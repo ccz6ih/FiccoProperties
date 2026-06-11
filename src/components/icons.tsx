@@ -17,5 +17,6 @@ export const navIcons: Record<string, ReactNode> = {
   card: s(<><rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 9.5h19" strokeLinecap="round" /><path d="M6 14.5h4" strokeLinecap="round" /></>),
   checklist: s(<path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />),
   calendar: s(<><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" strokeLinecap="round" /></>),
+  info: s(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.5" strokeLinecap="round" /></>),
   alert: s(<path d="M12 4l9 16H3l9-16zM12 10v4M12 17.5v.5" strokeLinecap="round" strokeLinejoin="round" />),
 };

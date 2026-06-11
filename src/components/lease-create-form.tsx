@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { createLease, type LeaseFormState } from "@/app/(admin)/admin/leases/actions";
+import { buildLeaseTerms } from "@/lib/lease-template";
 
 const initial: LeaseFormState = { ok: false };
 
@@ -37,10 +38,32 @@ export function LeaseCreateForm({
   };
 }) {
   const [state, action, pending] = useActionState(createLease, initial);
+  const [terms, setTerms] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+
+  function fillStandardTerms() {
+    const f = formRef.current;
+    if (!f) return;
+    const val = (name: string) =>
+      (f.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "";
+    const unit = units.find((u) => u.id === val("unit_id"));
+    const resident = residents.find((r) => r.id === val("resident_id"));
+    setTerms(
+      buildLeaseTerms({
+        tenantName: resident?.full_name,
+        propertyName: unit?.property_name,
+        unitLabel: unit?.label,
+        rentDollars: val("rent"),
+        depositDollars: val("deposit"),
+        startDate: val("start_date"),
+        endDate: val("end_date"),
+      })
+    );
+  }
 
   return (
     <Card className="p-6">
-      <form action={action} className="space-y-4">
+      <form ref={formRef} action={action} className="space-y-4">
         {state.error && (
           <div className="rounded-xl border border-terracotta/40 bg-terracotta-soft px-4 py-2.5 text-sm text-terracotta-dark">
             {state.error}
@@ -128,13 +151,28 @@ export function LeaseCreateForm({
         </div>
 
         <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-ink">Lease terms</span>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-ink">Lease terms</span>
+            <button
+              type="button"
+              onClick={fillStandardTerms}
+              className="whitespace-nowrap rounded-full border border-clay-deep px-3 py-1 text-xs font-medium text-pine hover:bg-sand"
+            >
+              Fill standard 38th Ave terms
+            </button>
+          </div>
           <textarea
             name="terms"
-            rows={10}
+            rows={12}
+            value={terms}
+            onChange={(e) => setTerms(e.target.value)}
             className={inputClass}
-            placeholder="Paste or write the full lease agreement the resident will read and sign…"
+            placeholder="Click “Fill standard 38th Ave terms” to generate the lease from the fields above, then edit as needed — or paste your own."
           />
+          <span className="block text-[11px] text-ink-faint">
+            Auto-fills tenant, unit, rent, dates &amp; deposit from the fields above plus the
+            standard rules. Review/edit before sending; have your attorney review the template once.
+          </span>
         </label>
 
         <Button type="submit" variant="primary" disabled={pending}>
