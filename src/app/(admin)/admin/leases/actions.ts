@@ -131,6 +131,110 @@ export async function endLease(form: FormData) {
   revalidatePath("/portal/lease");
 }
 
+/**
+ * Record the move-in and set up the operational tenancy: link the unit to the
+ * resident's account (so their portal/statements/maintenance connect), copy the
+ * lease dates + rent into unit_occupancy, and mark the unit occupied.
+ */
+export async function setupTenancy(form: FormData) {
+  const id = (form.get("id") as string)?.trim();
+  const moveIn = (form.get("move_in_date") as string)?.trim() || null;
+  if (!id) return;
+
+  const supabase = await createClient();
+  const user = await requireStaff(supabase);
+  if (!user) return;
+
+  const { data: lease } = await supabase
+    .from("leases")
+    .select("unit_id, resident_id, rent_cents, start_date, end_date, signed_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!lease) return;
+
+  await supabase.from("unit_occupancy").upsert(
+    {
+      unit_id: lease.unit_id,
+      occupant_profile_id: lease.resident_id,
+      rent_cents: lease.rent_cents,
+      lease_start_date: lease.start_date,
+      lease_signed_date: lease.signed_at ? lease.signed_at.slice(0, 10) : null,
+      lease_end_date: lease.end_date,
+      move_in_date: moveIn,
+    },
+    { onConflict: "unit_id" }
+  );
+  await supabase.from("units").update({ status: "occupied" }).eq("id", lease.unit_id);
+
+  await loose(supabase).from("lease_events").insert({
+    lease_id: id,
+    actor_id: user.id,
+    type: "note",
+    note: `Move-in ${moveIn ?? "recorded"} — tenancy set up`,
+  });
+
+  revalidatePath(`/admin/leases/${id}`);
+  revalidatePath("/admin/properties");
+  revalidatePath("/admin/properties/[slug]", "page");
+  revalidatePath("/admin");
+}
+
+/**
+ * Create a prorated first-month rent charge: charges only the days from the
+ * move-in date through the end of that month, based on the monthly rent.
+ */
+export async function createProratedCharge(form: FormData) {
+  const id = (form.get("id") as string)?.trim();
+  const moveIn = (form.get("move_in_date") as string)?.trim();
+  if (!id || !moveIn) return;
+
+  const supabase = await createClient();
+  const user = await requireStaff(supabase);
+  if (!user) return;
+
+  const { data: lease } = await supabase
+    .from("leases")
+    .select("resident_id, rent_cents")
+    .eq("id", id)
+    .maybeSingle();
+  if (!lease) return;
+
+  const [y, m, d] = moveIn.split("-").map(Number);
+  if (!y || !m || !d) return;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const daysRemaining = Math.max(1, daysInMonth - d + 1);
+  const amount = Math.round((lease.rent_cents * daysRemaining) / daysInMonth);
+  const period = `${y}-${String(m).padStart(2, "0")}`;
+
+  const { data: charge, error } = await supabase
+    .from("charges")
+    .insert({
+      lease_id: id,
+      resident_id: lease.resident_id,
+      amount_cents: amount,
+      description: `Prorated rent (${daysRemaining}/${daysInMonth} days)`,
+      due_date: moveIn,
+      status: "open",
+      period,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !charge) return;
+
+  await supabase.from("ledger_entries").insert({
+    resident_id: lease.resident_id,
+    lease_id: id,
+    kind: "charge",
+    amount_cents: amount,
+    ref_id: charge.id,
+    memo: `Prorated rent ${period}`,
+  });
+
+  revalidatePath("/admin/payments");
+  revalidatePath(`/admin/leases/${id}`);
+  revalidatePath("/admin");
+}
+
 /** Terminate a lease early. */
 export async function terminateLease(form: FormData) {
   const id = (form.get("id") as string)?.trim();

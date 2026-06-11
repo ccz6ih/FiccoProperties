@@ -39,6 +39,7 @@ export function LeaseCreateForm({
 }) {
   const [state, action, pending] = useActionState(createLease, initial);
   const [terms, setTerms] = useState("");
+  const [includeGarage, setIncludeGarage] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   function fillStandardTerms() {
@@ -57,6 +58,7 @@ export function LeaseCreateForm({
         depositDollars: val("deposit"),
         startDate: val("start_date"),
         endDate: val("end_date"),
+        includeGarage,
       })
     );
   }
@@ -151,15 +153,26 @@ export function LeaseCreateForm({
         </div>
 
         <label className="block space-y-1.5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm font-medium text-ink">Lease terms</span>
-            <button
-              type="button"
-              onClick={fillStandardTerms}
-              className="whitespace-nowrap rounded-full border border-clay-deep px-3 py-1 text-xs font-medium text-pine hover:bg-sand"
-            >
-              Fill standard 38th Ave terms
-            </button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <input
+                  type="checkbox"
+                  checked={includeGarage}
+                  onChange={(e) => setIncludeGarage(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-clay-deep text-pine focus:ring-pine/30"
+                />
+                Garage clause (Villa Victoria house)
+              </label>
+              <button
+                type="button"
+                onClick={fillStandardTerms}
+                className="whitespace-nowrap rounded-full border border-clay-deep px-3 py-1 text-xs font-medium text-pine hover:bg-sand"
+              >
+                Fill standard 38th Ave terms
+              </button>
+            </div>
           </div>
           <textarea
             name="terms"

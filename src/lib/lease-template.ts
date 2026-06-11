@@ -13,6 +13,8 @@ export type LeaseTemplateData = {
   depositDollars?: string | number | null;
   startDate?: string | null; // YYYY-MM-DD
   endDate?: string | null; // YYYY-MM-DD
+  /** Include the $150 garage deposit clause (only the Villa Victoria house). */
+  includeGarage?: boolean;
 };
 
 function money(v: string | number | null | undefined): string {
@@ -31,11 +33,30 @@ function longDate(iso: string | null | undefined): string {
 
 export function buildLeaseTerms(data: LeaseTemplateData): string {
   const tenant = data.tenantName?.trim() || "________________________";
-  const home = [data.propertyName, data.unitLabel].filter(Boolean).join(" — ") || "________________________";
+  const home =
+    [data.propertyName, data.unitLabel].filter(Boolean).join(" — ") ||
+    "________________________";
   const rent = money(data.rentDollars);
   const deposit = money(data.depositDollars);
   const start = longDate(data.startDate);
-  const end = data.endDate ? longDate(data.endDate) : "month-to-month until terminated as provided below";
+  const end = data.endDate
+    ? longDate(data.endDate)
+    : "month-to-month until terminated as provided below";
+
+  const provisions = [
+    "Notice to vacate. Tenant shall give at least thirty (30) days' written notice before moving out, and that notice must be given on the 1st day of a month.",
+    "No pets. No dogs, cats, or other pets are permitted. (Assistance animals are not pets and may be requested as a reasonable accommodation under fair housing law.)",
+    "No satellite dishes may be installed on the building or Premises.",
+    "Renters insurance. Tenant shall provide proof of renters insurance on or before the move-in date and keep it in force throughout the tenancy.",
+  ];
+  if (data.includeGarage) {
+    provisions.push(
+      "Garage. A $150.00 non-refundable garage deposit applies. Tenant is responsible for the keypad and remote."
+    );
+  }
+  const provisionLines = provisions
+    .map((p, i) => `   ${String.fromCharCode(97 + i)}. ${p}`)
+    .join("\n");
 
   return `RESIDENTIAL LEASE AGREEMENT — 38TH AVE PROPERTIES
 
@@ -52,11 +73,7 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
 6. Security deposit. Tenant has deposited ${deposit} as a security deposit. Landlord will return the deposit within sixty (60) days after the Tenant moves out and returns possession, less any amounts properly withheld for unpaid rent, damage beyond ordinary wear and tear, or cleaning, together with an itemized statement as required by Colorado law.
 
 7. Additional provisions.
-   a. Notice to vacate. Tenant shall give at least thirty (30) days' written notice before moving out, and that notice must be given on the 1st day of a month.
-   b. No pets. No dogs, cats, or other pets are permitted. (Assistance animals are not pets and may be requested as a reasonable accommodation under fair housing law.)
-   c. No satellite dishes may be installed on the building or Premises.
-   d. Renters insurance. Tenant shall provide proof of renters insurance on or before the move-in date and keep it in force throughout the tenancy.
-   e. Garage (if applicable). A garage requires a $150.00 non-refundable garage deposit. Tenant is responsible for the keypad and remote.
+${provisionLines}
 
 8. Parking & vehicles. Tenant shall keep a current, valid license plate on each vehicle at all times. No vehicle repairs or maintenance may be performed in the parking lots or common areas. Townhome residents may park one vehicle in front of the unit and one vehicle in the rear.
 

@@ -10,6 +10,8 @@ import {
   sendForSignature,
   endLease,
   terminateLease,
+  setupTenancy,
+  createProratedCharge,
 } from "@/app/(admin)/admin/leases/actions";
 
 type LeaseDetail = {
@@ -162,6 +164,47 @@ export default async function LeaseDetailPage({
               )}
             </div>
           </Card>
+
+          {lease.status === "active" && (
+            <Card className="p-6">
+              <h2 className="mb-3 font-display text-lg font-semibold text-ink">
+                Move-in &amp; keys
+              </h2>
+              <form className="space-y-3">
+                <input type="hidden" name="id" value={lease.id} />
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium text-ink-soft">Move-in date</span>
+                  <input
+                    type="date"
+                    name="move_in_date"
+                    defaultValue={lease.start_date}
+                    className="w-full rounded-xl border border-clay-deep bg-white/80 px-4 py-2.5 text-sm text-ink focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30"
+                  />
+                </label>
+                <Button
+                  type="submit"
+                  formAction={setupTenancy}
+                  variant="primary"
+                  className="w-full"
+                >
+                  Save move-in &amp; set up tenancy
+                </Button>
+                <Button
+                  type="submit"
+                  formAction={createProratedCharge}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Create prorated first-month charge
+                </Button>
+              </form>
+              <p className="mt-3 text-xs text-ink-faint">
+                &ldquo;Set up tenancy&rdquo; links this unit to the resident (their portal,
+                statements, maintenance) and marks it occupied. Proration charges only the
+                days from move-in through the end of that month.
+              </p>
+            </Card>
+          )}
 
           <Card className="p-6">
             <h2 className="mb-4 font-display text-lg font-semibold text-ink">Activity</h2>
