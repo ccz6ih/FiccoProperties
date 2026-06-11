@@ -107,7 +107,7 @@ export default async function MaintenancePage() {
                                       name={c.profiles?.full_name ?? c.profiles?.email}
                                       url={c.profiles?.avatar_url}
                                     />
-                                    {c.profiles?.full_name ?? c.profiles?.email ?? "Ficco team"}
+                                    {c.profiles?.full_name ?? c.profiles?.email ?? "38th Ave team"}
                                   </span>
                                   <span>{formatDate(c.created_at)}</span>
                                 </div>

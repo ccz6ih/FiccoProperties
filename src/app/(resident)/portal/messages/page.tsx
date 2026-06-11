@@ -33,7 +33,7 @@ export default async function MessagesPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Messages"
-        subtitle="Talk directly with the Ficco on-site team."
+        subtitle="Talk directly with the on-site team."
         action={<MessagesNew />}
       />
 

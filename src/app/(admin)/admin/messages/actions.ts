@@ -27,7 +27,7 @@ export async function sendStaffMessage(form: FormData) {
     body,
   });
 
-  // Email the resident that the Ficco team replied (delivers once the domain
+  // Email the resident that the 38th Ave team replied (delivers once the domain
   // is verified in Resend; no-ops otherwise).
   const { data: conv } = await supabase
     .from("conversations")
@@ -37,11 +37,11 @@ export async function sendStaffMessage(form: FormData) {
   if (conv?.profiles?.email) {
     await sendNotification({
       to: conv.profiles.email,
-      subject: `Ficco Properties replied — ${conv.subject}`,
-      html: notificationHtml("The Ficco team replied to your message", [
+      subject: `38th Ave Properties replied — ${conv.subject}`,
+      html: notificationHtml("The 38th Ave team replied to your message", [
         ["Subject", conv.subject],
         ["Message", body.slice(0, 240)],
-        ["View", `https://ficcoproperties.com/portal/messages/${conversationId}`],
+        ["View", `https://38thaveproperties.com/portal/messages/${conversationId}`],
       ]),
     });
   }

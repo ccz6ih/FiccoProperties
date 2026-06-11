@@ -32,7 +32,7 @@ export default async function LoginPage({
             </svg>
           </span>
           <span className="font-display text-lg font-semibold text-ink">
-            Ficco Properties
+            38th Ave Properties
           </span>
         </Link>
       </Container>

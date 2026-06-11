@@ -147,7 +147,7 @@ export function MessagesThread({
                 </div>
               </div>
               <div className="mt-1 px-1 text-[11px] text-ink-faint">
-                {senderNames[m.sender_id] ?? (fromStaff ? "Ficco team" : "Resident")}
+                {senderNames[m.sender_id] ?? (fromStaff ? "38th Ave team" : "Resident")}
                 {" · "}
                 {formatTime(m.created_at)}
               </div>

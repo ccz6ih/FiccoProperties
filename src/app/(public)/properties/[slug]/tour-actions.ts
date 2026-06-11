@@ -65,14 +65,14 @@ export async function submitTourRequest(
       ["Email", email],
       ["Phone", phone],
       ["Preferred", preferred],
-      ["Review", "https://ficcoproperties.com/admin/tours"],
+      ["Review", "https://38thaveproperties.com/admin/tours"],
     ]),
   });
 
   // Confirmation to the prospect (delivers once the Resend domain is verified).
   await sendNotification({
     to: email,
-    replyTo: "hello@ficcoproperties.com",
+    replyTo: "hello@38thaveproperties.com",
     subject: `We got your tour request — ${property_name}`,
     html: customerHtml(`Thanks for your interest, ${esc(name)}!`, [
       `We've received your request to tour <strong>${esc(property_name)}</strong>${

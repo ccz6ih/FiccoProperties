@@ -48,7 +48,7 @@ export async function setApplicationStatus(form: FormData) {
           "Required",
           "If the denial used the screening or credit report, the FCRA requires an adverse-action notice. Use the SmartMove letter, send it, then mark it sent.",
         ],
-        ["Open application", `https://ficcoproperties.com/admin/applications/${id}`],
+        ["Open application", `https://38thaveproperties.com/admin/applications/${id}`],
       ]),
     });
   }

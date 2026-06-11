@@ -7,7 +7,7 @@ export function SiteFooter() {
       <Container className="grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-3">
           <div className="font-display text-lg font-semibold text-ink">
-            Ficco Properties
+            38th Ave Properties
           </div>
           <p className="max-w-xs text-sm text-ink-soft">
             Family-owned communities on W 38th Avenue in Wheat Ridge, Colorado.
@@ -44,14 +44,14 @@ export function SiteFooter() {
           <ul className="space-y-2 text-sm text-ink-soft">
             <li>W 38th Ave</li>
             <li>Wheat Ridge, CO 80033</li>
-            <li><a href="mailto:hello@ficcoproperties.com" className="hover:text-ink">hello@ficcoproperties.com</a></li>
+            <li><a href="mailto:hello@38thaveproperties.com" className="hover:text-ink">hello@38thaveproperties.com</a></li>
           </ul>
         </div>
       </Container>
 
       <div className="border-t border-clay/70">
         <Container className="flex flex-col items-center justify-between gap-2 py-5 text-xs text-ink-faint sm:flex-row">
-          <span>© {new Date().getFullYear()} Ficco Properties. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} 38th Ave Properties. All rights reserved.</span>
           <span className="flex items-center gap-3">
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-pine" />

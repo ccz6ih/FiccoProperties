@@ -15,7 +15,7 @@ export const communityContent: Record<string, CommunityContent> = {
   "mountain-village-square": {
     tagline: "Our flagship apartment community",
     blurb:
-      "Sixty-one apartment homes wrapped around mature trees and mountain views, minutes from Crown Hill Park. The largest of the Ficco communities and the heart of the neighborhood.",
+      "Sixty-one apartment homes wrapped around mature trees and mountain views, minutes from Crown Hill Park. The largest of the 38th Ave communities and the heart of the neighborhood.",
     highlights: ["61 apartment homes", "Mountain & park views", "On-site management", "Off-street parking"],
     gradient: "from-pine to-pine-dark",
     accent: "pine",
@@ -47,7 +47,7 @@ export const communityContent: Record<string, CommunityContent> = {
 };
 
 export const FALLBACK_CONTENT: CommunityContent = {
-  tagline: "A Ficco community",
+  tagline: "A 38th Ave community",
   blurb:
     "A well-kept, family-owned community on W 38th Avenue in Wheat Ridge, Colorado.",
   highlights: ["Family-owned", "On-site management", "Responsive maintenance"],

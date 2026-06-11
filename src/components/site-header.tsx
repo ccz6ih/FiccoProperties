@@ -14,7 +14,7 @@ export function SiteHeader({ user }: { user?: { email?: string | null } | null }
         <Link href="/" className="flex items-center gap-2.5">
           <Logo />
           <span className="font-display text-lg font-semibold text-ink">
-            Ficco Properties
+            38th Ave Properties
           </span>
         </Link>
 

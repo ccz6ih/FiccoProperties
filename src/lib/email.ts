@@ -6,7 +6,7 @@
  * Env:
  *   RESEND_API_KEY  — from the Resend dashboard
  *   NOTIFY_EMAIL    — where staff notifications go (comma-separated allowed)
- *   EMAIL_FROM      — verified sender, e.g. "Ficco Properties <notifications@ficcoproperties.com>"
+ *   EMAIL_FROM      — verified sender, e.g. "38th Ave Properties <notifications@38thaveproperties.com>"
  */
 export async function sendNotification(opts: {
   subject: string;
@@ -19,7 +19,7 @@ export async function sendNotification(opts: {
   const to = opts.to ?? process.env.NOTIFY_EMAIL;
   const from =
     process.env.EMAIL_FROM ||
-    "Ficco Properties <notifications@ficcoproperties.com>";
+    "38th Ave Properties <notifications@38thaveproperties.com>";
 
   if (!key || !to) return { sent: false };
 
@@ -64,8 +64,8 @@ export function customerHtml(heading: string, paragraphs: string[]): string {
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px">
     <div style="font-family:Georgia,serif;font-size:20px;font-weight:600;color:#2f5d50;margin-bottom:14px">${heading}</div>
     ${body}
-    <p style="margin:18px 0 0;font-size:13px;color:#6f655a">— The Ficco Properties team</p>
-    <p style="margin:6px 0 0;font-size:12px;color:#9b9286">Ficco Properties · W 38th Ave, Wheat Ridge, CO · Equal Housing Opportunity</p>
+    <p style="margin:18px 0 0;font-size:13px;color:#6f655a">— The 38th Ave Properties team</p>
+    <p style="margin:6px 0 0;font-size:12px;color:#9b9286">38th Ave Properties · W 38th Ave, Wheat Ridge, CO · Equal Housing Opportunity</p>
   </div>`;
 }
 
@@ -81,6 +81,6 @@ export function notificationHtml(title: string, rows: [string, string][]): strin
   return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px">
     <h2 style="color:#2f5d50;font-size:18px;margin:0 0 12px">${title}</h2>
     <table style="border-collapse:collapse">${items}</table>
-    <p style="margin:18px 0 0;font-size:12px;color:#9b9286">Ficco Properties · admin notification</p>
+    <p style="margin:18px 0 0;font-size:12px;color:#9b9286">38th Ave Properties · admin notification</p>
   </div>`;
 }

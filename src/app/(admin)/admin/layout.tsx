@@ -28,7 +28,7 @@ export default async function AdminLayout({
   return (
     <DashboardShell
       brandHref="/admin"
-      brandLabel="Ficco Admin"
+      brandLabel="38th Ave Admin"
       nav={nav}
       user={{
         email: user.email,

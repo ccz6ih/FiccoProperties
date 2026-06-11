@@ -65,7 +65,7 @@ export default async function AdminThreadPage({
   const senders: Record<string, { name: string | null; avatarUrl: string | null }> = {};
   const staffIds: string[] = [];
   for (const p of profiles ?? []) {
-    senderNames[p.id] = p.full_name ?? "Ficco team";
+    senderNames[p.id] = p.full_name ?? "38th Ave team";
     senders[p.id] = { name: p.full_name, avatarUrl: p.avatar_url };
     if (p.role === "owner" || p.role === "admin") staffIds.push(p.id);
   }

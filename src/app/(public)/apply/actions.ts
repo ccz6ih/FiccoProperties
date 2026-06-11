@@ -147,14 +147,14 @@ export async function submitApplication(
       ["Email", email],
       ["Phone", phone],
       ["Desired move-in", desired_move_in],
-      ["Review", "https://ficcoproperties.com/admin/applications"],
+      ["Review", "https://38thaveproperties.com/admin/applications"],
     ]),
   });
 
   // Confirmation to the applicant (delivers once the Resend domain is verified).
   await sendNotification({
     to: email,
-    replyTo: "hello@ficcoproperties.com",
+    replyTo: "hello@38thaveproperties.com",
     subject: `We received your application — ${propertyName}`,
     html: customerHtml(`Thanks for applying, ${esc(first_name)}!`, [
       `We've received your application for <strong>${esc(propertyName)}</strong> and our team reviews every one personally.`,

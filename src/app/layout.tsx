@@ -9,12 +9,12 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: {
-    default: "Ficco Properties — Apartments & Homes in Wheat Ridge, CO",
-    template: "%s · Ficco Properties",
+    default: "38th Ave Properties — Apartments & Homes in Wheat Ridge, CO",
+    template: "%s · 38th Ave Properties",
   },
   description:
     "Family-owned apartment and senior communities on W 38th Ave in Wheat Ridge, Colorado. Apply online, manage your lease, and request maintenance in one place.",
-  metadataBase: new URL("https://ficcoproperties.com"),
+  metadataBase: new URL("https://38thaveproperties.com"),
 };
 
 export default function RootLayout({

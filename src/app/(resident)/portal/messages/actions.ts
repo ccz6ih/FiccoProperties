@@ -22,7 +22,7 @@ async function alertStaffOfMessage(
       ["From", senderName],
       ["Subject", subject],
       ["Message", body.slice(0, 240)],
-      ["Reply", `https://ficcoproperties.com/admin/messages/${conversationId}`],
+      ["Reply", `https://38thaveproperties.com/admin/messages/${conversationId}`],
     ]),
   });
 }

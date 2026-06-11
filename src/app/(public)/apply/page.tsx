@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = {
   title: "Apply",
   description:
-    "Apply online to any of the four Ficco Properties communities in Wheat Ridge, Colorado.",
+    "Apply online to any of the four 38th Ave Properties communities in Wheat Ridge, Colorado.",
 };
 
 export default async function ApplyPage({
@@ -43,7 +43,7 @@ export default async function ApplyPage({
             {[
               "Apply to any of our four communities",
               "We review every application personally",
-              "All Ficco communities are pet-free",
+              "All 38th Ave communities are pet-free",
               "A ~$40 background check is part of the process",
               "We'll email you within a few business days",
             ].map((line) => (

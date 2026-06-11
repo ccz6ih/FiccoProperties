@@ -81,7 +81,7 @@ export default async function HomePage() {
               Owned by a family, not a fund
             </h2>
             <p className="text-lg leading-relaxed text-ink-soft">
-              The Ficco family has looked after these buildings for two
+              The family has looked after these buildings for two
               generations. That means decisions get made by people who know your
               name, maintenance gets handled by a team that actually answers,
               and rent stays fair because we&apos;re here for the long run.

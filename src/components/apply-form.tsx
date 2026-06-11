@@ -66,7 +66,7 @@ export function ApplyForm({
         <div className="space-y-3 rounded-xl border border-terracotta/40 bg-terracotta-soft px-4 py-4">
           <h3 className="text-sm font-semibold text-terracotta-dark">Pet policy</h3>
           <p className="text-sm text-terracotta-dark">
-            None of the Ficco Properties communities allow pets. We&apos;re a
+            None of the 38th Ave Properties communities allow pets. We&apos;re a
             pet-free environment for all of our residents.
           </p>
           <p className="text-xs text-terracotta-dark/90">
@@ -82,7 +82,7 @@ export function ApplyForm({
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-clay-deep text-pine focus:ring-pine/30"
             />
             <span>
-              I understand that pets are not permitted at any Ficco community.
+              I understand that pets are not permitted at any 38th Ave community.
               {state.fieldErrors?.pets_ack && (
                 <span className="ml-2 text-xs font-medium">
                   {state.fieldErrors.pets_ack}
@@ -212,7 +212,7 @@ export function ApplyForm({
             />
           </Field>
           <p className="text-xs text-ink-faint">
-            Stored securely — only Ficco staff can view it. You can also bring
+            Stored securely — only our staff can view it. You can also bring
             your ID when you tour.
           </p>
         </Section>
@@ -235,11 +235,11 @@ export function ApplyForm({
               screening through TransUnion SmartMove. After we receive your
               application we&apos;ll email you a secure link to start it. The
               screening fee is approximately <strong>$40</strong> and is paid by
-              you directly to TransUnion SmartMove — Ficco never sees your Social
+              you directly to TransUnion SmartMove — We never see your Social
               Security number or payment details.
             </p>
             <p>
-              By signing below you authorize Ficco Properties to obtain a
+              By signing below you authorize 38th Ave Properties to obtain a
               consumer, credit, and background report about you, and to contact
               your current and previous landlords and your employer to verify the
               information in this application. This authorization is provided in
@@ -267,7 +267,7 @@ export function ApplyForm({
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-clay-deep text-pine focus:ring-pine/30"
             />
             <span>
-              I authorize Ficco Properties to request a credit and background
+              I authorize 38th Ave Properties to request a credit and background
               screening (~$40, paid by me to TransUnion SmartMove).
               {state.fieldErrors?.authorize_screening && (
                 <span className="ml-2 text-xs font-medium text-terracotta-dark">
@@ -286,7 +286,7 @@ export function ApplyForm({
               className="mt-0.5 h-4 w-4 shrink-0 rounded border-clay-deep text-pine focus:ring-pine/30"
             />
             <span>
-              I authorize Ficco Properties to contact my current and previous
+              I authorize 38th Ave Properties to contact my current and previous
               landlords and my employer.
               {state.fieldErrors?.authorize_landlord_contact && (
                 <span className="ml-2 text-xs font-medium text-terracotta-dark">

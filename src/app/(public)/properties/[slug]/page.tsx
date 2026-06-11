@@ -202,7 +202,7 @@ export default async function PropertyPage({ params }: Params) {
                   Our on-site team is happy to help.
                 </p>
               </div>
-              <ButtonLink href="mailto:hello@ficcoproperties.com" variant="outline">
+              <ButtonLink href="mailto:hello@38thaveproperties.com" variant="outline">
                 Contact us
               </ButtonLink>
             </Card>

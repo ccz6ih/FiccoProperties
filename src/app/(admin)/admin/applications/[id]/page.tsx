@@ -42,7 +42,7 @@ export default async function ApplicationDetail({
 
   const a = application;
   const fullName = `${a.first_name} ${a.last_name}`;
-  const subject = encodeURIComponent("Your Ficco Properties application — background check");
+  const subject = encodeURIComponent("Your 38th Ave Properties application — background check");
 
   // Applicant history — other applications + tour requests from the same email.
   type HistoryRow = {
