@@ -122,12 +122,25 @@ export async function saveUnit(form: FormData) {
     })
     .eq("id", id);
 
+  // Link the tenant's sign-in account. If none was picked but the tenant email
+  // matches an existing account, link it automatically.
+  let occupantId = str(form.get("occupant_profile_id"));
+  const tenantEmail = str(form.get("tenant_email"));
+  if (!occupantId && tenantEmail) {
+    const { data: match } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("email", tenantEmail)
+      .maybeSingle();
+    if (match) occupantId = match.id;
+  }
+
   await supabase.from("unit_occupancy").upsert(
     {
       unit_id: id,
-      occupant_profile_id: str(form.get("occupant_profile_id")),
+      occupant_profile_id: occupantId,
       tenant_name: str(form.get("tenant_name")),
-      tenant_email: str(form.get("tenant_email")),
+      tenant_email: tenantEmail,
       tenant_phone: str(form.get("tenant_phone")),
       rent_cents: dollarsToCents(form.get("tenant_rent_dollars")),
       lease_start_date: str(form.get("lease_start_date")),

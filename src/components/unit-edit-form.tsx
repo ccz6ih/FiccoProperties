@@ -170,19 +170,27 @@ export function UnitEditForm({
         </h4>
 
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-ink-soft">Occupant account</span>
+          <span className="text-xs font-medium text-ink-soft">
+            Occupant account (optional)
+          </span>
           <select
             name="occupant_profile_id"
             defaultValue={occupancy?.occupant_profile_id ?? ""}
             className={inputClass}
           >
-            <option value="">— none —</option>
+            <option value="">— none / link later —</option>
             {residents.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.full_name ?? r.email ?? r.id}
+                {(r.full_name ?? "Unnamed")}
+                {r.email ? ` — ${r.email}` : ""}
               </option>
             ))}
           </select>
+          <span className="block text-[11px] leading-snug text-ink-faint">
+            {residents.length === 0
+              ? "No one has created a login yet, so leave this as ‘none’. It links automatically once the tenant signs up with the email below."
+              : "Connects the tenant’s sign-in to this unit (their portal, maintenance, messages). It auto-links when the Tenant email below matches an account — or pick one here."}
+          </span>
         </label>
 
         <div className="grid gap-3 sm:grid-cols-2">

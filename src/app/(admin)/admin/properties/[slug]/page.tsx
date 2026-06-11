@@ -98,7 +98,6 @@ export default async function PropertyDetail({
       supabase
         .from("profiles")
         .select("id, full_name, email, role")
-        .eq("role", "resident")
         .order("full_name")
         .returns<ProfileRow[]>(),
     ]);
