@@ -52,9 +52,15 @@ export function SiteFooter() {
       <div className="border-t border-clay/70">
         <Container className="flex flex-col items-center justify-between gap-2 py-5 text-xs text-ink-faint sm:flex-row">
           <span>© {new Date().getFullYear()} Ficco Properties. All rights reserved.</span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-pine" />
-            Equal Housing Opportunity
+          <span className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-pine" />
+              Equal Housing Opportunity
+            </span>
+            <span className="text-clay-deep">·</span>
+            <Link href="/admin" className="text-ink-faint transition-colors hover:text-pine">
+              Staff sign in
+            </Link>
           </span>
         </Container>
       </div>
