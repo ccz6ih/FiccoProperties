@@ -41,6 +41,9 @@ export type Database = {
           phone: string | null
           property_id: string | null
           reason_for_moving: string | null
+          screening_notes: string | null
+          screening_report_url: string | null
+          screening_requested_at: string | null
           screening_status: string
           signature_name: string | null
           status: string
@@ -73,6 +76,9 @@ export type Database = {
           phone?: string | null
           property_id?: string | null
           reason_for_moving?: string | null
+          screening_notes?: string | null
+          screening_report_url?: string | null
+          screening_requested_at?: string | null
           screening_status?: string
           signature_name?: string | null
           status?: string
@@ -105,6 +111,9 @@ export type Database = {
           phone?: string | null
           property_id?: string | null
           reason_for_moving?: string | null
+          screening_notes?: string | null
+          screening_report_url?: string | null
+          screening_requested_at?: string | null
           screening_status?: string
           signature_name?: string | null
           status?: string

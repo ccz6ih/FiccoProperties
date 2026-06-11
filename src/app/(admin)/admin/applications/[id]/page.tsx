@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Card, ButtonLink } from "@/components/ui";
 import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import { ApplicationStatusControl } from "@/components/application-status-control";
-import { ScreeningStatusControl } from "@/components/screening-status-control";
+import { ScreeningRecordForm } from "@/components/screening-record-form";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -42,6 +42,32 @@ export default async function ApplicationDetail({
   const a = application;
   const fullName = `${a.first_name} ${a.last_name}`;
   const subject = encodeURIComponent("Your Ficco Properties application — background check");
+
+  // Applicant history — other applications + tour requests from the same email.
+  type HistoryRow = {
+    id: string;
+    status: string;
+    created_at: string;
+    properties: { name: string | null } | null;
+  };
+  const [{ data: priorApps }, { data: priorTours }] = await Promise.all([
+    supabase
+      .from("applications")
+      .select("id, status, created_at, properties(name)")
+      .eq("email", a.email)
+      .neq("id", a.id)
+      .order("created_at", { ascending: false })
+      .returns<HistoryRow[]>(),
+    supabase
+      .from("tour_requests")
+      .select("id, status, created_at, properties(name)")
+      .eq("email", a.email)
+      .order("created_at", { ascending: false })
+      .returns<HistoryRow[]>(),
+  ]);
+  const otherApps = priorApps ?? [];
+  const tours = priorTours ?? [];
+  const hasHistory = otherApps.length > 0 || tours.length > 0;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -170,17 +196,13 @@ export default async function ApplicationDetail({
               <h2 className="font-display text-lg font-semibold text-ink">Screening</h2>
               <StatusPill value={a.screening_status} />
             </div>
-            <div className="space-y-1.5">
-              <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
-                Status
-              </span>
-              <ScreeningStatusControl id={a.id} status={a.screening_status} />
-            </div>
-            <p className="text-sm text-ink-soft">
-              SmartMove invites are sent manually. Open SmartMove to send an
-              invite, then email the applicant their link and update the status
-              above. The applicant pays the ~$40 fee directly to TransUnion.
-            </p>
+
+            <ol className="space-y-1 text-xs text-ink-soft">
+              <li>1. Open SmartMove → start a screening for this applicant.</li>
+              <li>2. Email the applicant their invite link (they pay ~$40 + enter their SSN with TransUnion).</li>
+              <li>3. When the report comes back, paste its link + your decision below and set the status.</li>
+            </ol>
+
             <div className="flex flex-col gap-2">
               <ButtonLink
                 href="https://www.mysmartmove.com/"
@@ -199,6 +221,87 @@ export default async function ApplicationDetail({
                 Email applicant
               </ButtonLink>
             </div>
+
+            {a.screening_requested_at && (
+              <p className="text-xs text-ink-faint">
+                Screening started {formatDate(a.screening_requested_at)}.
+              </p>
+            )}
+            {a.screening_report_url && (
+              <a
+                href={a.screening_report_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-sm font-medium text-pine hover:text-pine-dark"
+              >
+                View saved report →
+              </a>
+            )}
+
+            <div className="border-t border-clay pt-4">
+              <ScreeningRecordForm
+                id={a.id}
+                status={a.screening_status}
+                reportUrl={a.screening_report_url}
+                notes={a.screening_notes}
+              />
+            </div>
+          </Card>
+
+          <Card className="h-fit space-y-4 p-6">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Applicant history
+            </h2>
+            {hasHistory ? (
+              <div className="space-y-4">
+                {otherApps.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Other applications
+                    </span>
+                    <ul className="space-y-1.5">
+                      {otherApps.map((h) => (
+                        <li key={h.id}>
+                          <Link
+                            href={`/admin/applications/${h.id}`}
+                            className="flex items-center justify-between gap-2 text-sm hover:text-pine"
+                          >
+                            <span className="text-ink-soft">
+                              {h.properties?.name ?? "—"} · {formatDate(h.created_at)}
+                            </span>
+                            <StatusPill value={h.status} />
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {tours.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                      Tour requests
+                    </span>
+                    <ul className="space-y-1.5">
+                      {tours.map((t) => (
+                        <li
+                          key={t.id}
+                          className="flex items-center justify-between gap-2 text-sm"
+                        >
+                          <span className="text-ink-soft">
+                            {t.properties?.name ?? "—"} · {formatDate(t.created_at)}
+                          </span>
+                          <StatusPill value={t.status} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-faint">
+                No other activity from {a.email} — first-time applicant.
+              </p>
+            )}
           </Card>
         </div>
       </div>
