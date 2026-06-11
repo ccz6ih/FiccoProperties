@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotification, notificationHtml } from "@/lib/email";
+
+type ConvRow = {
+  subject: string;
+  profiles: { email: string | null; full_name: string | null } | null;
+};
 
 /** Staff sends a reply in a conversation. */
 export async function sendStaffMessage(form: FormData) {
@@ -20,6 +26,25 @@ export async function sendStaffMessage(form: FormData) {
     sender_id: user.id,
     body,
   });
+
+  // Email the resident that the Ficco team replied (delivers once the domain
+  // is verified in Resend; no-ops otherwise).
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("subject, profiles:resident_id(email, full_name)")
+    .eq("id", conversationId)
+    .maybeSingle<ConvRow>();
+  if (conv?.profiles?.email) {
+    await sendNotification({
+      to: conv.profiles.email,
+      subject: `Ficco Properties replied — ${conv.subject}`,
+      html: notificationHtml("The Ficco team replied to your message", [
+        ["Subject", conv.subject],
+        ["Message", body.slice(0, 240)],
+        ["View", `https://ficcoproperties.com/portal/messages/${conversationId}`],
+      ]),
+    });
+  }
 
   revalidatePath(`/admin/messages/${conversationId}`);
   revalidatePath("/admin/messages");

@@ -3,8 +3,29 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotification, notificationHtml } from "@/lib/email";
 
 export type StartState = { ok: boolean; error?: string };
+
+/** Email staff that a resident sent a message. No-ops until email is configured. */
+async function alertStaffOfMessage(
+  senderName: string,
+  subject: string,
+  body: string,
+  conversationId: string,
+  replyTo?: string
+) {
+  await sendNotification({
+    subject: `New resident message — ${subject}`,
+    replyTo,
+    html: notificationHtml("New message from a resident", [
+      ["From", senderName],
+      ["Subject", subject],
+      ["Message", body.slice(0, 240)],
+      ["Reply", `https://ficcoproperties.com/admin/messages/${conversationId}`],
+    ]),
+  });
+}
 
 /** Resident starts a new conversation with the office and sends the first message. */
 export async function startConversation(
@@ -43,6 +64,19 @@ export async function startConversation(
     return { ok: false, error: "Could not send your message. Please try again." };
   }
 
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", user.id)
+    .maybeSingle();
+  await alertStaffOfMessage(
+    prof?.full_name ?? "A resident",
+    subject,
+    body,
+    conversation.id,
+    prof?.email ?? undefined
+  );
+
   revalidatePath("/portal/messages");
   redirect(`/portal/messages/${conversation.id}`);
 }
@@ -64,6 +98,18 @@ export async function sendMessage(form: FormData) {
     sender_id: user.id,
     body,
   });
+
+  const [{ data: conv }, { data: prof }] = await Promise.all([
+    supabase.from("conversations").select("subject").eq("id", conversationId).maybeSingle(),
+    supabase.from("profiles").select("full_name, email").eq("id", user.id).maybeSingle(),
+  ]);
+  await alertStaffOfMessage(
+    prof?.full_name ?? "A resident",
+    conv?.subject ?? "Conversation",
+    body,
+    conversationId,
+    prof?.email ?? undefined
+  );
 
   revalidatePath(`/portal/messages/${conversationId}`);
   revalidatePath("/portal/messages");

@@ -12,9 +12,11 @@ export async function sendNotification(opts: {
   subject: string;
   html: string;
   replyTo?: string;
+  /** Override the recipient. Defaults to NOTIFY_EMAIL (staff). */
+  to?: string;
 }): Promise<{ sent: boolean }> {
   const key = process.env.RESEND_API_KEY;
-  const to = process.env.NOTIFY_EMAIL;
+  const to = opts.to ?? process.env.NOTIFY_EMAIL;
   const from =
     process.env.EMAIL_FROM ||
     "Ficco Properties <notifications@ficcoproperties.com>";
