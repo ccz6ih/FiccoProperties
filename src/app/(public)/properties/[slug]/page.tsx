@@ -79,12 +79,31 @@ export default async function PropertyPage({ params }: Params) {
   ).length;
 
   const availableHomes = await getAvailableHomes(property.id);
+  const fullAddress = [
+    property.address_line1,
+    property.city,
+    property.state,
+    property.postal_code,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <>
       {/* Hero */}
-      <section className={`bg-gradient-to-br ${content.gradient} text-cream`}>
-        <div className="bg-grain">
+      <section className={`relative bg-gradient-to-br ${content.gradient} text-cream`}>
+        {property.hero_image && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={property.hero_image}
+              alt={property.name}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-ink/85 via-ink/60 to-ink/30" />
+          </>
+        )}
+        <div className="bg-grain relative">
           <Container className="py-16 lg:py-24">
             <div className="max-w-2xl space-y-5">
               <div className="flex items-center gap-3">
@@ -268,6 +287,40 @@ export default async function PropertyPage({ params }: Params) {
           </Container>
         </section>
       )}
+
+      {/* Location / map */}
+      <section className="border-t border-clay py-16">
+        <Container className="grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:items-center">
+          <div className="space-y-3">
+            <Eyebrow>Location</Eyebrow>
+            <h2 className="text-3xl font-semibold text-ink">On W 38th Avenue</h2>
+            <p className="text-ink-soft">
+              {property.address_line1}
+              <br />
+              {property.city}, {property.state} {property.postal_code}
+            </p>
+            <ButtonLink
+              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                fullAddress
+              )}`}
+              variant="outline"
+            >
+              Get directions →
+            </ButtonLink>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-clay shadow-sm">
+            <iframe
+              title={`Map of ${property.name}`}
+              src={`https://www.google.com/maps?q=${encodeURIComponent(
+                fullAddress
+              )}&output=embed`}
+              className="h-72 w-full lg:h-80"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </Container>
+      </section>
 
       {/* Back link */}
       <section className="pb-16">

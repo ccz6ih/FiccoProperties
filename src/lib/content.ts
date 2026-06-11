@@ -37,10 +37,10 @@ export const communityContent: Record<string, CommunityContent> = {
     accent: "gold",
   },
   "the-villa": {
-    tagline: "Intimate boutique apartments",
+    tagline: "Townhome living, 2 bed · 1.5 bath",
     blurb:
-      "Eighteen apartment homes with a tucked-away, neighborly feel. The smallest and most personal of the four communities.",
-    highlights: ["18 apartment homes", "Boutique scale", "Close-knit community", "Easy 38th Ave access"],
+      "Eighteen two-bedroom townhomes with a tucked-away, neighborly feel. Room to spread out across two levels, with the ease of professional management.",
+    highlights: ["18 townhomes", "2 bed · 1.5 bath", "Two-level living", "Easy 38th Ave access"],
     gradient: "from-pine-dark to-[#1c3a32]",
     accent: "pine",
   },

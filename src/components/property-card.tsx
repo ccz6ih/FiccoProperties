@@ -14,7 +14,19 @@ export function PropertyCard({ property }: { property: PropertyWithCounts }) {
         <div
           className={`relative aspect-[16/10] bg-gradient-to-br ${content.gradient}`}
         >
-          <div className="bg-grain absolute inset-0 opacity-60" />
+          {property.hero_image ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={property.hero_image}
+                alt={property.name}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink/70 via-ink/10 to-transparent" />
+            </>
+          ) : (
+            <div className="bg-grain absolute inset-0 opacity-60" />
+          )}
           <div className="absolute left-4 top-4">
             <span className="rounded-full bg-cream/90 px-2.5 py-0.5 text-xs font-medium text-ink-soft">
               {propertyTypeLabel(property.type)}

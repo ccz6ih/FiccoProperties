@@ -2,8 +2,70 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile, isStaff } from "@/lib/auth";
 
 const ALLOWED_STATUS = ["occupied", "available", "make_ready", "offline"];
+const PROPERTY_BUCKET = "property-photos";
+
+export type CoverState = { ok: boolean; error?: string };
+
+/** Upload a community cover photo. Staff-only (uses the service-role client). */
+export async function setPropertyCover(
+  _prev: CoverState,
+  form: FormData
+): Promise<CoverState> {
+  const propertyId = form.get("property_id") as string;
+  const slug = (form.get("slug") as string) || "";
+  const file = form.get("cover");
+
+  if (!propertyId) return { ok: false, error: "Missing property." };
+  if (!(file instanceof File) || file.size === 0 || !file.type.startsWith("image/")) {
+    return { ok: false, error: "Choose an image to upload." };
+  }
+
+  const { profile } = await requireProfile(`/admin/properties/${slug}`);
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const admin = createAdminClient();
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${propertyId}/cover-${crypto.randomUUID()}.${ext}`;
+
+  const { error: uploadError } = await admin.storage
+    .from(PROPERTY_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (uploadError) return { ok: false, error: "Upload failed. Please try again." };
+
+  const {
+    data: { publicUrl },
+  } = admin.storage.from(PROPERTY_BUCKET).getPublicUrl(path);
+
+  await admin.from("properties").update({ hero_image: publicUrl }).eq("id", propertyId);
+
+  revalidatePath("/admin/properties");
+  if (slug) revalidatePath(`/admin/properties/${slug}`);
+  revalidatePath("/");
+  revalidatePath(`/properties/${slug}`);
+  return { ok: true };
+}
+
+/** Clear a community cover photo. Staff-only. */
+export async function removePropertyCover(form: FormData): Promise<void> {
+  const propertyId = form.get("property_id") as string;
+  const slug = (form.get("slug") as string) || "";
+  if (!propertyId) return;
+
+  const { profile } = await requireProfile(`/admin/properties/${slug}`);
+  if (!isStaff(profile)) return;
+
+  const admin = createAdminClient();
+  await admin.from("properties").update({ hero_image: null }).eq("id", propertyId);
+
+  revalidatePath("/admin/properties");
+  if (slug) revalidatePath(`/admin/properties/${slug}`);
+  revalidatePath("/");
+  revalidatePath(`/properties/${slug}`);
+}
 
 function num(value: FormDataEntryValue | null): number | null {
   if (value == null || value === "") return null;

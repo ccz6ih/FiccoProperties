@@ -8,6 +8,7 @@ import {
   type OccupancyValues,
   type ResidentOption,
 } from "@/components/unit-edit-form";
+import { PropertyCoverForm } from "@/components/property-cover-form";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,6 +20,7 @@ type PropertyRow = {
   address_line1: string | null;
   city: string | null;
   state: string | null;
+  hero_image: string | null;
 };
 
 type UnitRow = {
@@ -73,7 +75,7 @@ export default async function PropertyDetail({
 
   const { data: property } = await supabase
     .from("properties")
-    .select("id, name, slug, type, address_line1, city, state")
+    .select("id, name, slug, type, address_line1, city, state, hero_image")
     .eq("slug", slug)
     .maybeSingle()
     .returns<PropertyRow>();
@@ -134,6 +136,14 @@ export default async function PropertyDetail({
       </Link>
 
       <PageHeader title={property.name} subtitle={address || undefined} />
+
+      <div className="mb-8">
+        <PropertyCoverForm
+          propertyId={property.id}
+          slug={property.slug}
+          heroImage={property.hero_image}
+        />
+      </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total units" value={total} />
