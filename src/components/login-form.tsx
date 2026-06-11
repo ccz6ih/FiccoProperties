@@ -82,13 +82,13 @@ export function LoginForm({ next }: { next: string }) {
 
   const title =
     mode === "signin"
-      ? "Resident login"
+      ? "Sign in"
       : mode === "signup"
         ? "Create your account"
         : "Reset your password";
   const subtitle =
     mode === "signin"
-      ? "Access your unit, lease, and maintenance requests."
+      ? "Welcome back — sign in to your account."
       : mode === "signup"
         ? "Set up your portal access in a few seconds."
         : "Enter your email and we'll send you a link to set a new password.";

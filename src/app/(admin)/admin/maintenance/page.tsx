@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
+import { Avatar } from "@/components/avatar";
 import { formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
 
 type MaintenanceRow = Tables<"maintenance_requests"> & {
   units: { label: string; properties: { name: string | null } | null } | null;
+  assignee: { full_name: string | null; avatar_url: string | null } | null;
 };
 
 const COLUMNS: { key: string; label: string }[] = [
@@ -20,7 +22,9 @@ export default async function AdminMaintenance() {
   const supabase = await createClient();
   const { data: requests } = await supabase
     .from("maintenance_requests")
-    .select("*, units(label, properties(name))")
+    .select(
+      "*, units(label, properties(name)), assignee:profiles!maintenance_requests_assigned_to_fkey(full_name, avatar_url)"
+    )
     .order("created_at", { ascending: false })
     .returns<MaintenanceRow[]>();
 
@@ -57,6 +61,22 @@ export default async function AdminMaintenance() {
                         <div className="flex items-center justify-between text-xs text-ink-faint">
                           <span>{humanize(r.category)}</span>
                           <span>{formatDate(r.created_at)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 border-t border-clay pt-2 text-xs">
+                          {r.assignee ? (
+                            <>
+                              <Avatar
+                                size="sm"
+                                name={r.assignee.full_name}
+                                url={r.assignee.avatar_url}
+                              />
+                              <span className="text-ink-soft">
+                                {r.assignee.full_name ?? "Assigned"}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-ink-faint">Unassigned</span>
+                          )}
                         </div>
                       </Card>
                     </Link>
