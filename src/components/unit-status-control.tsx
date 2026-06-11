@@ -19,6 +19,7 @@ export function UnitStatusControl({
     <form ref={formRef} action={setUnitStatus}>
       <input type="hidden" name="id" value={id} />
       <select
+        key={status}
         name="status"
         defaultValue={status}
         onChange={() => formRef.current?.requestSubmit()}

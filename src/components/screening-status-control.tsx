@@ -23,6 +23,7 @@ export function ScreeningStatusControl({
     <form ref={formRef} action={setScreeningStatus}>
       <input type="hidden" name="id" value={id} />
       <select
+        key={status}
         name="screening_status"
         defaultValue={status}
         onChange={() => formRef.current?.requestSubmit()}

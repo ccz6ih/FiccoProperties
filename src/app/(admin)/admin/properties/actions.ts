@@ -30,6 +30,7 @@ export async function setUnitStatus(form: FormData) {
   await supabase.from("units").update({ status }).eq("id", id);
 
   revalidatePath("/admin/properties");
+  revalidatePath("/admin/properties/[slug]", "page");
   revalidatePath("/admin");
 }
 
@@ -78,5 +79,6 @@ export async function saveUnit(form: FormData) {
 
   revalidatePath("/admin/properties");
   if (slug) revalidatePath(`/admin/properties/${slug}`);
+  revalidatePath("/admin/properties/[slug]", "page");
   revalidatePath("/admin");
 }
