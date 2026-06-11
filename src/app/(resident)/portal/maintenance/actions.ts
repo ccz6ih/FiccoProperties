@@ -23,13 +23,24 @@ export async function createMaintenanceRequest(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Your session expired. Please sign in again." };
 
-  // Link to the resident's active-lease unit if there is one.
-  const { data: lease } = await supabase
-    .from("leases")
+  // Link to the resident's unit, primarily via unit_occupancy (their home),
+  // falling back to their active-lease unit if no occupancy row exists.
+  const { data: occupancy } = await supabase
+    .from("unit_occupancy")
     .select("unit_id")
-    .eq("resident_id", user.id)
-    .eq("status", "active")
+    .eq("occupant_profile_id", user.id)
     .maybeSingle();
+
+  let unitId = occupancy?.unit_id ?? null;
+  if (!unitId) {
+    const { data: lease } = await supabase
+      .from("leases")
+      .select("unit_id")
+      .eq("resident_id", user.id)
+      .eq("status", "active")
+      .maybeSingle();
+    unitId = lease?.unit_id ?? null;
+  }
 
   const { error } = await supabase.from("maintenance_requests").insert({
     title,
@@ -37,7 +48,7 @@ export async function createMaintenanceRequest(
     category,
     priority,
     created_by: user.id,
-    unit_id: lease?.unit_id ?? null,
+    unit_id: unitId,
   });
 
   if (error) return { ok: false, error: "Could not submit your request. Please try again." };

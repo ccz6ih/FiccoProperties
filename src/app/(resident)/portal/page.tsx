@@ -10,11 +10,41 @@ type LeaseRow = Tables<"leases"> & {
   units: { label: string; properties: { name: string | null } | null } | null;
 };
 
+type OccupancyRow = {
+  rent_cents: number | null;
+  lease_start_date: string | null;
+  lease_end_date: string | null;
+  units: { label: string; properties: { name: string | null } | null } | null;
+};
+
+/** Compute tenure from a start date to today as e.g. "1 yr 3 mo". */
+function tenureLabel(startIso: string | null | undefined): string | undefined {
+  if (!startIso) return undefined;
+  const start = new Date(startIso);
+  const now = new Date();
+  let months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  if (months < 0) months = 0;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} yr${years === 1 ? "" : "s"}`);
+  parts.push(`${rem} mo`);
+  return parts.join(" ");
+}
+
 export default async function PortalHome() {
   const { user, profile } = await requireProfile("/portal");
   const supabase = await createClient();
 
-  const [{ data: leases }, { data: maintenance }] = await Promise.all([
+  const [{ data: occupancy }, { data: leases }, { data: maintenance }] = await Promise.all([
+    supabase
+      .from("unit_occupancy")
+      .select("rent_cents, lease_start_date, lease_end_date, units(label, properties(name))")
+      .eq("occupant_profile_id", user.id)
+      .maybeSingle<OccupancyRow>(),
     supabase
       .from("leases")
       .select("*, units(label, properties(name))")
@@ -30,6 +60,15 @@ export default async function PortalHome() {
   ]);
 
   const activeLease = leases?.find((l) => l.status === "active") ?? leases?.[0] ?? null;
+
+  // Resolve the resident's home primarily via unit_occupancy, falling back to
+  // their active lease.
+  const homeLabel = occupancy?.units?.label ?? activeLease?.units?.label ?? "—";
+  const homeProperty =
+    occupancy?.units?.properties?.name ?? activeLease?.units?.properties?.name ?? null;
+  const rentCents = occupancy?.rent_cents ?? activeLease?.rent_cents ?? null;
+  const tenure = tenureLabel(occupancy?.lease_start_date ?? activeLease?.start_date);
+
   const openCount =
     maintenance?.filter((m) => !["completed", "cancelled"].includes(m.status)).length ?? 0;
 
@@ -45,14 +84,14 @@ export default async function PortalHome() {
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Your home"
-          value={activeLease?.units?.label ?? "—"}
-          hint={activeLease?.units?.properties?.name ?? "No active lease yet"}
+          value={homeLabel}
+          hint={homeProperty ?? "No home on file yet"}
         />
         <StatCard
           label="Monthly rent"
-          value={activeLease ? formatCents(activeLease.rent_cents) : "—"}
+          value={rentCents != null ? formatCents(rentCents) : "—"}
           tone="terracotta"
-          hint={activeLease ? "Due on the 1st" : undefined}
+          hint={tenure ? `Tenure: ${tenure}` : rentCents != null ? "Due on the 1st" : undefined}
         />
         <StatCard
           label="Open requests"

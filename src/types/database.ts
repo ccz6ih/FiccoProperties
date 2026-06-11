@@ -893,6 +893,66 @@ export type Database = {
         }
         Relationships: []
       }
+      unit_occupancy: {
+        Row: {
+          lease_end_date: string | null
+          lease_signed_date: string | null
+          lease_start_date: string | null
+          move_in_date: string | null
+          notes: string | null
+          occupant_profile_id: string | null
+          rent_cents: number | null
+          tenant_email: string | null
+          tenant_name: string | null
+          tenant_phone: string | null
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          lease_end_date?: string | null
+          lease_signed_date?: string | null
+          lease_start_date?: string | null
+          move_in_date?: string | null
+          notes?: string | null
+          occupant_profile_id?: string | null
+          rent_cents?: number | null
+          tenant_email?: string | null
+          tenant_name?: string | null
+          tenant_phone?: string | null
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          lease_end_date?: string | null
+          lease_signed_date?: string | null
+          lease_start_date?: string | null
+          move_in_date?: string | null
+          notes?: string | null
+          occupant_profile_id?: string | null
+          rent_cents?: number | null
+          tenant_email?: string | null
+          tenant_name?: string | null
+          tenant_phone?: string | null
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_occupancy_occupant_profile_id_fkey"
+            columns: ["occupant_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_occupancy_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: true
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           bathrooms: number | null

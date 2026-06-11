@@ -3,7 +3,11 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { UnitStatusControl } from "@/components/unit-status-control";
-import { UnitEditForm } from "@/components/unit-edit-form";
+import {
+  UnitEditForm,
+  type OccupancyValues,
+  type ResidentOption,
+} from "@/components/unit-edit-form";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,13 +32,26 @@ type UnitRow = {
   notes: string | null;
 };
 
-type LeaseRow = {
-  id: string;
+type OccupancyRow = {
   unit_id: string;
-  rent_cents: number;
-  start_date: string;
-  end_date: string | null;
-  profiles: { full_name: string | null; email: string | null; phone: string | null } | null;
+  occupant_profile_id: string | null;
+  tenant_name: string | null;
+  tenant_email: string | null;
+  tenant_phone: string | null;
+  rent_cents: number | null;
+  lease_start_date: string | null;
+  lease_signed_date: string | null;
+  lease_end_date: string | null;
+  move_in_date: string | null;
+  notes: string | null;
+  profiles: { id: string; full_name: string | null; email: string | null } | null;
+};
+
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  role: string;
 };
 
 const VACANT_STATUSES = new Set(["available", "make_ready"]);
@@ -63,20 +80,26 @@ export default async function PropertyDetail({
 
   if (!property) notFound();
 
-  const [{ data: units }, { data: leases }] = await Promise.all([
-    supabase
-      .from("units")
-      .select("id, label, status, bedrooms, bathrooms, sqft, rent_cents, notes")
-      .eq("property_id", property.id)
-      .returns<UnitRow[]>(),
-    supabase
-      .from("leases")
-      .select(
-        "id, unit_id, rent_cents, start_date, end_date, profiles(full_name, email, phone)"
-      )
-      .eq("status", "active")
-      .returns<LeaseRow[]>(),
-  ]);
+  const [{ data: units }, { data: occupancies }, { data: profiles }] =
+    await Promise.all([
+      supabase
+        .from("units")
+        .select("id, label, status, bedrooms, bathrooms, sqft, rent_cents, notes")
+        .eq("property_id", property.id)
+        .returns<UnitRow[]>(),
+      supabase
+        .from("unit_occupancy")
+        .select(
+          "unit_id, occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, notes, profiles(id, full_name, email)"
+        )
+        .returns<OccupancyRow[]>(),
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, role")
+        .eq("role", "resident")
+        .order("full_name")
+        .returns<ProfileRow[]>(),
+    ]);
 
   const unitList = [...(units ?? [])].sort((a, b) => {
     const ka = labelSortKey(a.label);
@@ -85,8 +108,14 @@ export default async function PropertyDetail({
     return a.label.localeCompare(b.label);
   });
 
-  const leaseByUnit = new Map<string, LeaseRow>();
-  for (const l of leases ?? []) leaseByUnit.set(l.unit_id, l);
+  const occByUnit = new Map<string, OccupancyRow>();
+  for (const o of occupancies ?? []) occByUnit.set(o.unit_id, o);
+
+  const residentOptions: ResidentOption[] = (profiles ?? []).map((p) => ({
+    id: p.id,
+    full_name: p.full_name,
+    email: p.email,
+  }));
 
   const total = unitList.length;
   const occupied = unitList.filter((u) => u.status === "occupied").length;
@@ -120,21 +149,26 @@ export default async function PropertyDetail({
                 <tr className="border-b border-clay bg-sand/50 text-left text-xs uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-3 font-medium">Unit</th>
                   <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium">Current resident</th>
-                  <th className="px-5 py-3 font-medium">Lease term</th>
+                  <th className="px-5 py-3 font-medium">Tenant</th>
                   <th className="px-5 py-3 font-medium">Rent</th>
+                  <th className="px-5 py-3 font-medium">Lease signed</th>
+                  <th className="px-5 py-3 font-medium">Term</th>
                   <th className="px-5 py-3 font-medium" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-clay">
                 {unitList.map((u) => {
-                  const lease = leaseByUnit.get(u.id);
+                  const occ = occByUnit.get(u.id);
                   const specs = [
                     u.bedrooms != null ? `${u.bedrooms} bd` : null,
                     u.bathrooms != null ? `${u.bathrooms} ba` : null,
                   ]
                     .filter(Boolean)
                     .join(" · ");
+
+                  const occProfile = occ?.profiles ?? null;
+                  const rentCents = occ?.rent_cents ?? u.rent_cents;
+                  const hasTerm = occ?.lease_start_date || occ?.lease_end_date;
 
                   return (
                     <tr key={u.id} className="align-top hover:bg-sand/30">
@@ -152,13 +186,20 @@ export default async function PropertyDetail({
                         <UnitStatusControl id={u.id} status={u.status} />
                       </td>
                       <td className="px-5 py-3">
-                        {lease ? (
+                        {occProfile ? (
+                          <Link
+                            href={`/admin/residents/${occProfile.id}`}
+                            className="font-medium text-pine hover:text-pine-dark"
+                          >
+                            {occProfile.full_name ?? occProfile.email ?? "Resident"}
+                          </Link>
+                        ) : occ?.tenant_name ? (
                           <div>
                             <div className="font-medium text-ink">
-                              {lease.profiles?.full_name ?? "—"}
+                              {occ.tenant_name}
                             </div>
                             <div className="text-xs text-ink-faint">
-                              {lease.profiles?.email ?? lease.profiles?.phone ?? ""}
+                              {occ.tenant_email ?? occ.tenant_phone ?? ""}
                             </div>
                           </div>
                         ) : (
@@ -166,10 +207,18 @@ export default async function PropertyDetail({
                         )}
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
-                        {lease ? (
+                        {formatCents(rentCents)}
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {formatDate(occ?.lease_signed_date)}
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {hasTerm ? (
                           <>
-                            {formatDate(lease.start_date)} –{" "}
-                            {lease.end_date ? formatDate(lease.end_date) : "ongoing"}
+                            {formatDate(occ?.lease_start_date)} –{" "}
+                            {occ?.lease_end_date
+                              ? formatDate(occ.lease_end_date)
+                              : "ongoing"}
                           </>
                         ) : (
                           <Link
@@ -180,11 +229,10 @@ export default async function PropertyDetail({
                           </Link>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-ink-soft">
-                        {formatCents(lease ? lease.rent_cents : u.rent_cents)}
-                      </td>
                       <td className="px-5 py-3">
                         <UnitEditForm
+                          propertySlug={property.slug}
+                          residents={residentOptions}
                           unit={{
                             id: u.id,
                             label: u.label,
@@ -195,6 +243,22 @@ export default async function PropertyDetail({
                             rent_cents: u.rent_cents,
                             notes: u.notes,
                           }}
+                          occupancy={
+                            occ
+                              ? ({
+                                  occupant_profile_id: occ.occupant_profile_id,
+                                  tenant_name: occ.tenant_name,
+                                  tenant_email: occ.tenant_email,
+                                  tenant_phone: occ.tenant_phone,
+                                  rent_cents: occ.rent_cents,
+                                  lease_start_date: occ.lease_start_date,
+                                  lease_signed_date: occ.lease_signed_date,
+                                  lease_end_date: occ.lease_end_date,
+                                  move_in_date: occ.move_in_date,
+                                  notes: occ.notes,
+                                } satisfies OccupancyValues)
+                              : null
+                          }
                         />
                       </td>
                     </tr>

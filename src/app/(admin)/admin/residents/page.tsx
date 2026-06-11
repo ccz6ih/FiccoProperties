@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatDate } from "@/lib/format";
@@ -30,7 +31,11 @@ export default async function AdminResidents() {
               <tbody className="divide-y divide-clay">
                 {profiles.map((p) => (
                   <tr key={p.id} className="hover:bg-sand/30">
-                    <td className="px-5 py-3 font-medium text-ink">{p.full_name ?? "—"}</td>
+                    <td className="px-5 py-3 font-medium text-ink">
+                      <Link href={`/admin/residents/${p.id}`} className="text-pine hover:underline">
+                        {p.full_name ?? "—"}
+                      </Link>
+                    </td>
                     <td className="px-5 py-3 text-ink-soft">{p.email}</td>
                     <td className="px-5 py-3 text-ink-soft">{p.phone ?? "—"}</td>
                     <td className="px-5 py-3 text-ink-soft">{formatDate(p.created_at)}</td>
