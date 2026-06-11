@@ -16,52 +16,97 @@ export type Database = {
     Tables: {
       applications: {
         Row: {
+          authorize_landlord_contact: boolean
+          authorize_screening: boolean
           created_at: string
           created_by: string | null
+          current_address: string | null
+          current_residency_length: string | null
+          date_of_birth: string | null
           desired_move_in: string | null
           email: string
+          employer_name: string | null
+          employer_phone: string | null
           first_name: string
           household_size: number | null
           id: string
+          id_photo_path: string | null
+          landlord_email: string | null
+          landlord_name: string | null
+          landlord_phone: string | null
           last_name: string
           message: string | null
           monthly_income_cents: number | null
+          pets_ack: boolean
           phone: string | null
           property_id: string | null
+          reason_for_moving: string | null
+          screening_status: string
+          signature_name: string | null
           status: string
           unit_id: string | null
           updated_at: string
         }
         Insert: {
+          authorize_landlord_contact?: boolean
+          authorize_screening?: boolean
           created_at?: string
           created_by?: string | null
+          current_address?: string | null
+          current_residency_length?: string | null
+          date_of_birth?: string | null
           desired_move_in?: string | null
           email: string
+          employer_name?: string | null
+          employer_phone?: string | null
           first_name: string
           household_size?: number | null
           id?: string
+          id_photo_path?: string | null
+          landlord_email?: string | null
+          landlord_name?: string | null
+          landlord_phone?: string | null
           last_name: string
           message?: string | null
           monthly_income_cents?: number | null
+          pets_ack?: boolean
           phone?: string | null
           property_id?: string | null
+          reason_for_moving?: string | null
+          screening_status?: string
+          signature_name?: string | null
           status?: string
           unit_id?: string | null
           updated_at?: string
         }
         Update: {
+          authorize_landlord_contact?: boolean
+          authorize_screening?: boolean
           created_at?: string
           created_by?: string | null
+          current_address?: string | null
+          current_residency_length?: string | null
+          date_of_birth?: string | null
           desired_move_in?: string | null
           email?: string
+          employer_name?: string | null
+          employer_phone?: string | null
           first_name?: string
           household_size?: number | null
           id?: string
+          id_photo_path?: string | null
+          landlord_email?: string | null
+          landlord_name?: string | null
+          landlord_phone?: string | null
           last_name?: string
           message?: string | null
           monthly_income_cents?: number | null
+          pets_ack?: boolean
           phone?: string | null
           property_id?: string | null
+          reason_for_moving?: string | null
+          screening_status?: string
+          signature_name?: string | null
           status?: string
           unit_id?: string | null
           updated_at?: string

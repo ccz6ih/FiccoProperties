@@ -102,6 +102,11 @@ const statusTones: Record<string, string> = {
   pending: "bg-[#f6edd6] text-[#8a6a1f]",
   failed: "bg-terracotta-soft text-terracotta-dark",
   refunded: "bg-sand text-ink-soft",
+  // application screening
+  not_started: "bg-sand text-ink-soft",
+  invited: "bg-[#f6edd6] text-[#8a6a1f]",
+  passed: "bg-pine-soft text-pine-dark",
+  waived: "bg-sand text-ink-faint",
 };
 
 export function StatusPill({ value }: { value: string }) {

@@ -34,13 +34,17 @@ export default async function ApplyPage({
             Let&apos;s find your home on 38th
           </h1>
           <p className="text-lg leading-relaxed text-ink-soft">
-            Tell us a bit about you and where you&apos;d like to live. It takes
-            about three minutes, and there&apos;s no fee to apply.
+            Tell us a bit about you and where you&apos;d like to live. There&apos;s
+            no fee to apply. Our communities are pet-free, and a credit and
+            background check (about $40, paid by you to TransUnion SmartMove) is
+            part of the process.
           </p>
           <ul className="space-y-3 pt-2">
             {[
               "Apply to any of our four communities",
               "We review every application personally",
+              "All Ficco communities are pet-free",
+              "A ~$40 background check is part of the process",
               "We'll email you within a few business days",
             ].map((line) => (
               <li key={line} className="flex items-start gap-3 text-sm text-ink-soft">

@@ -30,9 +30,9 @@ type ApplicationRow = {
 export default async function NewLeasePage({
   searchParams,
 }: {
-  searchParams: Promise<{ application?: string }>;
+  searchParams: Promise<{ application?: string; unit?: string }>;
 }) {
-  const { application } = await searchParams;
+  const { application, unit } = await searchParams;
   const supabase = await createClient();
 
   const [{ data: units }, { data: profiles }] = await Promise.all([
@@ -72,6 +72,15 @@ export default async function NewLeasePage({
         unit_id: app.unit_id,
         resident_id: matchedProfile?.id ?? null,
         rent: matchedUnit?.rent_cents != null ? String(matchedUnit.rent_cents / 100) : undefined,
+      };
+    }
+  } else if (unit) {
+    // Prefill the unit when coming from a vacant unit in Properties.
+    const matchedUnit = units?.find((u) => u.id === unit);
+    if (matchedUnit) {
+      defaults = {
+        unit_id: matchedUnit.id,
+        rent: matchedUnit.rent_cents != null ? String(matchedUnit.rent_cents / 100) : undefined,
       };
     }
   }

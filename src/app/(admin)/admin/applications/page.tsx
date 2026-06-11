@@ -43,9 +43,12 @@ export default async function AdminApplications() {
                 {applications.map((a) => (
                   <tr key={a.id} className="hover:bg-sand/30">
                     <td className="px-5 py-3">
-                      <div className="font-medium text-ink">
+                      <Link
+                        href={`/admin/applications/${a.id}`}
+                        className="font-medium text-ink hover:text-pine"
+                      >
                         {a.first_name} {a.last_name}
-                      </div>
+                      </Link>
                       <div className="text-xs text-ink-faint">{a.email}</div>
                     </td>
                     <td className="px-5 py-3 text-ink-soft">
