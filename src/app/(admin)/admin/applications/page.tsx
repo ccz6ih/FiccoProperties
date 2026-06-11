@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { ApplicationStatusControl } from "@/components/application-status-control";
@@ -56,7 +57,17 @@ export default async function AdminApplications() {
                     </td>
                     <td className="px-5 py-3 text-ink-soft">{formatDate(a.created_at)}</td>
                     <td className="px-5 py-3">
-                      <ApplicationStatusControl id={a.id} status={a.status} />
+                      <div className="flex items-center gap-3">
+                        <ApplicationStatusControl id={a.id} status={a.status} />
+                        {a.status === "approved" && (
+                          <Link
+                            href={`/admin/leases/new?application=${a.id}`}
+                            className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                          >
+                            Create lease →
+                          </Link>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

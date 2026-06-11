@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type MaintenanceState = { ok: boolean; error?: string };
 
@@ -44,4 +45,30 @@ export async function createMaintenanceRequest(
   revalidatePath("/portal/maintenance");
   revalidatePath("/portal");
   return { ok: true };
+}
+
+/**
+ * Resident reply to one of their own requests. RLS enforces that the request
+ * belongs to them and that the comment is never internal.
+ */
+export async function addResidentComment(form: FormData) {
+  const requestId = form.get("request_id") as string;
+  const body = (form.get("body") as string)?.trim();
+  if (!requestId || !body) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const db = supabase as unknown as SupabaseClient;
+  await db.from("maintenance_comments").insert({
+    request_id: requestId,
+    author_id: user.id,
+    body,
+    internal: false,
+  });
+  revalidatePath("/portal/maintenance");
+  revalidatePath(`/admin/maintenance/${requestId}`);
 }

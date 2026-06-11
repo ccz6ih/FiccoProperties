@@ -1,10 +1,15 @@
-import { Card } from "@/components/ui";
+import Link from "next/link";
+import { Card, ButtonLink } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import type { Tables } from "@/types/database";
 
-type LeaseRow = Tables<"leases"> & {
+type LeaseRow = {
+  id: string;
+  rent_cents: number;
+  start_date: string;
+  end_date: string | null;
+  status: string;
   units: { label: string; properties: { name: string | null } | null } | null;
   profiles: { full_name: string | null; email: string | null } | null;
 };
@@ -13,13 +18,21 @@ export default async function AdminLeases() {
   const supabase = await createClient();
   const { data: leases } = await supabase
     .from("leases")
-    .select("*, units(label, properties(name)), profiles(full_name, email)")
+    .select("id, rent_cents, start_date, end_date, status, units(label, properties(name)), profiles(full_name, email)")
     .order("start_date", { ascending: false })
     .returns<LeaseRow[]>();
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Leases" subtitle="Active and historical agreements." />
+      <PageHeader
+        title="Leases"
+        subtitle="Active and historical agreements."
+        action={
+          <ButtonLink href="/admin/leases/new" variant="primary">
+            New lease
+          </ButtonLink>
+        }
+      />
 
       {leases && leases.length > 0 ? (
         <Card className="overflow-hidden">
@@ -38,8 +51,12 @@ export default async function AdminLeases() {
                 {leases.map((l) => (
                   <tr key={l.id} className="hover:bg-sand/30">
                     <td className="px-5 py-3">
-                      <div className="font-medium text-ink">{l.profiles?.full_name ?? "—"}</div>
-                      <div className="text-xs text-ink-faint">{l.profiles?.email}</div>
+                      <Link href={`/admin/leases/${l.id}`} className="block">
+                        <div className="font-medium text-ink hover:text-pine">
+                          {l.profiles?.full_name ?? "—"}
+                        </div>
+                        <div className="text-xs text-ink-faint">{l.profiles?.email}</div>
+                      </Link>
                     </td>
                     <td className="px-5 py-3 text-ink-soft">
                       {l.units?.properties?.name} · {l.units?.label}
@@ -60,7 +77,12 @@ export default async function AdminLeases() {
       ) : (
         <EmptyState
           title="No leases yet"
-          body="Approve an application and create a lease to get started. Lease creation and e-signature arrive in Phase 2."
+          body="Approve an application and create a lease to get started."
+          action={
+            <ButtonLink href="/admin/leases/new" variant="primary">
+              New lease
+            </ButtonLink>
+          }
         />
       )}
     </div>

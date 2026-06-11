@@ -90,6 +90,18 @@ const statusTones: Record<string, string> = {
   high: "bg-terracotta-soft text-terracotta-dark",
   normal: "bg-sand text-ink-soft",
   low: "bg-sand text-ink-faint",
+  // make-ready (Phase 3)
+  blocked: "bg-terracotta-soft text-terracotta-dark",
+  complete: "bg-pine-soft text-pine-dark",
+  internal: "bg-[#f6edd6] text-[#8a6a1f]",
+  // payments (Phase 5)
+  paid: "bg-pine-soft text-pine-dark",
+  past_due: "bg-terracotta-soft text-terracotta-dark",
+  void: "bg-sand text-ink-faint",
+  succeeded: "bg-pine-soft text-pine-dark",
+  pending: "bg-[#f6edd6] text-[#8a6a1f]",
+  failed: "bg-terracotta-soft text-terracotta-dark",
+  refunded: "bg-sand text-ink-soft",
 };
 
 export function StatusPill({ value }: { value: string }) {

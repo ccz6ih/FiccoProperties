@@ -14,4 +14,6 @@ export const navIcons: Record<string, ReactNode> = {
   inbox: s(<path d="M3 13h5l2 3h4l2-3h5M3 13l3-8h12l3 8v6H3z" strokeLinecap="round" strokeLinejoin="round" />),
   building: s(<path d="M4 21V4h10v17M14 9h6v12M8 8h2M8 12h2M8 16h2" strokeLinecap="round" strokeLinejoin="round" />),
   users: s(<path d="M16 19v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 9a3 3 0 100-6 3 3 0 000 6zM22 19v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" strokeLinecap="round" strokeLinejoin="round" />),
+  card: s(<><rect x="2.5" y="5" width="19" height="14" rx="2.5" /><path d="M2.5 9.5h19" strokeLinecap="round" /><path d="M6 14.5h4" strokeLinecap="round" /></>),
+  checklist: s(<path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />),
 };

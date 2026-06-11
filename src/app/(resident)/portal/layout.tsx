@@ -13,6 +13,7 @@ export default async function PortalLayout({
     { href: "/portal", label: "My home", icon: navIcons.home },
     { href: "/portal/maintenance", label: "Maintenance", icon: navIcons.wrench },
     { href: "/portal/lease", label: "Lease", icon: navIcons.doc },
+    { href: "/portal/payments", label: "Payments", icon: navIcons.card },
     { href: "/portal/messages", label: "Messages", icon: navIcons.chat },
   ];
   if (isStaff(profile)) {

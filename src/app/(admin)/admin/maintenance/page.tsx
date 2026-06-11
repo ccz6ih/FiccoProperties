@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatDate, humanize } from "@/lib/format";
@@ -43,20 +44,22 @@ export default async function AdminMaintenance() {
                 </div>
                 <div className="space-y-3">
                   {items.map((r) => (
-                    <Card key={r.id} className="space-y-2 p-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium text-ink">{r.title}</span>
-                        {r.priority !== "normal" && <StatusPill value={r.priority} />}
-                      </div>
-                      <div className="text-xs text-ink-faint">
-                        {r.units?.properties?.name ?? "Unassigned"}
-                        {r.units?.label ? ` · ${r.units.label}` : ""}
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-ink-faint">
-                        <span>{humanize(r.category)}</span>
-                        <span>{formatDate(r.created_at)}</span>
-                      </div>
-                    </Card>
+                    <Link key={r.id} href={`/admin/maintenance/${r.id}`} className="block">
+                      <Card className="space-y-2 p-4 transition-colors hover:border-clay-deep hover:bg-sand/30">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm font-medium text-ink">{r.title}</span>
+                          {r.priority !== "normal" && <StatusPill value={r.priority} />}
+                        </div>
+                        <div className="text-xs text-ink-faint">
+                          {r.units?.properties?.name ?? "Unassigned"}
+                          {r.units?.label ? ` · ${r.units.label}` : ""}
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-ink-faint">
+                          <span>{humanize(r.category)}</span>
+                          <span>{formatDate(r.created_at)}</span>
+                        </div>
+                      </Card>
+                    </Link>
                   ))}
                   {items.length === 0 && (
                     <div className="rounded-xl border border-dashed border-clay-deep py-8 text-center text-xs text-ink-faint">

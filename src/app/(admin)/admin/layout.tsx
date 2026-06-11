@@ -14,8 +14,11 @@ export default async function AdminLayout({
   const nav: NavItem[] = [
     { href: "/admin", label: "Overview", icon: navIcons.home },
     { href: "/admin/applications", label: "Applications", icon: navIcons.inbox },
-    { href: "/admin/maintenance", label: "Maintenance", icon: navIcons.wrench },
     { href: "/admin/leases", label: "Leases", icon: navIcons.doc },
+    { href: "/admin/maintenance", label: "Maintenance", icon: navIcons.wrench },
+    { href: "/admin/turns", label: "Make-ready", icon: navIcons.checklist },
+    { href: "/admin/payments", label: "Payments", icon: navIcons.card },
+    { href: "/admin/messages", label: "Messages", icon: navIcons.chat },
     { href: "/admin/residents", label: "Residents", icon: navIcons.users },
   ];
 

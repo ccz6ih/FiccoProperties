@@ -83,6 +83,60 @@ export type Database = {
           },
         ]
       }
+      charges: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          lease_id: string
+          period: string | null
+          resident_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lease_id: string
+          period?: string | null
+          resident_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          lease_id?: string
+          period?: string | null
+          resident_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "charges_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "leases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "charges_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -115,8 +169,51 @@ export type Database = {
           },
         ]
       }
+      lease_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          lease_id: string
+          note: string | null
+          type: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          lease_id: string
+          note?: string | null
+          type: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          lease_id?: string
+          note?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lease_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lease_events_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "leases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leases: {
         Row: {
+          application_id: string | null
           created_at: string
           deposit_cents: number
           document_url: string | null
@@ -124,13 +221,17 @@ export type Database = {
           id: string
           rent_cents: number
           resident_id: string
+          signature_ip: string | null
+          signature_name: string | null
           signed_at: string | null
           start_date: string
           status: string
+          terms: string | null
           unit_id: string
           updated_at: string
         }
         Insert: {
+          application_id?: string | null
           created_at?: string
           deposit_cents?: number
           document_url?: string | null
@@ -138,13 +239,17 @@ export type Database = {
           id?: string
           rent_cents?: number
           resident_id: string
+          signature_ip?: string | null
+          signature_name?: string | null
           signed_at?: string | null
           start_date: string
           status?: string
+          terms?: string | null
           unit_id: string
           updated_at?: string
         }
         Update: {
+          application_id?: string | null
           created_at?: string
           deposit_cents?: number
           document_url?: string | null
@@ -152,13 +257,23 @@ export type Database = {
           id?: string
           rent_cents?: number
           resident_id?: string
+          signature_ip?: string | null
+          signature_name?: string | null
           signed_at?: string | null
           start_date?: string
           status?: string
+          terms?: string | null
           unit_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "leases_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "leases_resident_id_fkey"
             columns: ["resident_id"]
@@ -171,6 +286,96 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ledger_entries: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          id: string
+          kind: string
+          lease_id: string | null
+          memo: string | null
+          ref_id: string | null
+          resident_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          id?: string
+          kind: string
+          lease_id?: string | null
+          memo?: string | null
+          ref_id?: string | null
+          resident_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          lease_id?: string | null
+          memo?: string | null
+          ref_id?: string | null
+          resident_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_entries_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "leases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_entries_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maintenance_comments: {
+        Row: {
+          author_id: string | null
+          body: string
+          created_at: string
+          id: string
+          internal: boolean
+          request_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          body: string
+          created_at?: string
+          id?: string
+          internal?: boolean
+          request_id: string
+        }
+        Update: {
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          id?: string
+          internal?: boolean
+          request_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_comments_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "maintenance_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -242,6 +447,153 @@ export type Database = {
           },
         ]
       }
+      makeready_tasks: {
+        Row: {
+          done: boolean
+          done_at: string | null
+          done_by: string | null
+          id: string
+          label: string
+          sort: number
+          turn_id: string
+        }
+        Insert: {
+          done?: boolean
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          label: string
+          sort?: number
+          turn_id: string
+        }
+        Update: {
+          done?: boolean
+          done_at?: string | null
+          done_by?: string | null
+          id?: string
+          label?: string
+          sort?: number
+          turn_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "makeready_tasks_done_by_fkey"
+            columns: ["done_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "makeready_tasks_turn_id_fkey"
+            columns: ["turn_id"]
+            isOneToOne: false
+            referencedRelation: "makeready_turns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      makeready_template_items: {
+        Row: {
+          id: string
+          label: string
+          sort: number
+          template_id: string
+        }
+        Insert: {
+          id?: string
+          label: string
+          sort?: number
+          template_id: string
+        }
+        Update: {
+          id?: string
+          label?: string
+          sort?: number
+          template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "makeready_template_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "makeready_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      makeready_templates: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      makeready_turns: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          started_by: string | null
+          status: string
+          template_id: string | null
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          started_by?: string | null
+          status?: string
+          template_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          started_by?: string | null
+          status?: string
+          template_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "makeready_turns_started_by_fkey"
+            columns: ["started_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "makeready_turns_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "makeready_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "makeready_turns_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -278,6 +630,140 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          read_at: string | null
+          title: string
+          type: string
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          title: string
+          type?: string
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_methods: {
+        Row: {
+          created_at: string
+          id: string
+          is_default: boolean
+          kind: string
+          label: string | null
+          profile_id: string
+          provider_ref: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind?: string
+          label?: string | null
+          profile_id: string
+          provider_ref?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          kind?: string
+          label?: string | null
+          profile_id?: string
+          provider_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount_cents: number
+          charge_id: string | null
+          created_at: string
+          id: string
+          method_id: string | null
+          provider_ref: string | null
+          resident_id: string
+          status: string
+        }
+        Insert: {
+          amount_cents: number
+          charge_id?: string | null
+          created_at?: string
+          id?: string
+          method_id?: string | null
+          provider_ref?: string | null
+          resident_id: string
+          status?: string
+        }
+        Update: {
+          amount_cents?: number
+          charge_id?: string | null
+          created_at?: string
+          id?: string
+          method_id?: string | null
+          provider_ref?: string | null
+          resident_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "charges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_method_id_fkey"
+            columns: ["method_id"]
+            isOneToOne: false
+            referencedRelation: "payment_methods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_resident_id_fkey"
+            columns: ["resident_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -418,6 +904,14 @@ export type Database = {
     }
     Functions: {
       is_staff: { Args: never; Returns: boolean }
+      settle_charge: {
+        Args: {
+          p_charge_id: string
+          p_method_id: string
+          p_provider_ref: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
