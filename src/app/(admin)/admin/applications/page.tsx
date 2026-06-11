@@ -70,6 +70,14 @@ export default async function AdminApplications() {
                             Create lease →
                           </Link>
                         )}
+                        {a.status === "denied" && !a.adverse_action_sent_at && (
+                          <Link
+                            href={`/admin/applications/${a.id}`}
+                            className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-terracotta-soft px-2.5 py-0.5 text-xs font-medium text-terracotta-dark"
+                          >
+                            ⚠ Notice due
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>

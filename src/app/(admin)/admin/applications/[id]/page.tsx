@@ -4,6 +4,7 @@ import { Card, ButtonLink } from "@/components/ui";
 import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import { ApplicationStatusControl } from "@/components/application-status-control";
 import { ScreeningRecordForm } from "@/components/screening-record-form";
+import { setAdverseActionSent } from "@/app/(admin)/admin/applications/[id]/actions";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -83,6 +84,71 @@ export default async function ApplicationDetail({
           </Link>
         }
       />
+
+      {a.status === "denied" &&
+        (a.adverse_action_sent_at ? (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-pine-soft px-5 py-4">
+            <span className="text-sm text-pine-dark">
+              ✓ Adverse-action notice marked sent on{" "}
+              {formatDate(a.adverse_action_sent_at)}.
+            </span>
+            <form action={setAdverseActionSent}>
+              <input type="hidden" name="id" value={a.id} />
+              <input type="hidden" name="sent" value="false" />
+              <button type="submit" className="text-xs font-medium text-pine-dark underline">
+                Undo
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div className="mb-6 space-y-3 rounded-2xl border-2 border-terracotta bg-terracotta-soft px-5 py-4">
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-terracotta text-sm font-bold text-cream"
+              >
+                !
+              </span>
+              <div className="space-y-1">
+                <div className="font-semibold text-terracotta-dark">
+                  Adverse-action notice required
+                </div>
+                <p className="text-sm text-terracotta-dark/90">
+                  This application is denied. If the decision was based even in
+                  part on the screening or credit report, the FCRA requires you
+                  to send the applicant an adverse-action notice. SmartMove
+                  provides a ready-made letter with the required disclosures (the
+                  screening company&apos;s name &amp; contact, that they
+                  didn&apos;t make the decision, and the applicant&apos;s right to
+                  a free copy of the report and to dispute it).
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pl-9">
+              <ButtonLink
+                href="https://www.mysmartmove.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="accent"
+              >
+                SmartMove adverse-action letter
+              </ButtonLink>
+              <ButtonLink href={`mailto:${a.email}?subject=${subject}`} variant="outline">
+                Email applicant
+              </ButtonLink>
+              <form action={setAdverseActionSent}>
+                <input type="hidden" name="id" value={a.id} />
+                <input type="hidden" name="sent" value="true" />
+                <button
+                  type="submit"
+                  className="inline-flex h-10 items-center rounded-full bg-pine px-5 text-sm font-medium text-cream transition-colors hover:bg-pine-dark"
+                >
+                  Mark notice sent
+                </button>
+              </form>
+            </div>
+          </div>
+        ))}
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">

@@ -20,6 +20,24 @@ export async function setScreeningStatus(form: FormData) {
   revalidatePath("/admin/applications");
 }
 
+/** Record that the FCRA adverse-action notice was sent (or clear it). */
+export async function setAdverseActionSent(form: FormData) {
+  const id = form.get("id") as string;
+  const sent = form.get("sent") === "true";
+  if (!id) return;
+
+  const { profile } = await requireProfile(`/admin/applications/${id}`);
+  if (!isStaff(profile)) return;
+
+  const supabase = await createClient();
+  await supabase
+    .from("applications")
+    .update({ adverse_action_sent_at: sent ? new Date().toISOString() : null })
+    .eq("id", id);
+  revalidatePath(`/admin/applications/${id}`);
+  revalidatePath("/admin/applications");
+}
+
 export type ScreeningState = { ok: boolean; error?: string };
 
 /** Record the screening outcome: status + the SmartMove report link + notes. */

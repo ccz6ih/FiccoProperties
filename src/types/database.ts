@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       applications: {
         Row: {
+          adverse_action_sent_at: string | null
           authorize_landlord_contact: boolean
           authorize_screening: boolean
           created_at: string
@@ -51,6 +52,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          adverse_action_sent_at?: string | null
           authorize_landlord_contact?: boolean
           authorize_screening?: boolean
           created_at?: string
@@ -86,6 +88,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          adverse_action_sent_at?: string | null
           authorize_landlord_contact?: boolean
           authorize_screening?: boolean
           created_at?: string
