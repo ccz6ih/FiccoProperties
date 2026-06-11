@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Ficco Properties — warm & trustworthy design tokens
+   Earthy neutrals, pine green + terracotta accents, friendly serif display.
+   ========================================================================= */
+@theme {
+  --color-cream: #faf7f1;
+  --color-sand: #f2ebdd;
+  --color-clay: #e6dcc8;
+  --color-clay-deep: #d8cbb2;
+
+  --color-ink: #2c2622;
+  --color-ink-soft: #6f655a;
+  --color-ink-faint: #9b9286;
+
+  --color-pine: #2f5d50;
+  --color-pine-dark: #244a40;
+  --color-pine-soft: #e3ece8;
+
+  --color-terracotta: #c2683f;
+  --color-terracotta-dark: #a8552f;
+  --color-terracotta-soft: #f6e7df;
+
+  --color-gold: #c79a3e;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
+
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+}
+
+:root {
+  --background: var(--color-cream);
+  --foreground: var(--color-ink);
+}
+
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background: var(--color-terracotta-soft);
+    color: var(--color-terracotta-dark);
+  }
+}
+
+/* Subtle paper-grain warmth on large surfaces */
+.bg-grain {
+  background-image: radial-gradient(
+      circle at 1px 1px,
+      rgba(44, 38, 34, 0.04) 1px,
+      transparent 0
+    );
+  background-size: 22px 22px;
+}
