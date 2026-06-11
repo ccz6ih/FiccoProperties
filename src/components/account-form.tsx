@@ -15,11 +15,15 @@ export function AccountForm({
   phone,
   email,
   avatarUrl,
+  emergencyName,
+  emergencyPhone,
 }: {
   fullName: string | null;
   phone: string | null;
   email: string | null;
   avatarUrl: string | null;
+  emergencyName: string | null;
+  emergencyPhone: string | null;
 }) {
   const [state, action, pending] = useActionState(updateAccount, initial);
 
@@ -56,6 +60,33 @@ export function AccountForm({
             <span className="text-sm font-medium text-ink">Email</span>
             <input value={email ?? ""} disabled className={`${inputClass} opacity-60`} />
           </label>
+        </div>
+
+        <div className="space-y-5 border-t border-clay pt-6">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">Emergency contact</h2>
+            <p className="text-sm text-ink-soft">
+              Who we should reach if we can&apos;t get hold of you.
+            </p>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Name</span>
+              <input
+                name="emergency_contact_name"
+                defaultValue={emergencyName ?? ""}
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Phone</span>
+              <input
+                name="emergency_contact_phone"
+                defaultValue={emergencyPhone ?? ""}
+                className={inputClass}
+              />
+            </label>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

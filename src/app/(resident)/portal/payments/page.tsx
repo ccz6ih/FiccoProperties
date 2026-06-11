@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, Eyebrow } from "@/components/ui";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { PaymentsAddMethod } from "@/components/payments-add-method";
@@ -87,6 +88,14 @@ export default async function PortalPayments() {
       <PageHeader
         title="Payments"
         subtitle="Pay rent, manage your bank accounts, and review your history."
+        action={
+          <Link
+            href="/statement"
+            className="text-sm font-medium text-pine hover:text-pine-dark"
+          >
+            Rent statement →
+          </Link>
+        }
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">

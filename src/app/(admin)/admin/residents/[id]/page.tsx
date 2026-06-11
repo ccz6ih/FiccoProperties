@@ -58,6 +58,27 @@ type LeaseRow = {
   signed_at: string | null;
 };
 
+type VehicleRow = {
+  id: string;
+  make: string | null;
+  model: string | null;
+  color: string | null;
+  year: number | null;
+  plate: string | null;
+  state: string | null;
+};
+
+/** "2019 Honda Civic · Silver · CO ABC-123" */
+function describeVehicle(v: VehicleRow): string {
+  const head = [v.year, v.make, v.model].filter(Boolean).join(" ");
+  const parts: string[] = [];
+  if (head) parts.push(head);
+  if (v.color) parts.push(v.color);
+  const plate = [v.state, v.plate].filter(Boolean).join(" ");
+  if (plate) parts.push(plate);
+  return parts.join(" · ") || "Vehicle";
+}
+
 /** Compute tenure from a start date to today as e.g. "1 yr 3 mo". */
 function tenureLabel(startIso: string | null): string {
   if (!startIso) return "—";
@@ -99,6 +120,7 @@ export default async function ResidentDetailPage({
     { data: charges },
     { data: ledger },
     { data: leases },
+    { data: vehicles },
   ] = await Promise.all([
     supabase
       .from("unit_occupancy")
@@ -138,6 +160,12 @@ export default async function ResidentDetailPage({
       .eq("resident_id", id)
       .order("start_date", { ascending: false })
       .returns<LeaseRow[]>(),
+    supabase
+      .from("vehicles")
+      .select("id, make, model, color, year, plate, state")
+      .eq("profile_id", id)
+      .order("created_at", { ascending: true })
+      .returns<VehicleRow[]>(),
   ]);
 
   const balanceCents = (ledger ?? []).reduce((sum, e) => sum + e.amount_cents, 0);
@@ -193,7 +221,34 @@ export default async function ResidentDetailPage({
             <Detail label="Email" value={profile.email ?? "—"} />
             <Detail label="Phone" value={profile.phone ?? "—"} />
             <Detail label="Joined" value={formatDate(profile.created_at)} />
+            {(profile.emergency_contact_name || profile.emergency_contact_phone) && (
+              <Detail
+                label="Emergency contact"
+                value={
+                  <>
+                    {profile.emergency_contact_name ?? "—"}
+                    {profile.emergency_contact_phone && (
+                      <span className="block text-sm font-normal text-ink-soft">
+                        {profile.emergency_contact_phone}
+                      </span>
+                    )}
+                  </>
+                }
+              />
+            )}
           </dl>
+          {vehicles && vehicles.length > 0 && (
+            <div className="border-t border-clay px-6 py-4">
+              <div className="text-xs uppercase tracking-wide text-ink-faint">Vehicles</div>
+              <ul className="mt-2 space-y-1">
+                {vehicles.map((v) => (
+                  <li key={v.id} className="text-sm text-ink">
+                    {describeVehicle(v)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
 
         {/* Home */}

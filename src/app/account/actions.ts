@@ -12,6 +12,10 @@ export async function updateAccount(
 ): Promise<AccountState> {
   const full_name = (form.get("full_name") as string)?.trim() || null;
   const phone = (form.get("phone") as string)?.trim() || null;
+  const emergency_contact_name =
+    (form.get("emergency_contact_name") as string)?.trim() || null;
+  const emergency_contact_phone =
+    (form.get("emergency_contact_phone") as string)?.trim() || null;
 
   const supabase = await createClient();
   const {
@@ -34,9 +38,17 @@ export async function updateAccount(
     }
   }
 
-  const update: { full_name: string | null; phone: string | null; avatar_url?: string } = {
+  const update: {
+    full_name: string | null;
+    phone: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    avatar_url?: string;
+  } = {
     full_name,
     phone,
+    emergency_contact_name,
+    emergency_contact_phone,
   };
   if (avatar_url) update.avatar_url = avatar_url;
 
@@ -47,4 +59,58 @@ export async function updateAccount(
   revalidatePath("/admin");
   revalidatePath("/portal");
   return { ok: true };
+}
+
+/** Parse a form value to an integer, or null if blank/invalid. */
+function num(value: FormDataEntryValue | null): number | null {
+  const s = (value as string)?.trim();
+  if (!s) return null;
+  const n = Number.parseInt(s, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+export type VehicleState = { ok: boolean; error?: string };
+
+export async function addVehicle(
+  _prev: VehicleState,
+  form: FormData
+): Promise<VehicleState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Please sign in again." };
+
+  const make = (form.get("make") as string)?.trim() || null;
+  const model = (form.get("model") as string)?.trim() || null;
+
+  if (!make && !model) {
+    return { ok: false, error: "Add at least a make or model." };
+  }
+
+  const { error } = await supabase.from("vehicles").insert({
+    profile_id: user.id,
+    make,
+    model,
+    color: (form.get("color") as string)?.trim() || null,
+    year: num(form.get("year")),
+    plate: (form.get("plate") as string)?.trim() || null,
+    state: (form.get("state") as string)?.trim() || null,
+    notes: (form.get("notes") as string)?.trim() || null,
+  });
+  if (error) return { ok: false, error: "Could not add the vehicle. Please try again." };
+
+  revalidatePath("/account");
+  return { ok: true };
+}
+
+export async function deleteVehicle(form: FormData): Promise<void> {
+  const id = form.get("id") as string;
+  if (!id) return;
+
+  const supabase = await createClient();
+  // RLS restricts deletes to the owner.
+  await supabase.from("vehicles").delete().eq("id", id);
+
+  revalidatePath("/account");
 }
