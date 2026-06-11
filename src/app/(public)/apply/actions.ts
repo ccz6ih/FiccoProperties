@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification, notificationHtml } from "@/lib/email";
 
 export type ApplyState = {
   ok: boolean;
@@ -126,6 +127,29 @@ export async function submitApplication(
       error: "Something went wrong submitting your application. Please try again.",
     };
   }
+
+  // Notify staff (no-ops until email is configured).
+  let propertyName = "—";
+  if (property_id) {
+    const { data: prop } = await supabase
+      .from("properties")
+      .select("name")
+      .eq("id", property_id)
+      .maybeSingle();
+    propertyName = prop?.name ?? "—";
+  }
+  await sendNotification({
+    subject: `New application — ${first_name} ${last_name}`,
+    replyTo: email,
+    html: notificationHtml("New rental application", [
+      ["Name", `${first_name} ${last_name}`],
+      ["Community", propertyName],
+      ["Email", email],
+      ["Phone", phone],
+      ["Desired move-in", desired_move_in],
+      ["Review", "https://ficcoproperties.com/admin/applications"],
+    ]),
+  });
 
   return { ok: true };
 }

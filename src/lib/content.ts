@@ -58,3 +58,31 @@ export const FALLBACK_CONTENT: CommunityContent = {
 export function getCommunityContent(slug: string): CommunityContent {
   return communityContent[slug] ?? FALLBACK_CONTENT;
 }
+
+/**
+ * Neighborhood perks — shared across all four communities (same block of
+ * W 38th Ave in Wheat Ridge). Note: none of the communities have a pool.
+ */
+export const NEIGHBORHOOD = {
+  heading: "The neighborhood",
+  blurb:
+    "A quiet pocket of Wheat Ridge with the best of the Front Range minutes away — parks, trails, and the foothills all close to home.",
+  highlights: [
+    {
+      title: "Rec center discount",
+      body: "Residents get a discounted membership to the Wheat Ridge Recreation Center — pool, gym, and classes included.",
+    },
+    {
+      title: "Parks & open space",
+      body: "Crown Hill Park, its lake, and acres of open space are just around the corner.",
+    },
+    {
+      title: "Bike trails everywhere",
+      body: "Connected to the regional trail network — miles of riding right from your door.",
+    },
+    {
+      title: "Minutes to Golden",
+      body: "Historic downtown Golden, foothills hiking, and Clear Creek are a short drive west.",
+    },
+  ],
+};

@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Container, Eyebrow, Badge, ButtonLink, Card } from "@/components/ui";
 import { UnitGallery } from "@/components/unit-gallery";
+import { TourRequestForm } from "@/components/tour-request-form";
 import { getPropertyBySlug } from "@/lib/queries";
-import { getCommunityContent } from "@/lib/content";
+import { getCommunityContent, NEIGHBORHOOD } from "@/lib/content";
 import { createClient } from "@/lib/supabase/server";
 import { listingPublicUrl } from "@/lib/unit-photos";
 import { propertyTypeLabel, formatCents } from "@/lib/format";
@@ -209,6 +210,25 @@ export default async function PropertyPage({ params }: Params) {
         </Container>
       </section>
 
+      {/* Neighborhood */}
+      <section className="py-16">
+        <Container className="space-y-8">
+          <div className="max-w-2xl space-y-3">
+            <Eyebrow>{NEIGHBORHOOD.heading}</Eyebrow>
+            <h2 className="text-3xl font-semibold text-ink">A great place to land</h2>
+            <p className="text-lg text-ink-soft">{NEIGHBORHOOD.blurb}</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {NEIGHBORHOOD.highlights.map((h) => (
+              <Card key={h.title} className="space-y-2 p-5">
+                <h3 className="font-display text-lg font-semibold text-ink">{h.title}</h3>
+                <p className="text-sm leading-relaxed text-ink-soft">{h.body}</p>
+              </Card>
+            ))}
+          </div>
+        </Container>
+      </section>
+
       {/* Available homes */}
       {availableHomes.length > 0 && (
         <section className="border-t border-clay bg-sand/40 py-16">
@@ -319,6 +339,21 @@ export default async function PropertyPage({ params }: Params) {
               referrerPolicy="no-referrer-when-downgrade"
             />
           </div>
+        </Container>
+      </section>
+
+      {/* Request a tour */}
+      <section className="border-t border-clay bg-sand/40 py-16">
+        <Container className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div className="space-y-3 lg:sticky lg:top-24">
+            <Eyebrow>Visit us</Eyebrow>
+            <h2 className="text-3xl font-semibold text-ink">Request a tour</h2>
+            <p className="text-lg text-ink-soft">
+              Come see {property.name} in person. Tell us when works and our
+              on-site team will reach out to set it up.
+            </p>
+          </div>
+          <TourRequestForm propertyId={property.id} propertyName={property.name} />
         </Container>
       </section>
 

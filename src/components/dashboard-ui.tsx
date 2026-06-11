@@ -107,6 +107,8 @@ const statusTones: Record<string, string> = {
   invited: "bg-[#f6edd6] text-[#8a6a1f]",
   passed: "bg-pine-soft text-pine-dark",
   waived: "bg-sand text-ink-faint",
+  // tours
+  scheduled: "bg-pine-soft text-pine-dark",
   // profile roles
   owner: "bg-pine-soft text-pine-dark",
   admin: "bg-pine-soft text-pine-dark",
