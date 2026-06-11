@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SidebarNav, MobileNav, type NavItem } from "@/components/dashboard-nav";
+import { Avatar } from "@/components/avatar";
 
 export type { NavItem };
 
@@ -13,7 +14,12 @@ export function DashboardShell({
   brandHref: string;
   brandLabel: string;
   nav: NavItem[];
-  user: { email?: string | null; name?: string | null; role?: string | null };
+  user: {
+    email?: string | null;
+    name?: string | null;
+    role?: string | null;
+    avatarUrl?: string | null;
+  };
   children: React.ReactNode;
 }) {
   return (
@@ -41,11 +47,20 @@ export function DashboardShell({
         <header className="flex h-16 items-center justify-between gap-4 border-b border-clay bg-cream/80 px-5 backdrop-blur sm:px-8">
           <MobileNav nav={nav} />
           <div className="hidden flex-1 lg:block" />
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-sm font-medium text-ink">{user.name || user.email}</div>
-              {user.role && <div className="text-xs capitalize text-ink-faint">{user.role}</div>}
-            </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/account"
+              className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-sand"
+              title="Your account"
+            >
+              <Avatar name={user.name} url={user.avatarUrl} size="md" />
+              <div className="text-right leading-tight">
+                <div className="text-sm font-medium text-ink">{user.name || user.email}</div>
+                {user.role && (
+                  <div className="text-xs capitalize text-ink-faint">{user.role}</div>
+                )}
+              </div>
+            </Link>
             <form action="/auth/signout" method="post">
               <button
                 type="submit"

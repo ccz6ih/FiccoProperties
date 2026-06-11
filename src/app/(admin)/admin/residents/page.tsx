@@ -1,15 +1,27 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
+  role: string;
+  avatar_url: string | null;
+};
 
 export default async function AdminResidents() {
   const supabase = await createClient();
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: false });
+    .select("id, full_name, email, phone, created_at, role, avatar_url")
+    .order("created_at", { ascending: false })
+    .returns<ProfileRow[]>();
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -32,9 +44,12 @@ export default async function AdminResidents() {
                 {profiles.map((p) => (
                   <tr key={p.id} className="hover:bg-sand/30">
                     <td className="px-5 py-3 font-medium text-ink">
-                      <Link href={`/admin/residents/${p.id}`} className="text-pine hover:underline">
-                        {p.full_name ?? "—"}
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        <Avatar size="sm" name={p.full_name} url={p.avatar_url} />
+                        <Link href={`/admin/residents/${p.id}`} className="text-pine hover:underline">
+                          {p.full_name ?? "—"}
+                        </Link>
+                      </div>
                     </td>
                     <td className="px-5 py-3 text-ink-soft">{p.email}</td>
                     <td className="px-5 py-3 text-ink-soft">{p.phone ?? "—"}</td>

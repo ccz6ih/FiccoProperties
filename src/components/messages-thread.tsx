@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { cn } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 import { createClient } from "@/lib/supabase/client";
 
 export type ThreadMessage = {
@@ -37,6 +38,7 @@ export function MessagesThread({
   staffIds,
   initialMessages,
   senderNames,
+  senders,
   sendAction,
 }: {
   conversationId: string;
@@ -44,6 +46,7 @@ export function MessagesThread({
   staffIds: string[];
   initialMessages: ThreadMessage[];
   senderNames: Record<string, string>;
+  senders: Record<string, { name: string | null; avatarUrl: string | null }>;
   sendAction: (form: FormData) => Promise<void>;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
@@ -115,6 +118,7 @@ export function MessagesThread({
         {messages.map((m) => {
           const mine = m.sender_id === currentUserId;
           const fromStaff = staffSet.has(m.sender_id);
+          const sender = senders[m.sender_id];
           return (
             <div
               key={m.id}
@@ -122,13 +126,25 @@ export function MessagesThread({
             >
               <div
                 className={cn(
-                  "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
-                  fromStaff
-                    ? "bg-pine-soft text-pine-dark"
-                    : "bg-sand text-ink"
+                  "flex max-w-[80%] items-end gap-2",
+                  mine ? "flex-row-reverse" : "flex-row"
                 )}
               >
-                <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                <Avatar
+                  size="sm"
+                  name={sender?.name ?? null}
+                  url={sender?.avatarUrl ?? null}
+                />
+                <div
+                  className={cn(
+                    "rounded-2xl px-4 py-2.5 text-sm",
+                    fromStaff
+                      ? "bg-pine-soft text-pine-dark"
+                      : "bg-sand text-ink"
+                  )}
+                >
+                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                </div>
               </div>
               <div className="mt-1 px-1 text-[11px] text-ink-faint">
                 {senderNames[m.sender_id] ?? (fromStaff ? "Ficco team" : "Resident")}

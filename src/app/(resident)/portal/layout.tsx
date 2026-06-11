@@ -25,7 +25,12 @@ export default async function PortalLayout({
       brandHref="/portal"
       brandLabel="Resident Portal"
       nav={nav}
-      user={{ email: user.email, name: profile?.full_name, role: profile?.role }}
+      user={{
+        email: user.email,
+        name: profile?.full_name,
+        role: profile?.role,
+        avatarUrl: profile?.avatar_url,
+      }}
     >
       {children}
     </DashboardShell>

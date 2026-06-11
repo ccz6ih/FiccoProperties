@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
+import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -177,8 +178,14 @@ export default async function ResidentDetailPage({
       <div className="grid gap-6 md:grid-cols-2">
         {/* Person & contact */}
         <Card className="overflow-hidden">
-          <div className="border-b border-clay bg-sand/50 px-6 py-4">
-            <h2 className="font-display text-lg font-semibold text-ink">Person & contact</h2>
+          <div className="flex items-center gap-4 border-b border-clay bg-sand/50 px-6 py-4">
+            <Avatar size="lg" name={profile.full_name} url={profile.avatar_url} />
+            <div>
+              <h2 className="font-display text-lg font-semibold text-ink">
+                {profile.full_name ?? "Resident"}
+              </h2>
+              <p className="text-sm text-ink-soft">Person & contact</p>
+            </div>
           </div>
           <dl className="grid grid-cols-2 gap-px bg-clay">
             <Detail label="Full name" value={profile.full_name ?? "—"} />

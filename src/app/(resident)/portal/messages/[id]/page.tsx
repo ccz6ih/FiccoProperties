@@ -8,7 +8,12 @@ import { createClient } from "@/lib/supabase/server";
 import { sendMessage, markConversationRead } from "../actions";
 
 type ConversationRow = { id: string; subject: string; resident_id: string };
-type ProfileRow = { id: string; full_name: string | null; role: string };
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+  role: string;
+  avatar_url: string | null;
+};
 
 export default async function ResidentThreadPage({
   params,
@@ -35,18 +40,26 @@ export default async function ResidentThreadPage({
     .order("created_at", { ascending: true })
     .returns<ThreadMessage[]>();
 
-  // Resolve sender names + which senders are staff.
-  const senderIds = Array.from(new Set((messages ?? []).map((m) => m.sender_id)));
+  // Resolve sender names + avatars + which senders are staff. Include the
+  // conversation's resident so their avatar is available even before they post.
+  const senderIds = Array.from(
+    new Set([
+      ...(messages ?? []).map((m) => m.sender_id),
+      conversation.resident_id,
+    ])
+  );
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, full_name, role")
+    .select("id, full_name, role, avatar_url")
     .in("id", senderIds.length ? senderIds : ["00000000-0000-0000-0000-000000000000"])
     .returns<ProfileRow[]>();
 
   const senderNames: Record<string, string> = {};
+  const senders: Record<string, { name: string | null; avatarUrl: string | null }> = {};
   const staffIds: string[] = [];
   for (const p of profiles ?? []) {
     senderNames[p.id] = p.full_name ?? "Ficco team";
+    senders[p.id] = { name: p.full_name, avatarUrl: p.avatar_url };
     if (p.role === "owner" || p.role === "admin") staffIds.push(p.id);
   }
 
@@ -72,6 +85,7 @@ export default async function ResidentThreadPage({
           staffIds={staffIds}
           initialMessages={messages ?? []}
           senderNames={senderNames}
+          senders={senders}
           sendAction={sendMessage}
         />
       </Card>

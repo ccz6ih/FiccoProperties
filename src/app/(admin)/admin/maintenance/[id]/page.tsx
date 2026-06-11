@@ -8,6 +8,7 @@ import {
   MaintenanceAssigneeControl,
 } from "@/components/maintenance-controls";
 import { MaintenanceCommentForm } from "@/components/maintenance-comment-form";
+import { Avatar } from "@/components/avatar";
 import { addMaintenanceComment } from "@/app/(admin)/admin/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -31,7 +32,7 @@ type CommentRow = {
   body: string;
   internal: boolean;
   created_at: string;
-  profiles: { full_name: string | null; email: string | null } | null;
+  profiles: { full_name: string | null; email: string | null; avatar_url: string | null } | null;
 };
 
 type StaffRow = { id: string; full_name: string | null; email: string | null };
@@ -59,7 +60,7 @@ export default async function MaintenanceDetail({
 
   const { data: comments } = await db
     .from("maintenance_comments")
-    .select("id, body, internal, created_at, profiles(full_name, email)")
+    .select("id, body, internal, created_at, profiles(full_name, email, avatar_url)")
     .eq("request_id", id)
     .order("created_at", { ascending: true })
     .returns<CommentRow[]>();
@@ -128,7 +129,12 @@ export default async function MaintenanceDetail({
                     }`}
                   >
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-ink">
+                      <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                        <Avatar
+                          size="sm"
+                          name={c.profiles?.full_name ?? c.profiles?.email}
+                          url={c.profiles?.avatar_url}
+                        />
                         {c.profiles?.full_name ?? c.profiles?.email ?? "Unknown"}
                       </span>
                       <div className="flex items-center gap-2">

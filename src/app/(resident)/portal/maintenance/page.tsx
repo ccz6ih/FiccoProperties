@@ -2,6 +2,7 @@ import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MaintenanceForm } from "@/components/maintenance-form";
 import { MaintenanceCommentForm } from "@/components/maintenance-comment-form";
+import { Avatar } from "@/components/avatar";
 import { addResidentComment } from "@/app/(resident)/portal/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
@@ -13,7 +14,7 @@ type CommentRow = {
   request_id: string;
   body: string;
   created_at: string;
-  profiles: { full_name: string | null; email: string | null } | null;
+  profiles: { full_name: string | null; email: string | null; avatar_url: string | null } | null;
 };
 
 export default async function MaintenancePage() {
@@ -35,7 +36,7 @@ export default async function MaintenancePage() {
     list.length > 0
       ? await db
           .from("maintenance_comments")
-          .select("id, request_id, body, created_at, profiles(full_name, email)")
+          .select("id, request_id, body, created_at, profiles(full_name, email, avatar_url)")
           .in(
             "request_id",
             list.map((r) => r.id)
@@ -100,7 +101,12 @@ export default async function MaintenancePage() {
                                 className="rounded-xl border border-clay bg-white/70 px-3 py-2"
                               >
                                 <div className="mb-0.5 flex items-center justify-between gap-2 text-xs text-ink-faint">
-                                  <span className="font-medium text-ink-soft">
+                                  <span className="flex items-center gap-2 font-medium text-ink-soft">
+                                    <Avatar
+                                      size="sm"
+                                      name={c.profiles?.full_name ?? c.profiles?.email}
+                                      url={c.profiles?.avatar_url}
+                                    />
                                     {c.profiles?.full_name ?? c.profiles?.email ?? "Ficco team"}
                                   </span>
                                   <span>{formatDate(c.created_at)}</span>
