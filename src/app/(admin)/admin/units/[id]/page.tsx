@@ -107,17 +107,21 @@ export default async function UnitDetail({
     .filter((p) => p.kind === "listing")
     .map((p) => ({ id: p.id, url: listingPublicUrl(p.path), caption: p.caption }));
 
-  const conditionRows = photoList.filter((p) => p.kind === "condition");
+  // Move-in (incl. legacy "condition") and move-out are private — sign their URLs.
+  const privateRows = photoList.filter((p) => p.kind !== "listing");
   const signed = await Promise.all(
-    conditionRows.map((p) =>
+    privateRows.map((p) =>
       admin.storage.from(CONDITION_BUCKET).createSignedUrl(p.path, 3600)
     )
   );
-  const conditionPhotos = conditionRows.map((p, i) => ({
+  const signedByIndex = privateRows.map((p, i) => ({
     id: p.id,
+    kind: p.kind,
     url: signed[i]?.data?.signedUrl ?? "",
     caption: p.caption,
   }));
+  const moveInPhotos = signedByIndex.filter((p) => p.kind === "move_in" || p.kind === "condition");
+  const moveOutPhotos = signedByIndex.filter((p) => p.kind === "move_out");
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -134,6 +138,16 @@ export default async function UnitDetail({
       />
 
       <div className="space-y-6">
+        <div>
+          <h2 className="mb-4 font-display text-lg font-semibold text-ink">Photos</h2>
+          <UnitPhotosManager
+            unitId={unit.id}
+            listing={listingPhotos}
+            moveIn={moveInPhotos}
+            moveOut={moveOutPhotos}
+          />
+        </div>
+
         <Card className="space-y-4 p-6">
           <h2 className="font-display text-lg font-semibold text-ink">Make-ready</h2>
           {activeTurn ? (
@@ -160,15 +174,6 @@ export default async function UnitDetail({
             <MakereadyStartForm unitId={unit.id} templates={templateList} />
           )}
         </Card>
-
-        <div>
-          <h2 className="mb-4 font-display text-lg font-semibold text-ink">Photos</h2>
-          <UnitPhotosManager
-            unitId={unit.id}
-            listing={listingPhotos}
-            condition={conditionPhotos}
-          />
-        </div>
 
         <Card className="p-6">
           <h2 className="mb-4 font-display text-lg font-semibold text-ink">

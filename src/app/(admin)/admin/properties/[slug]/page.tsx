@@ -230,7 +230,14 @@ export default async function PropertyDetail({
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        <UnitEditForm
+                        <div className="flex items-center gap-3">
+                          <Link
+                            href={`/admin/units/${u.id}`}
+                            className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                          >
+                            Photos
+                          </Link>
+                          <UnitEditForm
                           propertySlug={property.slug}
                           residents={residentOptions}
                           unit={{
@@ -259,7 +266,8 @@ export default async function PropertyDetail({
                                 } satisfies OccupancyValues)
                               : null
                           }
-                        />
+                          />
+                        </div>
                       </td>
                     </tr>
                   );

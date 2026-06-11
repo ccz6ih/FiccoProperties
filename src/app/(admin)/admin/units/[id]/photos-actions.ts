@@ -15,8 +15,9 @@ function str(form: FormData, key: string): string {
   return (form.get(key) as string | null)?.trim() ?? "";
 }
 
+const KINDS: PhotoKind[] = ["listing", "condition", "move_in", "move_out"];
 function normalizeKind(value: string): PhotoKind {
-  return value === "condition" ? "condition" : "listing";
+  return (KINDS as string[]).includes(value) ? (value as PhotoKind) : "listing";
 }
 
 /**

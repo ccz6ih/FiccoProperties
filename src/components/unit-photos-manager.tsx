@@ -23,7 +23,7 @@ function PhotoSection({
   photos,
 }: {
   unitId: string;
-  kind: "listing" | "condition";
+  kind: "listing" | "move_in" | "move_out";
   title: string;
   subtitle: string;
   photos: Photo[];
@@ -116,11 +116,13 @@ function PhotoSection({
 export function UnitPhotosManager({
   unitId,
   listing,
-  condition,
+  moveIn,
+  moveOut,
 }: {
   unitId: string;
   listing: Photo[];
-  condition: Photo[];
+  moveIn: Photo[];
+  moveOut: Photo[];
 }) {
   return (
     <div className="space-y-6">
@@ -128,15 +130,22 @@ export function UnitPhotosManager({
         unitId={unitId}
         kind="listing"
         title="Listing photos"
-        subtitle="Shown to the public for vacant-unit marketing."
+        subtitle="Public — shown to prospects on the website when the unit is vacant."
         photos={listing}
       />
       <PhotoSection
         unitId={unitId}
-        kind="condition"
-        title="Move-in / condition photos"
-        subtitle="Private record — not shown publicly."
-        photos={condition}
+        kind="move_in"
+        title="Move-in condition"
+        subtitle="Private — document the unit's condition at move-in (deposit record)."
+        photos={moveIn}
+      />
+      <PhotoSection
+        unitId={unitId}
+        kind="move_out"
+        title="Move-out condition"
+        subtitle="Private — document the unit's condition at move-out, to compare against move-in."
+        photos={moveOut}
       />
     </div>
   );

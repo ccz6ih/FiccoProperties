@@ -6,10 +6,11 @@
 export const LISTING_BUCKET = "unit-photos";
 export const CONDITION_BUCKET = "unit-condition";
 
-export type PhotoKind = "listing" | "condition";
+export type PhotoKind = "listing" | "condition" | "move_in" | "move_out";
 
+/** Listing photos are public; everything else (move-in/out/condition) is private. */
 export function bucketForKind(kind: string): string {
-  return kind === "condition" ? CONDITION_BUCKET : LISTING_BUCKET;
+  return kind === "listing" ? LISTING_BUCKET : CONDITION_BUCKET;
 }
 
 /** Public URL for a listing photo (no auth needed — the bucket is public). */
