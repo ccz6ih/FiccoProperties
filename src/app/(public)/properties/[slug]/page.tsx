@@ -1,13 +1,60 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Container, Eyebrow, Badge, ButtonLink, Card } from "@/components/ui";
+import { UnitGallery } from "@/components/unit-gallery";
 import { getPropertyBySlug } from "@/lib/queries";
 import { getCommunityContent } from "@/lib/content";
-import { propertyTypeLabel } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
+import { listingPublicUrl } from "@/lib/unit-photos";
+import { propertyTypeLabel, formatCents } from "@/lib/format";
 
 export const revalidate = 60;
 
 type Params = { params: Promise<{ slug: string }> };
+
+type VacantUnitRow = {
+  id: string;
+  label: string;
+  status: string;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  sqft: number | null;
+  rent_cents: number | null;
+  unit_photos: {
+    id: string;
+    path: string;
+    caption: string | null;
+    sort: number;
+    created_at: string;
+  }[];
+};
+
+/** Vacant units (available/make_ready) that have at least one listing photo. */
+async function getAvailableHomes(propertyId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("units")
+    .select(
+      "id, label, status, bedrooms, bathrooms, sqft, rent_cents, unit_photos(id, path, caption, sort, created_at)"
+    )
+    .eq("property_id", propertyId)
+    .in("status", ["available", "make_ready"])
+    .eq("unit_photos.kind", "listing")
+    .order("label")
+    .returns<VacantUnitRow[]>();
+
+  return (data ?? [])
+    .map((unit) => ({
+      ...unit,
+      photos: [...unit.unit_photos]
+        .sort(
+          (a, b) =>
+            a.sort - b.sort || a.created_at.localeCompare(b.created_at)
+        )
+        .map((p) => ({ url: listingPublicUrl(p.path), caption: p.caption })),
+    }))
+    .filter((unit) => unit.photos.length > 0);
+}
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
@@ -30,6 +77,8 @@ export default async function PropertyPage({ params }: Params) {
   const available = units.filter(
     (u) => u.status === "available" || u.status === "make_ready"
   ).length;
+
+  const availableHomes = await getAvailableHomes(property.id);
 
   return (
     <>
@@ -141,6 +190,85 @@ export default async function PropertyPage({ params }: Params) {
         </Container>
       </section>
 
+      {/* Available homes */}
+      {availableHomes.length > 0 && (
+        <section className="border-t border-clay bg-sand/40 py-16">
+          <Container className="space-y-8">
+            <div className="space-y-3">
+              <Eyebrow>Available homes</Eyebrow>
+              <h2 className="text-3xl font-semibold text-ink">
+                Take a look inside
+              </h2>
+              <p className="max-w-2xl text-ink-soft">
+                {availableHomes.length}{" "}
+                {availableHomes.length === 1 ? "home is" : "homes are"}{" "}
+                ready to tour and apply for right now.
+              </p>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {availableHomes.map((unit) => (
+                <Card key={unit.id} className="space-y-5 p-5">
+                  <UnitGallery photos={unit.photos} label={unit.label} />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-display text-xl font-semibold text-ink">
+                        {unit.label}
+                      </h3>
+                      <Badge
+                        tone={
+                          unit.status === "available" ? "pine" : "terracotta"
+                        }
+                      >
+                        {unit.status === "available"
+                          ? "Available now"
+                          : "Coming soon"}
+                      </Badge>
+                    </div>
+
+                    <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-ink-soft">
+                      <UnitSpec
+                        label="Beds"
+                        value={unit.bedrooms != null ? String(unit.bedrooms) : "—"}
+                      />
+                      <UnitSpec
+                        label="Baths"
+                        value={
+                          unit.bathrooms != null ? String(unit.bathrooms) : "—"
+                        }
+                      />
+                      <UnitSpec
+                        label="Sq ft"
+                        value={
+                          unit.sqft != null
+                            ? unit.sqft.toLocaleString("en-US")
+                            : "—"
+                        }
+                      />
+                    </dl>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                      <div className="font-display text-lg font-semibold text-pine">
+                        {unit.rent_cents != null
+                          ? `${formatCents(unit.rent_cents)}/mo`
+                          : "Contact for pricing"}
+                      </div>
+                      <ButtonLink
+                        href={`/apply?property=${property.slug}`}
+                        variant="accent"
+                      >
+                        Apply
+                      </ButtonLink>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </Container>
+        </section>
+      )}
+
       {/* Back link */}
       <section className="pb-16">
         <Container>
@@ -161,6 +289,15 @@ function MiniStat({ value, label }: { value: string; label: string }) {
     <div className="bg-cream p-5 text-center">
       <div className="font-display text-2xl font-semibold text-pine">{value}</div>
       <div className="mt-0.5 text-xs text-ink-soft">{label}</div>
+    </div>
+  );
+}
+
+function UnitSpec({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-ink-faint">{label}</dt>
+      <dd className="font-medium text-ink">{value}</dd>
     </div>
   );
 }

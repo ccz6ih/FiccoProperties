@@ -953,6 +953,54 @@ export type Database = {
           },
         ]
       }
+      unit_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          path: string
+          sort: number
+          unit_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          path: string
+          sort?: number
+          unit_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          path?: string
+          sort?: number
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_photos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_photos_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           bathrooms: number | null

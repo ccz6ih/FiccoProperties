@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
+import { UnitPhotosManager } from "@/components/unit-photos-manager";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CONDITION_BUCKET, listingPublicUrl } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type UnitRow = {
@@ -35,6 +38,13 @@ type TurnRow = {
 };
 
 type TemplateRow = { id: string; name: string };
+
+type PhotoRow = {
+  id: string;
+  kind: string;
+  path: string;
+  caption: string | null;
+};
 
 export default async function UnitDetail({
   params,
@@ -80,6 +90,35 @@ export default async function UnitDetail({
   const templateList = templates ?? [];
   const activeTurn = turnList.find((t) => t.status !== "complete");
 
+  // Unit photos — staff client reads rows; URLs are resolved server-side
+  // (public URL for listing, signed URL for the private condition bucket).
+  const { data: photos } = await supabase
+    .from("unit_photos")
+    .select("id, kind, path, caption")
+    .eq("unit_id", id)
+    .order("sort", { ascending: true })
+    .order("created_at", { ascending: true })
+    .returns<PhotoRow[]>();
+
+  const photoList = photos ?? [];
+  const admin = createAdminClient();
+
+  const listingPhotos = photoList
+    .filter((p) => p.kind === "listing")
+    .map((p) => ({ id: p.id, url: listingPublicUrl(p.path), caption: p.caption }));
+
+  const conditionRows = photoList.filter((p) => p.kind === "condition");
+  const signed = await Promise.all(
+    conditionRows.map((p) =>
+      admin.storage.from(CONDITION_BUCKET).createSignedUrl(p.path, 3600)
+    )
+  );
+  const conditionPhotos = conditionRows.map((p, i) => ({
+    id: p.id,
+    url: signed[i]?.data?.signedUrl ?? "",
+    caption: p.caption,
+  }));
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
@@ -121,6 +160,15 @@ export default async function UnitDetail({
             <MakereadyStartForm unitId={unit.id} templates={templateList} />
           )}
         </Card>
+
+        <div>
+          <h2 className="mb-4 font-display text-lg font-semibold text-ink">Photos</h2>
+          <UnitPhotosManager
+            unitId={unit.id}
+            listing={listingPhotos}
+            condition={conditionPhotos}
+          />
+        </div>
 
         <Card className="p-6">
           <h2 className="mb-4 font-display text-lg font-semibold text-ink">
