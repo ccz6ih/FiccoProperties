@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotification, notificationHtml } from "@/lib/email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const STATUSES = ["open", "in_progress", "on_hold", "completed", "cancelled"];
@@ -40,10 +41,33 @@ export async function setMaintenanceAssignee(form: FormData) {
   if (!id) return;
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   await supabase
     .from("maintenance_requests")
     .update({ assigned_to: assignedTo || null })
     .eq("id", id);
+
+  // Notify the new assignee — but not if they just claimed it themselves.
+  if (assignedTo && assignedTo !== user?.id) {
+    const [{ data: req }, { data: assignee }] = await Promise.all([
+      supabase.from("maintenance_requests").select("title").eq("id", id).maybeSingle(),
+      supabase.from("profiles").select("email").eq("id", assignedTo).maybeSingle(),
+    ]);
+    if (assignee?.email) {
+      await sendNotification({
+        to: assignee.email,
+        subject: `Assigned to you — ${req?.title ?? "maintenance request"}`,
+        html: notificationHtml("A maintenance request was assigned to you", [
+          ["Request", req?.title ?? "—"],
+          ["Open", `https://38thaveproperties.com/admin/maintenance/${id}`],
+        ]),
+      });
+    }
+  }
+
   revalidatePath(`/admin/maintenance/${id}`);
   revalidatePath("/admin/maintenance");
 }

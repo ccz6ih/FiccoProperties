@@ -9,7 +9,10 @@ import {
 } from "@/components/maintenance-controls";
 import { MaintenanceCommentForm } from "@/components/maintenance-comment-form";
 import { Avatar } from "@/components/avatar";
-import { addMaintenanceComment } from "@/app/(admin)/admin/maintenance/actions";
+import {
+  addMaintenanceComment,
+  setMaintenanceAssignee,
+} from "@/app/(admin)/admin/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -44,6 +47,9 @@ export default async function MaintenanceDetail({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   // maintenance_comments isn't in the generated types yet (added in 0004).
   const db = supabase as unknown as SupabaseClient;
 
@@ -181,6 +187,21 @@ export default async function MaintenanceDetail({
               assignedTo={request.assigned_to}
               staff={staffList}
             />
+            {user && request.assigned_to !== user.id && (
+              <form action={setMaintenanceAssignee} className="pt-1">
+                <input type="hidden" name="id" value={request.id} />
+                <input type="hidden" name="assigned_to" value={user.id} />
+                <button
+                  type="submit"
+                  className="inline-flex h-9 items-center rounded-full bg-pine px-4 text-xs font-medium text-cream transition-colors hover:bg-pine-dark"
+                >
+                  Assign to me
+                </button>
+              </form>
+            )}
+            {user && request.assigned_to === user.id && (
+              <p className="pt-1 text-xs font-medium text-pine-dark">✓ Assigned to you</p>
+            )}
           </div>
         </Card>
       </div>

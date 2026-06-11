@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { sendNotification, notificationHtml } from "@/lib/email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type MaintenanceState = { ok: boolean; error?: string };
@@ -53,6 +54,17 @@ export async function createMaintenanceRequest(
 
   if (error) return { ok: false, error: "Could not submit your request. Please try again." };
 
+  // New request -> alert the shared staff inbox so someone can claim it.
+  await sendNotification({
+    subject: `New maintenance request — ${title}`,
+    html: notificationHtml("New maintenance request", [
+      ["Request", title],
+      ["Priority", priority],
+      ["Category", category],
+      ["Open board", "https://38thaveproperties.com/admin/maintenance"],
+    ]),
+  });
+
   revalidatePath("/portal/maintenance");
   revalidatePath("/portal");
   return { ok: true };
@@ -80,6 +92,33 @@ export async function addResidentComment(form: FormData) {
     body,
     internal: false,
   });
+
+  // Scoped notification: only the assigned staffer (fall back to the shared
+  // inbox if nobody has claimed it yet).
+  const { data: req } = await supabase
+    .from("maintenance_requests")
+    .select("title, assigned_to")
+    .eq("id", requestId)
+    .maybeSingle();
+  let to: string | undefined;
+  if (req?.assigned_to) {
+    const { data: assignee } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", req.assigned_to)
+      .maybeSingle();
+    to = assignee?.email ?? undefined;
+  }
+  await sendNotification({
+    to,
+    subject: `New reply — ${req?.title ?? "maintenance request"}`,
+    html: notificationHtml("Resident replied on a maintenance request", [
+      ["Request", req?.title ?? "—"],
+      ["Message", body.slice(0, 240)],
+      ["Open", `https://38thaveproperties.com/admin/maintenance/${requestId}`],
+    ]),
+  });
+
   revalidatePath("/portal/maintenance");
   revalidatePath(`/admin/maintenance/${requestId}`);
 }
