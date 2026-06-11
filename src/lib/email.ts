@@ -44,6 +44,31 @@ export async function sendNotification(opts: {
   }
 }
 
+/** Escape a dynamic value before embedding it in email HTML. */
+export function esc(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Friendly, branded confirmation email for applicants / prospects. */
+export function customerHtml(heading: string, paragraphs: string[]): string {
+  const body = paragraphs
+    .map(
+      (p) =>
+        `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#2c2622">${p}</p>`
+    )
+    .join("");
+  return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px">
+    <div style="font-family:Georgia,serif;font-size:20px;font-weight:600;color:#2f5d50;margin-bottom:14px">${heading}</div>
+    ${body}
+    <p style="margin:18px 0 0;font-size:13px;color:#6f655a">— The Ficco Properties team</p>
+    <p style="margin:6px 0 0;font-size:12px;color:#9b9286">Ficco Properties · W 38th Ave, Wheat Ridge, CO · Equal Housing Opportunity</p>
+  </div>`;
+}
+
 /** Minimal HTML wrapper for a notification body. */
 export function notificationHtml(title: string, rows: [string, string][]): string {
   const items = rows

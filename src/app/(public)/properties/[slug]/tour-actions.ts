@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { sendNotification, notificationHtml } from "@/lib/email";
+import { sendNotification, notificationHtml, customerHtml, esc } from "@/lib/email";
 
 export type TourState = {
   ok: boolean;
@@ -53,6 +53,8 @@ export async function submitTourRequest(
     };
   }
 
+  const preferred = [preferred_date, preferred_time].filter(Boolean).join(" ");
+
   // Notify staff (no-ops until email is configured).
   await sendNotification({
     subject: `New tour request — ${name}`,
@@ -62,8 +64,21 @@ export async function submitTourRequest(
       ["Community", property_name],
       ["Email", email],
       ["Phone", phone],
-      ["Preferred", [preferred_date, preferred_time].filter(Boolean).join(" ")],
+      ["Preferred", preferred],
       ["Review", "https://ficcoproperties.com/admin/tours"],
+    ]),
+  });
+
+  // Confirmation to the prospect (delivers once the Resend domain is verified).
+  await sendNotification({
+    to: email,
+    replyTo: "hello@ficcoproperties.com",
+    subject: `We got your tour request — ${property_name}`,
+    html: customerHtml(`Thanks for your interest, ${esc(name)}!`, [
+      `We've received your request to tour <strong>${esc(property_name)}</strong>${
+        preferred ? ` (you mentioned ${esc(preferred)})` : ""
+      }.`,
+      `Our on-site team will reach out soon to set up a time. Reply to this email any time with questions.`,
     ]),
   });
 

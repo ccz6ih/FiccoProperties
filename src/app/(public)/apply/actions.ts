@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendNotification, notificationHtml } from "@/lib/email";
+import { sendNotification, notificationHtml, customerHtml, esc } from "@/lib/email";
 
 export type ApplyState = {
   ok: boolean;
@@ -148,6 +148,18 @@ export async function submitApplication(
       ["Phone", phone],
       ["Desired move-in", desired_move_in],
       ["Review", "https://ficcoproperties.com/admin/applications"],
+    ]),
+  });
+
+  // Confirmation to the applicant (delivers once the Resend domain is verified).
+  await sendNotification({
+    to: email,
+    replyTo: "hello@ficcoproperties.com",
+    subject: `We received your application — ${propertyName}`,
+    html: customerHtml(`Thanks for applying, ${esc(first_name)}!`, [
+      `We've received your application for <strong>${esc(propertyName)}</strong> and our team reviews every one personally.`,
+      `We'll be in touch by email within a few business days. If we move forward, the next step is a quick credit &amp; background check (about $40, paid directly to TransUnion SmartMove) — we'll send you a secure link.`,
+      `Questions in the meantime? Just reply to this email.`,
     ]),
   });
 
