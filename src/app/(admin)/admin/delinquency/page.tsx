@@ -1,0 +1,193 @@
+import Link from "next/link";
+import { Card } from "@/components/ui";
+import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
+import { LateFeeForm } from "@/components/late-fee-form";
+import { lateFeeCapCents } from "@/lib/late-fee";
+import { formatCents, formatDate } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
+
+type DChargeRow = {
+  id: string;
+  amount_cents: number;
+  due_date: string | null;
+  status: string;
+  resident_id: string;
+  lease_id: string;
+  profiles: { full_name: string | null; email: string | null } | null;
+  leases: {
+    units: { label: string; properties: { name: string | null } | null } | null;
+  } | null;
+};
+
+type Delinquent = {
+  residentId: string;
+  leaseId: string;
+  name: string;
+  email: string | null;
+  unit: string;
+  property: string;
+  overdueCents: number;
+  count: number;
+  oldestDue: string;
+};
+
+function daysBetween(fromIso: string, to: Date): number {
+  const ms = to.getTime() - new Date(fromIso).getTime();
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
+
+export default async function AdminDelinquency() {
+  const supabase = await createClient();
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+
+  const { data: charges } = await supabase
+    .from("charges")
+    .select(
+      "id, amount_cents, due_date, status, resident_id, lease_id, profiles:resident_id(full_name, email), leases(units(label, properties(name)))"
+    )
+    .in("status", ["open", "past_due"])
+    .returns<DChargeRow[]>();
+
+  // Overdue = an open charge whose due date has passed.
+  const overdue = (charges ?? []).filter(
+    (c) => c.due_date != null && c.due_date < todayIso
+  );
+
+  const byResident = new Map<string, Delinquent>();
+  for (const c of overdue) {
+    const cur = byResident.get(c.resident_id);
+    if (cur) {
+      cur.overdueCents += c.amount_cents;
+      cur.count += 1;
+      if (c.due_date! < cur.oldestDue) cur.oldestDue = c.due_date!;
+    } else {
+      byResident.set(c.resident_id, {
+        residentId: c.resident_id,
+        leaseId: c.lease_id,
+        name: c.profiles?.full_name ?? "—",
+        email: c.profiles?.email ?? null,
+        unit: c.leases?.units?.label ?? "—",
+        property: c.leases?.units?.properties?.name ?? "—",
+        overdueCents: c.amount_cents,
+        count: 1,
+        oldestDue: c.due_date!,
+      });
+    }
+  }
+
+  const rows = [...byResident.values()].sort(
+    (a, b) => new Date(a.oldestDue).getTime() - new Date(b.oldestDue).getTime()
+  );
+
+  const totalOverdue = rows.reduce((s, r) => s + r.overdueCents, 0);
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <PageHeader
+        title="Delinquency"
+        subtitle="Who's behind on rent, how far, and what's owed."
+      />
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Total overdue" value={formatCents(totalOverdue)} tone="terracotta" />
+        <StatCard label="Delinquent tenants" value={rows.length} tone="terracotta" />
+        <StatCard
+          label="Overdue charges"
+          value={overdue.length}
+          tone="gold"
+          hint="Past their due date"
+        />
+      </div>
+
+      {rows.length > 0 ? (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-clay bg-sand/50 text-left text-xs uppercase tracking-wide text-ink-faint">
+                  <th className="px-5 py-3 font-medium">Tenant</th>
+                  <th className="px-5 py-3 font-medium">Home</th>
+                  <th className="px-5 py-3 font-medium">Overdue</th>
+                  <th className="px-5 py-3 font-medium">Oldest due</th>
+                  <th className="px-5 py-3 font-medium">Days late</th>
+                  <th className="px-5 py-3 font-medium">Late fee</th>
+                  <th className="px-5 py-3 font-medium" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-clay">
+                {rows.map((r) => {
+                  const suggested = Math.round(r.overdueCents * 0.05);
+                  const cap = lateFeeCapCents(r.overdueCents);
+                  const daysLate = daysBetween(r.oldestDue, today);
+                  return (
+                    <tr key={r.residentId} className="align-top hover:bg-sand/30">
+                      <td className="px-5 py-3">
+                        <Link
+                          href={`/admin/residents/${r.residentId}`}
+                          className="font-medium text-pine hover:text-pine-dark"
+                        >
+                          {r.name}
+                        </Link>
+                        <div className="text-xs text-ink-faint">{r.email}</div>
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {r.property} · {r.unit}
+                      </td>
+                      <td className="px-5 py-3 font-semibold text-terracotta-dark">
+                        {formatCents(r.overdueCents)}
+                        <span className="ml-1 text-xs font-normal text-ink-faint">
+                          ({r.count})
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">{formatDate(r.oldestDue)}</td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={
+                            daysLate >= 10
+                              ? "font-semibold text-terracotta-dark"
+                              : "text-ink-soft"
+                          }
+                        >
+                          {daysLate} days
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <LateFeeForm
+                          residentId={r.residentId}
+                          leaseId={r.leaseId}
+                          overdueCents={r.overdueCents}
+                          suggestedCents={suggested}
+                          capCents={cap}
+                        />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <Link
+                          href="/admin/payments"
+                          className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                        >
+                          Record payment →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      ) : (
+        <EmptyState
+          title="No one's behind on rent"
+          body="Tenants with a past-due charge show up here, sorted by how late they are."
+        />
+      )}
+
+      <p className="mt-6 text-xs text-ink-faint">
+        Colorado: a late fee can&apos;t exceed the greater of $50 or 5% of overdue
+        rent, and only after a 7-day grace period. Verify current law — this is a
+        workflow aid, not legal advice.
+      </p>
+    </div>
+  );
+}

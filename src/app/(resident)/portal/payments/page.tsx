@@ -33,6 +33,12 @@ type PaymentRow = {
 
 type LedgerRow = { amount_cents: number };
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+function daysOverdue(due: string | null): number {
+  if (!due || due >= todayIso()) return 0;
+  return Math.floor((Date.now() - new Date(due).getTime()) / 86_400_000);
+}
+
 export default async function PortalPayments() {
   const { user } = await requireProfile("/portal/payments");
   const supabase = await createClient();
@@ -119,9 +125,14 @@ export default async function PortalPayments() {
                         {c.description ?? "Rent"}
                         {c.period ? ` — ${c.period}` : ""}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-faint">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-ink-faint">
                         <StatusPill value={c.status} />
                         <span>Due {formatDate(c.due_date)}</span>
+                        {daysOverdue(c.due_date) > 0 && (
+                          <span className="rounded-full bg-terracotta-soft px-2 py-0.5 font-medium text-terracotta-dark">
+                            {daysOverdue(c.due_date)} days overdue
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
