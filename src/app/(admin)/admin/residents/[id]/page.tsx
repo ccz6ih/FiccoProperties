@@ -5,9 +5,22 @@ import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Tables } from "@/types/database";
 
 type Profile = Tables<"profiles">;
+
+/** Coverage status: no doc/expiry → missing; expiry past → expired; else active. */
+function insuranceStatus(profile: Profile): "missing" | "expired" | "active" {
+  if (!profile.insurance_doc_path && !profile.insurance_expires_on) return "missing";
+  if (profile.insurance_expires_on) {
+    const expires = new Date(`${profile.insurance_expires_on}T00:00:00`);
+    if (!Number.isNaN(expires.getTime()) && expires.getTime() < Date.now()) {
+      return "expired";
+    }
+  }
+  return "active";
+}
 
 type OccupancyRow = {
   unit_id: string;
@@ -171,6 +184,15 @@ export default async function ResidentDetailPage({
   const balanceCents = (ledger ?? []).reduce((sum, e) => sum + e.amount_cents, 0);
   const property = occupancy?.units?.properties ?? null;
 
+  const insStatus = insuranceStatus(profile);
+  let insuranceDocUrl: string | null = null;
+  if (profile.insurance_doc_path) {
+    const { data: signed } = await createAdminClient()
+      .storage.from("insurance-docs")
+      .createSignedUrl(profile.insurance_doc_path, 60);
+    insuranceDocUrl = signed?.signedUrl ?? null;
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
@@ -237,6 +259,49 @@ export default async function ResidentDetailPage({
               />
             )}
           </dl>
+          <div className="border-t border-clay px-6 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs uppercase tracking-wide text-ink-faint">
+                Renters insurance
+              </div>
+              <InsurancePill status={insStatus} />
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+              <div>
+                <dt className="text-xs text-ink-faint">Provider</dt>
+                <dd className="text-sm font-medium text-ink">
+                  {profile.insurance_provider ?? "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-faint">Policy #</dt>
+                <dd className="text-sm font-medium text-ink">
+                  {profile.insurance_policy_number ?? "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-ink-faint">Expires</dt>
+                <dd className="text-sm font-medium text-ink">
+                  {formatDate(profile.insurance_expires_on)}
+                </dd>
+              </div>
+              {insuranceDocUrl && (
+                <div>
+                  <dt className="text-xs text-ink-faint">Proof</dt>
+                  <dd>
+                    <a
+                      href={insuranceDocUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-pine hover:underline"
+                    >
+                      View proof →
+                    </a>
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
           {vehicles && vehicles.length > 0 && (
             <div className="border-t border-clay px-6 py-4">
               <div className="text-xs uppercase tracking-wide text-ink-faint">Vehicles</div>
@@ -403,6 +468,21 @@ export default async function ResidentDetailPage({
         )}
       </div>
     </div>
+  );
+}
+
+function InsurancePill({ status }: { status: "missing" | "expired" | "active" }) {
+  const cls = {
+    active: "bg-pine-soft text-pine-dark",
+    expired: "bg-terracotta-soft text-terracotta-dark",
+    missing: "bg-sand text-ink-soft",
+  }[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}
+    >
+      {humanize(status)}
+    </span>
   );
 }
 

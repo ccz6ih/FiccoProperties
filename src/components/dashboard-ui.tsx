@@ -109,6 +109,11 @@ const statusTones: Record<string, string> = {
   waived: "bg-sand text-ink-faint",
   // tours
   scheduled: "bg-pine-soft text-pine-dark",
+  // notices + insurance
+  served: "bg-[#f6edd6] text-[#8a6a1f]",
+  cured: "bg-pine-soft text-pine-dark",
+  expired: "bg-terracotta-soft text-terracotta-dark",
+  missing: "bg-terracotta-soft text-terracotta-dark",
   // profile roles
   owner: "bg-pine-soft text-pine-dark",
   admin: "bg-pine-soft text-pine-dark",

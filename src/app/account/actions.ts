@@ -17,6 +17,14 @@ export async function updateAccount(
   const emergency_contact_phone =
     (form.get("emergency_contact_phone") as string)?.trim() || null;
 
+  // Renters insurance fields.
+  const insurance_provider =
+    (form.get("insurance_provider") as string)?.trim() || null;
+  const insurance_policy_number =
+    (form.get("insurance_policy_number") as string)?.trim() || null;
+  const insurance_expires_on =
+    (form.get("insurance_expires_on") as string)?.trim() || null;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -38,19 +46,51 @@ export async function updateAccount(
     }
   }
 
+  // Optional renters-insurance proof upload (image or PDF) to the private
+  // insurance-docs bucket, server-side via the service-role client.
+  let insurance_doc_path: string | undefined;
+  const insuranceDoc = form.get("insurance_doc");
+  if (
+    insuranceDoc instanceof File &&
+    insuranceDoc.size > 0 &&
+    (insuranceDoc.type.startsWith("image/") ||
+      insuranceDoc.type === "application/pdf")
+  ) {
+    const admin = createAdminClient();
+    const ext = insuranceDoc.name.split(".").pop()?.toLowerCase() || "pdf";
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from("insurance-docs")
+      .upload(path, insuranceDoc, {
+        contentType: insuranceDoc.type || "application/octet-stream",
+        upsert: false,
+      });
+    if (!upErr) {
+      insurance_doc_path = path;
+    }
+  }
+
   const update: {
     full_name: string | null;
     phone: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
+    insurance_provider: string | null;
+    insurance_policy_number: string | null;
+    insurance_expires_on: string | null;
     avatar_url?: string;
+    insurance_doc_path?: string;
   } = {
     full_name,
     phone,
     emergency_contact_name,
     emergency_contact_phone,
+    insurance_provider,
+    insurance_policy_number,
+    insurance_expires_on,
   };
   if (avatar_url) update.avatar_url = avatar_url;
+  if (insurance_doc_path) update.insurance_doc_path = insurance_doc_path;
 
   const { error } = await supabase.from("profiles").update(update).eq("id", user.id);
   if (error) return { ok: false, error: "Could not save your account. Please try again." };

@@ -50,6 +50,10 @@ export default async function AccountPage() {
           avatarUrl={profile?.avatar_url ?? null}
           emergencyName={profile?.emergency_contact_name ?? null}
           emergencyPhone={profile?.emergency_contact_phone ?? null}
+          insuranceProvider={profile?.insurance_provider ?? null}
+          insurancePolicyNumber={profile?.insurance_policy_number ?? null}
+          insuranceExpiresOn={profile?.insurance_expires_on ?? null}
+          hasInsuranceDoc={!!profile?.insurance_doc_path}
         />
 
         <h2 className="mb-3 mt-10 font-display text-2xl font-semibold text-ink">Vehicles</h2>

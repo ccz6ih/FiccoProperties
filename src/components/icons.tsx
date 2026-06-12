@@ -19,4 +19,5 @@ export const navIcons: Record<string, ReactNode> = {
   calendar: s(<><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" strokeLinecap="round" /></>),
   info: s(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.5" strokeLinecap="round" /></>),
   alert: s(<path d="M12 4l9 16H3l9-16zM12 10v4M12 17.5v.5" strokeLinecap="round" strokeLinejoin="round" />),
+  notice: s(<><path d="M8 4h8a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2z" strokeLinejoin="round" /><path d="M9 9h6M9 12.5h6" strokeLinecap="round" /></>),
 };

@@ -693,6 +693,79 @@ export type Database = {
           },
         ]
       }
+      notices: {
+        Row: {
+          amount_cents: number | null
+          body: string
+          created_at: string
+          created_by: string | null
+          cure_by: string | null
+          id: string
+          lease_id: string | null
+          resident_id: string | null
+          served_at: string | null
+          served_method: string | null
+          status: string
+          title: string
+          type: string
+          unit_id: string | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          body: string
+          created_at?: string
+          created_by?: string | null
+          cure_by?: string | null
+          id?: string
+          lease_id?: string | null
+          resident_id?: string | null
+          served_at?: string | null
+          served_method?: string | null
+          status?: string
+          title: string
+          type: string
+          unit_id?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          cure_by?: string | null
+          id?: string
+          lease_id?: string | null
+          resident_id?: string | null
+          served_at?: string | null
+          served_method?: string | null
+          status?: string
+          title?: string
+          type?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notices_lease_id_fkey"
+            columns: ["lease_id"]
+            isOneToOne: false
+            referencedRelation: "leases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notices_resident_id_fkey"
+            columns: ["resident_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notices_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -836,6 +909,10 @@ export type Database = {
           emergency_contact_phone: string | null
           full_name: string | null
           id: string
+          insurance_doc_path: string | null
+          insurance_expires_on: string | null
+          insurance_policy_number: string | null
+          insurance_provider: string | null
           phone: string | null
           role: string
           updated_at: string
@@ -848,6 +925,10 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string | null
           id: string
+          insurance_doc_path?: string | null
+          insurance_expires_on?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
           phone?: string | null
           role?: string
           updated_at?: string
@@ -860,6 +941,10 @@ export type Database = {
           emergency_contact_phone?: string | null
           full_name?: string | null
           id?: string
+          insurance_doc_path?: string | null
+          insurance_expires_on?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
           phone?: string | null
           role?: string
           updated_at?: string

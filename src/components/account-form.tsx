@@ -17,6 +17,10 @@ export function AccountForm({
   avatarUrl,
   emergencyName,
   emergencyPhone,
+  insuranceProvider,
+  insurancePolicyNumber,
+  insuranceExpiresOn,
+  hasInsuranceDoc,
 }: {
   fullName: string | null;
   phone: string | null;
@@ -24,6 +28,10 @@ export function AccountForm({
   avatarUrl: string | null;
   emergencyName: string | null;
   emergencyPhone: string | null;
+  insuranceProvider: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceExpiresOn: string | null;
+  hasInsuranceDoc: boolean;
 }) {
   const [state, action, pending] = useActionState(updateAccount, initial);
 
@@ -87,6 +95,59 @@ export function AccountForm({
               />
             </label>
           </div>
+        </div>
+
+        <div className="space-y-5 border-t border-clay pt-6">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">Renters insurance</h2>
+            <p className="text-sm text-ink-soft">
+              Your lease requires active renters insurance — please keep this current.
+            </p>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Provider</span>
+              <input
+                name="insurance_provider"
+                defaultValue={insuranceProvider ?? ""}
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Policy number</span>
+              <input
+                name="insurance_policy_number"
+                defaultValue={insurancePolicyNumber ?? ""}
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Expiry date</span>
+              <input
+                type="date"
+                name="insurance_expires_on"
+                defaultValue={insuranceExpiresOn ?? ""}
+                className={inputClass}
+              />
+            </label>
+          </div>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">
+              Proof of insurance
+              {hasInsuranceDoc && (
+                <span className="ml-2 font-normal text-pine-dark">Proof on file ✓</span>
+              )}
+            </span>
+            <input
+              type="file"
+              name="insurance_doc"
+              accept="image/*,application/pdf"
+              className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-full file:border-0 file:bg-sand file:px-4 file:py-2 file:text-sm file:font-medium file:text-ink hover:file:bg-clay"
+            />
+            <span className="block text-xs text-ink-faint">
+              Upload your declarations page or policy (image or PDF). Our team can view this to confirm coverage.
+            </span>
+          </label>
         </div>
 
         <div className="flex items-center gap-3">
