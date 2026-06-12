@@ -11,10 +11,10 @@ const nav = [
 export function SiteHeader({ user }: { user?: { email?: string | null } | null }) {
   return (
     <header className="sticky top-0 z-40 border-b border-clay/70 bg-cream/85 backdrop-blur">
-      <Container className="flex h-16 items-center justify-between gap-6">
+      <Container className="flex h-16 items-center justify-between gap-3 sm:gap-6">
         <Link href="/" className="flex items-center gap-2.5">
           <Logo />
-          <span className="font-display text-lg font-semibold text-ink">
+          <span className="whitespace-nowrap font-display text-base font-semibold text-ink sm:text-lg">
             38th Ave Properties
           </span>
         </Link>
@@ -34,13 +34,13 @@ export function SiteHeader({ user }: { user?: { email?: string | null } | null }
         <div className="flex items-center gap-2">
           <MobileSiteNav user={user} />
           {user ? (
-            <ButtonLink href="/portal" variant="outline" className="hidden sm:inline-flex">
+            <ButtonLink href="/portal" variant="outline" className="hidden md:inline-flex">
               My portal
             </ButtonLink>
           ) : (
             <Link
               href="/login"
-              className="hidden text-sm font-medium text-ink-soft transition-colors hover:text-ink sm:block"
+              className="hidden text-sm font-medium text-ink-soft transition-colors hover:text-ink md:block"
             >
               Resident login
             </Link>
