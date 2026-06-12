@@ -9,6 +9,7 @@ import {
   type ResidentOption,
 } from "@/components/unit-edit-form";
 import { PropertyCoverForm } from "@/components/property-cover-form";
+import { InviteTenantButton } from "@/components/invite-tenant-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -210,6 +211,7 @@ export default async function PropertyDetail({
                             <div className="text-xs text-ink-faint">
                               {occ.tenant_email ?? occ.tenant_phone ?? ""}
                             </div>
+                            {occ.tenant_email && <InviteTenantButton unitId={u.id} />}
                           </div>
                         ) : (
                           <span className="text-ink-faint">Vacant</span>

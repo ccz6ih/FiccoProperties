@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { sendNotification } from "@/lib/email";
 
 const ALLOWED_STATUS = ["occupied", "available", "make_ready", "offline"];
 const PROPERTY_BUCKET = "property-photos";
@@ -156,4 +157,92 @@ export async function saveUnit(form: FormData) {
   if (slug) revalidatePath(`/admin/properties/${slug}`);
   revalidatePath("/admin/properties/[slug]", "page");
   revalidatePath("/admin");
+}
+
+export type InviteState = { ok: boolean; error?: string; notice?: string };
+
+/**
+ * Invite a unit's current tenant to the resident portal. Creates (or links) an
+ * account from the tenancy's tenant_email + tenant_name, links it as the unit's
+ * occupant, and emails them a login. Staff-only.
+ */
+export async function inviteTenant(
+  _prev: InviteState,
+  form: FormData
+): Promise<InviteState> {
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!unitId) return { ok: false, error: "Missing unit." };
+
+  const supabase = await createClient();
+  const { profile } = await requireProfile("/admin/properties");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const { data: occ } = await supabase
+    .from("unit_occupancy")
+    .select("tenant_name, tenant_email, occupant_profile_id, units(label, properties(name))")
+    .eq("unit_id", unitId)
+    .maybeSingle<{
+      tenant_name: string | null;
+      tenant_email: string | null;
+      occupant_profile_id: string | null;
+      units: { label: string; properties: { name: string | null } | null } | null;
+    }>();
+
+  if (occ?.occupant_profile_id) return { ok: true, notice: "Already linked to an account." };
+  const email = occ?.tenant_email?.trim().toLowerCase();
+  if (!email) return { ok: false, error: "Add a tenant email first, then save." };
+
+  const home = occ?.units?.properties?.name
+    ? `${occ.units.properties.name} — ${occ.units.label}`
+    : "your home";
+
+  // Reuse an existing account if one already has this email; else create one.
+  let profileId: string | null = null;
+  let tempPassword: string | null = null;
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (existing) {
+    profileId = existing.id;
+  } else {
+    const admin = createAdminClient();
+    tempPassword = `38thAve-${crypto.randomUUID().slice(0, 8)}`;
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: occ?.tenant_name ?? undefined },
+    });
+    if (error || !data.user) {
+      return { ok: false, error: "Could not create the account. Check the email and try again." };
+    }
+    profileId = data.user.id;
+  }
+
+  await supabase
+    .from("unit_occupancy")
+    .update({ occupant_profile_id: profileId })
+    .eq("unit_id", unitId);
+
+  const greeting = occ?.tenant_name?.split(" ")[0] ?? "there";
+  if (tempPassword) {
+    await sendNotification({
+      to: email,
+      replyTo: "hello@38thaveproperties.com",
+      subject: "Your 38th Ave Properties resident portal",
+      html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Welcome, ${greeting} 👋</div><p>We've set up a resident portal for <strong>${home}</strong>. You can pay rent, request maintenance, view your lease and rent statement, and message our team — all in one place.</p><p style="margin:18px 0 8px;font-weight:600">How to sign in:</p><ol style="padding-left:20px;margin:0 0 18px"><li style="margin-bottom:6px">Go to <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a></li><li style="margin-bottom:6px">Email: <strong>${email}</strong></li><li style="margin-bottom:6px">Temporary password: <strong>${tempPassword}</strong></li></ol><p style="font-size:14px;color:#6f655a">We recommend setting your own password — on the sign-in page click “Forgot password?”. Reply to this email if you need any help.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
+    });
+    return { ok: true, notice: "Account created & login emailed." };
+  }
+
+  await sendNotification({
+    to: email,
+    replyTo: "hello@38thaveproperties.com",
+    subject: "Your 38th Ave Properties resident portal is ready",
+    html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">You're all set, ${greeting} 👋</div><p>Your account is now linked to <strong>${home}</strong>. Sign in at <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> to pay rent, request maintenance, view your lease and statement, and message our team. Use “Forgot password?” if you need to reset it.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
+  });
+  return { ok: true, notice: "Linked & emailed." };
 }
