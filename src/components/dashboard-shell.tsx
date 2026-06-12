@@ -44,17 +44,25 @@ export function DashboardShell({
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between gap-4 border-b border-clay bg-cream/80 px-5 backdrop-blur sm:px-8">
-          <MobileNav nav={nav} />
+        <header className="flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream/80 px-4 backdrop-blur sm:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <MobileNav nav={nav} brandLabel={brandLabel} brandHref={brandHref} />
+            <Link
+              href={brandHref}
+              className="truncate font-display text-base font-semibold text-ink lg:hidden"
+            >
+              {brandLabel}
+            </Link>
+          </div>
           <div className="hidden flex-1 lg:block" />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/account"
-              className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-sand"
+              className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-1 transition-colors hover:bg-sand sm:pr-3"
               title="Your account"
             >
               <Avatar name={user.name} url={user.avatarUrl} size="md" />
-              <div className="text-right leading-tight">
+              <div className="hidden text-right leading-tight sm:block">
                 <div className="text-sm font-medium text-ink">{user.name || user.email}</div>
                 {user.role && (
                   <div className="text-xs capitalize text-ink-faint">{user.role}</div>
