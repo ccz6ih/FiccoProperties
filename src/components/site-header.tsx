@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container, ButtonLink } from "@/components/ui";
+import { MobileSiteNav } from "@/components/mobile-site-nav";
 
 const nav = [
   { href: "/#communities", label: "Communities" },
@@ -31,6 +32,7 @@ export function SiteHeader({ user }: { user?: { email?: string | null } | null }
         </nav>
 
         <div className="flex items-center gap-2">
+          <MobileSiteNav user={user} />
           {user ? (
             <ButtonLink href="/portal" variant="outline" className="hidden sm:inline-flex">
               My portal
