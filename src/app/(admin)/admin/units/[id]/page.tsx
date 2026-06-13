@@ -10,7 +10,10 @@ import {
   type OccupancyValues,
   type ResidentOption,
 } from "@/components/unit-edit-form";
+import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
 import { deleteLogEntry } from "@/app/(admin)/admin/units/actions";
+
+const LEASE_BUCKET = "lease-docs";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -98,6 +101,26 @@ export default async function UnitDetail({
       .order("full_name")
       .returns<ResidentOption[]>(),
   ]);
+
+  // Lease documents (private bucket) — sign each for viewing.
+  const { data: leaseDocRows } = await db
+    .from("lease_documents")
+    .select("id, label, path, created_at")
+    .eq("unit_id", id)
+    .order("created_at", { ascending: false })
+    .returns<{ id: string; label: string | null; path: string; created_at: string }[]>();
+  const leaseAdmin = createAdminClient();
+  const leaseSigned = await Promise.all(
+    (leaseDocRows ?? []).map((d) =>
+      leaseAdmin.storage.from(LEASE_BUCKET).createSignedUrl(d.path, 3600)
+    )
+  );
+  const leaseDocs: LeaseDoc[] = (leaseDocRows ?? []).map((d, i) => ({
+    id: d.id,
+    label: d.label,
+    url: leaseSigned[i]?.data?.signedUrl ?? "",
+    created: d.created_at,
+  }));
 
   const [{ data: requests }, { data: turns }, { data: templates }] = await Promise.all([
     supabase
@@ -223,6 +246,8 @@ export default async function UnitDetail({
             residents={residents ?? []}
             propertySlug={unit.properties?.slug ?? ""}
           />
+
+          <LeaseDocuments unitId={unit.id} docs={leaseDocs} />
         </Card>
 
         <div>
