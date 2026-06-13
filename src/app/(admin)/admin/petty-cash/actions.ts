@@ -1,0 +1,142 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile, isStaff } from "@/lib/auth";
+
+const RECEIPT_BUCKET = "receipts";
+const DOC_TYPES = new Set([
+  "application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+]);
+
+export type CashState = { ok: boolean; error?: string };
+
+function str(v: FormDataEntryValue | null): string | null {
+  const s = ((v as string) ?? "").trim();
+  return s || null;
+}
+function cents(v: FormDataEntryValue | null): number | null {
+  const s = ((v as string) ?? "").replace(/[$,\s]/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/** Log an expense against a staffer's envelope (with optional receipt upload). */
+export async function addExpense(
+  _prev: CashState,
+  form: FormData
+): Promise<CashState> {
+  const { user, profile } = await requireProfile("/admin/petty-cash");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const staffId = str(form.get("staff_id"));
+  const occurredOn = str(form.get("occurred_on"));
+  const amount = cents(form.get("amount"));
+  if (!staffId) return { ok: false, error: "Whose envelope?" };
+  if (!occurredOn) return { ok: false, error: "Pick a date." };
+  if (amount == null || amount <= 0) {
+    return { ok: false, error: "Enter the business amount from petty cash." };
+  }
+  const receiptTotal = cents(form.get("receipt_total"));
+  if (receiptTotal != null && amount > receiptTotal) {
+    return { ok: false, error: "Business amount can't exceed the receipt total." };
+  }
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  // Optional receipt upload to the private bucket.
+  let receiptPath: string | null = null;
+  const file = form.get("file");
+  if (file instanceof File && file.size > 0) {
+    if (!DOC_TYPES.has(file.type)) {
+      return { ok: false, error: "Receipt must be a PDF or image." };
+    }
+    const admin = createAdminClient();
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    receiptPath = `${staffId}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from(RECEIPT_BUCKET)
+      .upload(receiptPath, file, { contentType: file.type, upsert: false });
+    if (upErr) return { ok: false, error: "Receipt upload failed." };
+  }
+
+  const { error } = await db.from("petty_cash_entries").insert({
+    staff_id: staffId,
+    kind: "expense",
+    occurred_on: occurredOn,
+    store: str(form.get("store")),
+    description: str(form.get("description")),
+    category: str(form.get("category")),
+    property_id: str(form.get("property_id")),
+    unit_id: str(form.get("unit_id")),
+    receipt_total_cents: receiptTotal,
+    amount_cents: amount,
+    receipt_path: receiptPath,
+    created_by: user.id,
+  });
+  if (error) return { ok: false, error: "Could not save the expense." };
+
+  revalidatePath("/admin/petty-cash");
+  return { ok: true };
+}
+
+/** Load cash into a staffer's envelope. */
+export async function addTopup(
+  _prev: CashState,
+  form: FormData
+): Promise<CashState> {
+  const { user, profile } = await requireProfile("/admin/petty-cash");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const staffId = str(form.get("staff_id"));
+  const occurredOn = str(form.get("occurred_on"));
+  const amount = cents(form.get("amount"));
+  if (!staffId) return { ok: false, error: "Whose envelope?" };
+  if (!occurredOn) return { ok: false, error: "Pick a date." };
+  if (amount == null || amount <= 0) return { ok: false, error: "Enter an amount." };
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const { error } = await db.from("petty_cash_entries").insert({
+    staff_id: staffId,
+    kind: "topup",
+    occurred_on: occurredOn,
+    description: str(form.get("description")) ?? "Envelope top-up",
+    amount_cents: amount,
+    created_by: user.id,
+  });
+  if (error) return { ok: false, error: "Could not record the top-up." };
+
+  revalidatePath("/admin/petty-cash");
+  return { ok: true };
+}
+
+/** Delete a petty-cash entry (and its receipt file). */
+export async function deletePettyEntry(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/petty-cash");
+  if (!isStaff(profile)) return;
+
+  const id = str(form.get("id"));
+  if (!id) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: row } = await db
+    .from("petty_cash_entries")
+    .select("receipt_path")
+    .eq("id", id)
+    .maybeSingle<{ receipt_path: string | null }>();
+
+  if (row?.receipt_path) {
+    const admin = createAdminClient();
+    await admin.storage.from(RECEIPT_BUCKET).remove([row.receipt_path]);
+  }
+  await db.from("petty_cash_entries").delete().eq("id", id);
+
+  revalidatePath("/admin/petty-cash");
+}
