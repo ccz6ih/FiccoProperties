@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
+import { ResidentContactEdit } from "@/components/resident-contact-edit";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,6 +26,9 @@ function insuranceStatus(profile: Profile): "missing" | "expired" | "active" {
 type OccupancyRow = {
   unit_id: string;
   rent_cents: number | null;
+  tenant_name: string | null;
+  tenant_email: string | null;
+  tenant_phone: string | null;
   lease_start_date: string | null;
   lease_signed_date: string | null;
   lease_end_date: string | null;
@@ -138,7 +142,7 @@ export default async function ResidentDetailPage({
     supabase
       .from("unit_occupancy")
       .select(
-        "unit_id, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, units(label, properties(name, slug, address_line1, city, state))"
+        "unit_id, rent_cents, tenant_name, tenant_email, tenant_phone, lease_start_date, lease_signed_date, lease_end_date, move_in_date, units(label, properties(name, slug, address_line1, city, state))"
       )
       .eq("occupant_profile_id", id)
       .maybeSingle<OccupancyRow>(),
@@ -233,18 +237,27 @@ export default async function ResidentDetailPage({
         <Card className="overflow-hidden">
           <div className="flex items-center gap-4 border-b border-clay bg-sand/50 px-6 py-4">
             <Avatar size="lg" name={profile.full_name} url={profile.avatar_url} />
-            <div>
+            <div className="min-w-0 flex-1">
               <h2 className="font-display text-lg font-semibold text-ink">
                 {profile.full_name ?? "Resident"}
               </h2>
               <p className="text-sm text-ink-soft">Person & contact</p>
             </div>
+            <ResidentContactEdit
+              resident={{
+                id: profile.id,
+                full_name: profile.full_name,
+                phone: profile.phone ?? occupancy?.tenant_phone ?? null,
+                emergency_contact_name: profile.emergency_contact_name,
+                emergency_contact_phone: profile.emergency_contact_phone,
+              }}
+            />
           </div>
           <dl className="grid grid-cols-2 gap-px bg-clay">
             <Detail label="Full name" value={profile.full_name ?? "—"} />
             <Detail label="Role" value={<StatusPill value={profile.role} />} />
             <Detail label="Email" value={profile.email ?? "—"} />
-            <Detail label="Phone" value={profile.phone ?? "—"} />
+            <Detail label="Phone" value={profile.phone ?? occupancy?.tenant_phone ?? "—"} />
             <Detail label="Joined" value={formatDate(profile.created_at)} />
             <Detail
               label="House rules"
