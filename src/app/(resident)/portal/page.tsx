@@ -73,6 +73,9 @@ export default async function PortalHome() {
     maintenance?.filter((m) => !["completed", "cancelled"].includes(m.status)).length ?? 0;
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
+  const rulesAck =
+    (profile as unknown as { house_rules_ack_at: string | null } | null)
+      ?.house_rules_ack_at ?? null;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -80,6 +83,26 @@ export default async function PortalHome() {
         title={`Welcome back, ${firstName}`}
         subtitle="Here's everything about your home in one place."
       />
+
+      {!rulesAck && (
+        <Card className="mb-8 flex flex-wrap items-center justify-between gap-4 border-pine/30 bg-pine/5 p-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <span aria-hidden className="text-lg">👋</span>
+              <h3 className="font-display text-lg font-semibold text-ink">
+                New here? Please read the house rules
+              </h3>
+            </div>
+            <p className="mt-1 text-sm text-ink-soft">
+              A quick read on keeping our community great and your plumbing happy —
+              then check the box to acknowledge.
+            </p>
+          </div>
+          <ButtonLink href="/portal/guide" variant="primary">
+            Read &amp; acknowledge →
+          </ButtonLink>
+        </Card>
+      )}
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard

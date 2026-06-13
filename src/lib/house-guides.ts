@@ -3,6 +3,9 @@
  * Plain data so it renders crisply in the portal and prints cleanly.
  */
 
+/** Communities the town home rules apply to (townhome-style properties). */
+export const TOWNHOME_SLUGS = ["the-villa", "villa-victoria"];
+
 export const TOWN_HOME_RULES: { title: string; body: string }[] = [
   {
     title: "Keep front areas clear",

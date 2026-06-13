@@ -1,15 +1,17 @@
-import { Card, Eyebrow } from "@/components/ui";
+import { Card, Eyebrow, Button } from "@/components/ui";
 import { PageHeader } from "@/components/dashboard-ui";
-import { TOWN_HOME_RULES, NEVER_FLUSH } from "@/lib/house-guides";
+import { TOWN_HOME_RULES, NEVER_FLUSH, TOWNHOME_SLUGS } from "@/lib/house-guides";
+import { formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { acknowledgeRules } from "./actions";
 
 type HomeRow = {
   units: { properties: { slug: string | null } | null } | null;
 };
 
 export default async function PortalGuide() {
-  const { user } = await requireProfile("/portal/guide");
+  const { user, profile } = await requireProfile("/portal/guide");
   const supabase = await createClient();
 
   const { data: home } = await supabase
@@ -18,7 +20,11 @@ export default async function PortalGuide() {
     .eq("occupant_profile_id", user.id)
     .maybeSingle<HomeRow>();
 
-  const isTownhome = home?.units?.properties?.slug === "the-villa";
+  const slug = home?.units?.properties?.slug ?? null;
+  const isTownhome = !!slug && TOWNHOME_SLUGS.includes(slug);
+  const ackAt =
+    (profile as unknown as { house_rules_ack_at: string | null } | null)
+      ?.house_rules_ack_at ?? null;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -86,6 +92,34 @@ export default async function PortalGuide() {
           Notice a slow drain or running toilet? Submit a maintenance request and
           we&apos;ll take care of it before it becomes a bigger problem.
         </p>
+      </Card>
+
+      {/* Acknowledgment */}
+      <Card className="mt-8 p-6">
+        {ackAt ? (
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-pine/10 text-pine">
+              ✓
+            </span>
+            <div>
+              <div className="text-sm font-semibold text-ink">
+                Thanks — you&apos;re all set
+              </div>
+              <div className="text-xs text-ink-faint">
+                You acknowledged the house rules on {formatDate(ackAt)}.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <form action={acknowledgeRules} className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-ink-soft">
+              Please confirm you&apos;ve read and understand the rules above.
+            </p>
+            <Button type="submit" variant="primary">
+              I&apos;ve read &amp; understand
+            </Button>
+          </form>
+        )}
       </Card>
     </div>
   );
