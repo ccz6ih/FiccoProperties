@@ -9,6 +9,14 @@ export type UnitOption = {
   label: string;
   property: string;
   rentCents: number | null;
+  occupiedBy: string | null;
+};
+
+export type ExistingTenant = {
+  unitId: string;
+  name: string | null;
+  email: string | null;
+  where: string;
 };
 
 const initial: AddTenantState = { ok: false };
@@ -16,15 +24,38 @@ const initial: AddTenantState = { ok: false };
 const field =
   "w-full rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink";
 const lbl = "block text-xs font-medium uppercase tracking-wide text-ink-faint";
+const norm = (s: string) => s.trim().toLowerCase();
 
-export function AddTenantForm({ units }: { units: UnitOption[] }) {
+export function AddTenantForm({
+  units,
+  existing,
+}: {
+  units: UnitOption[];
+  existing: ExistingTenant[];
+}) {
   const [state, action, pending] = useActionState(addTenant, initial);
   const [rent, setRent] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
 
   function onUnit(e: React.ChangeEvent<HTMLSelectElement>) {
-    const u = units.find((x) => x.id === e.target.value);
+    const id = e.target.value;
+    setUnitId(id);
+    const u = units.find((x) => x.id === id);
     if (u && u.rentCents != null && !rent) setRent(String(u.rentCents / 100));
   }
+
+  const selectedUnit = units.find((u) => u.id === unitId) ?? null;
+  const overwrite = selectedUnit?.occupiedBy ?? null;
+
+  // Same name/email already on another unit?
+  const dupes = existing.filter(
+    (e) =>
+      e.unitId !== unitId &&
+      ((name.trim() && e.name && norm(e.name) === norm(name)) ||
+        (email.trim() && e.email && norm(e.email) === norm(email)))
+  );
 
   return (
     <form action={action} className="space-y-6">
@@ -40,16 +71,31 @@ export function AddTenantForm({ units }: { units: UnitOption[] }) {
             {units.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.property} · {u.label}
+                {u.occupiedBy ? ` — occupied (${u.occupiedBy})` : ""}
                 {u.rentCents != null ? ` — $${(u.rentCents / 100).toLocaleString()}` : ""}
               </option>
             ))}
           </select>
+          {overwrite && (
+            <p className="mt-2 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-xs text-ink">
+              ⚠️ This unit already has <strong>{overwrite}</strong> on file. Saving
+              will <strong>replace</strong> that tenant&apos;s record. To edit them
+              instead, open the unit and use Edit.
+            </p>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={lbl} htmlFor="tenant_name">Tenant name</label>
-            <input id="tenant_name" name="tenant_name" required className={field} />
+            <input
+              id="tenant_name"
+              name="tenant_name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={field}
+            />
           </div>
           <div>
             <label className={lbl} htmlFor="tenant_phone">Phone</label>
@@ -57,9 +103,25 @@ export function AddTenantForm({ units }: { units: UnitOption[] }) {
           </div>
         </div>
 
+        {dupes.length > 0 && (
+          <p className="rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-xs text-ink">
+            ⚠️ Someone with this {dupes[0].name && norm(dupes[0].name) === norm(name) ? "name" : "email"} is
+            already on file in{" "}
+            <strong>{dupes.map((d) => d.where).join(", ")}</strong>. If that&apos;s
+            the same person, edit them there instead of adding a duplicate.
+          </p>
+        )}
+
         <div>
           <label className={lbl} htmlFor="tenant_email">Email <span className="normal-case text-ink-faint">(optional)</span></label>
-          <input id="tenant_email" name="tenant_email" type="email" className={field} />
+          <input
+            id="tenant_email"
+            name="tenant_email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={field}
+          />
           <p className="mt-1 text-xs text-ink-faint">
             Optional — leave blank if they don&apos;t want a portal account. If the
             email already has an account, it&apos;s connected automatically.
