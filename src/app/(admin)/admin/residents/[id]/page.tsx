@@ -183,6 +183,9 @@ export default async function ResidentDetailPage({
 
   const balanceCents = (ledger ?? []).reduce((sum, e) => sum + e.amount_cents, 0);
   const property = occupancy?.units?.properties ?? null;
+  const rulesAckAt =
+    (profile as unknown as { house_rules_ack_at: string | null })
+      .house_rules_ack_at ?? null;
 
   const insStatus = insuranceStatus(profile);
   let insuranceDocUrl: string | null = null;
@@ -243,6 +246,16 @@ export default async function ResidentDetailPage({
             <Detail label="Email" value={profile.email ?? "—"} />
             <Detail label="Phone" value={profile.phone ?? "—"} />
             <Detail label="Joined" value={formatDate(profile.created_at)} />
+            <Detail
+              label="House rules"
+              value={
+                rulesAckAt ? (
+                  <span className="text-pine">✓ {formatDate(rulesAckAt)}</span>
+                ) : (
+                  <span className="text-ink-soft">Not yet acknowledged</span>
+                )
+              }
+            />
             {(profile.emergency_contact_name || profile.emergency_contact_phone) && (
               <Detail
                 label="Emergency contact"

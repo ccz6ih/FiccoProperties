@@ -14,6 +14,7 @@ type ProfileRow = {
   created_at: string;
   role: string;
   avatar_url: string | null;
+  house_rules_ack_at: string | null;
 };
 
 type OccRow = {
@@ -34,16 +35,23 @@ type Row = {
   href: string;
   linked: boolean;
   role: string | null;
+  isResident: boolean;
+  ackAt: string | null;
 };
 
-export default async function AdminResidents() {
+export default async function AdminResidents({
+  searchParams,
+}: {
+  searchParams: Promise<{ show?: string }>;
+}) {
+  const { show } = await searchParams;
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
   const [{ data: profiles }, { data: occ }] = await Promise.all([
-    supabase
+    db
       .from("profiles")
-      .select("id, full_name, email, phone, created_at, role, avatar_url")
+      .select("id, full_name, email, phone, created_at, role, avatar_url, house_rules_ack_at")
       .order("created_at", { ascending: false })
       .returns<ProfileRow[]>(),
     db
@@ -54,7 +62,6 @@ export default async function AdminResidents() {
       .returns<OccRow[]>(),
   ]);
 
-  // Home label per linked account, and the record-only tenancies.
   const homeByProfile = new Map<string, string>();
   const recordOnly: OccRow[] = [];
   for (const o of occ ?? []) {
@@ -72,6 +79,8 @@ export default async function AdminResidents() {
     href: `/admin/residents/${p.id}`,
     linked: true,
     role: p.role,
+    isResident: p.role === "resident",
+    ackAt: p.house_rules_ack_at,
   }));
 
   const recordRows: Row[] = recordOnly.map((o) => ({
@@ -83,11 +92,18 @@ export default async function AdminResidents() {
     href: `/admin/units/${o.unit_id}`,
     linked: false,
     role: null,
+    isResident: false,
+    ackAt: null,
   }));
 
-  const rows = [...accountRows, ...recordRows].sort((a, b) =>
+  const all = [...accountRows, ...recordRows].sort((a, b) =>
     a.name.localeCompare(b.name)
   );
+
+  // Residents (portal accounts) who haven't acknowledged the house rules.
+  const pendingCount = all.filter((r) => r.isResident && !r.ackAt).length;
+  const pendingView = show === "rules-pending";
+  const rows = pendingView ? all.filter((r) => r.isResident && !r.ackAt) : all;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -95,6 +111,15 @@ export default async function AdminResidents() {
         title="Residents & staff"
         subtitle="Everyone on file — with or without a portal account."
       />
+
+      <div className="mb-6 flex flex-wrap gap-2 text-sm">
+        <Filter active={!pendingView} href="/admin/residents" label={`Everyone (${all.length})`} />
+        <Filter
+          active={pendingView}
+          href="/admin/residents?show=rules-pending"
+          label={`House rules pending (${pendingCount})`}
+        />
+      </div>
 
       {rows.length > 0 ? (
         <Card className="overflow-hidden">
@@ -104,8 +129,8 @@ export default async function AdminResidents() {
                 <tr className="border-b border-clay bg-sand/50 text-left text-xs uppercase tracking-wide text-ink-faint">
                   <th className="px-5 py-3 font-medium">Name</th>
                   <th className="px-5 py-3 font-medium">Email</th>
-                  <th className="px-5 py-3 font-medium">Phone</th>
                   <th className="px-5 py-3 font-medium">Home</th>
+                  <th className="px-5 py-3 font-medium">House rules</th>
                   <th className="px-5 py-3 font-medium">Account</th>
                 </tr>
               </thead>
@@ -121,8 +146,20 @@ export default async function AdminResidents() {
                       </div>
                     </td>
                     <td className="px-5 py-3 text-ink-soft">{r.email ?? "—"}</td>
-                    <td className="px-5 py-3 text-ink-soft">{r.phone ?? "—"}</td>
                     <td className="px-5 py-3 text-ink-soft">{r.home ?? "—"}</td>
+                    <td className="px-5 py-3">
+                      {!r.isResident ? (
+                        <span className="text-ink-faint">—</span>
+                      ) : r.ackAt ? (
+                        <span className="text-xs font-medium text-pine">
+                          ✓ {formatDate(r.ackAt)}
+                        </span>
+                      ) : (
+                        <span className="inline-block rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-medium text-ink">
+                          Pending
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3">
                       {r.linked ? (
                         <StatusPill value={r.role ?? "resident"} />
@@ -140,10 +177,27 @@ export default async function AdminResidents() {
         </Card>
       ) : (
         <EmptyState
-          title="No one on file yet"
-          body="Tenants and staff will appear here as you add them."
+          title={pendingView ? "Everyone's acknowledged 🎉" : "No one on file yet"}
+          body={
+            pendingView
+              ? "Every resident with a portal account has acknowledged the house rules."
+              : "Tenants and staff will appear here as you add them."
+          }
         />
       )}
     </div>
+  );
+}
+
+function Filter({ active, href, label }: { active: boolean; href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-lg px-3 py-1.5 font-medium ${
+        active ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
