@@ -35,7 +35,7 @@ export default async function AddTenantPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Add tenant"
-        subtitle="Add one renter to a unit — record an existing lease or start a new one."
+        subtitle="Record a renter's details for a unit — accounts and billing are optional."
         action={
           <Link href="/admin/import" className="text-sm text-pine hover:underline">
             Import many →

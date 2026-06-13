@@ -19,7 +19,6 @@ const lbl = "block text-xs font-medium uppercase tracking-wide text-ink-faint";
 
 export function AddTenantForm({ units }: { units: UnitOption[] }) {
   const [state, action, pending] = useActionState(addTenant, initial);
-  const [leaseType, setLeaseType] = useState<"existing" | "new">("existing");
   const [rent, setRent] = useState("");
 
   function onUnit(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -59,43 +58,32 @@ export function AddTenantForm({ units }: { units: UnitOption[] }) {
         </div>
 
         <div>
-          <label className={lbl} htmlFor="tenant_email">Email</label>
+          <label className={lbl} htmlFor="tenant_email">Email <span className="normal-case text-ink-faint">(optional)</span></label>
           <input id="tenant_email" name="tenant_email" type="email" className={field} />
           <p className="mt-1 text-xs text-ink-faint">
-            Needed to set up billing — an active lease requires a portal account. The
-            account is created quietly; invite them to the portal when you&apos;re ready.
+            Optional — leave blank if they don&apos;t want a portal account. If the
+            email already has an account, it&apos;s connected automatically.
           </p>
         </div>
+
+        <label className="flex items-start gap-3 rounded-xl border border-clay bg-sand/30 p-3">
+          <input type="checkbox" name="invite" className="mt-0.5 h-4 w-4 rounded border-clay-deep accent-pine" />
+          <span className="text-sm text-ink-soft">
+            <span className="font-medium text-ink">Invite to the resident portal</span> —
+            create an account and email them a login (needs an email). Leave unticked
+            to just keep records.
+          </span>
+        </label>
       </Card>
 
-      {/* Lease type */}
+      {/* Lease & tenancy details (for the record) */}
       <Card className="space-y-4 p-6">
-        <span className={lbl}>Lease</span>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[
-            { v: "existing", t: "Existing lease", d: "Already signed on paper. Creates an active, billable lease now." },
-            { v: "new", t: "New lease", d: "Draft a lease and send it to the resident to e-sign." },
-          ].map((o) => (
-            <label
-              key={o.v}
-              className={`cursor-pointer rounded-xl border p-4 transition-colors ${
-                leaseType === o.v
-                  ? "border-pine bg-pine/5"
-                  : "border-clay hover:bg-sand/40"
-              }`}
-            >
-              <input
-                type="radio"
-                name="lease_type"
-                value={o.v}
-                checked={leaseType === o.v}
-                onChange={() => setLeaseType(o.v as "existing" | "new")}
-                className="sr-only"
-              />
-              <div className="text-sm font-semibold text-ink">{o.t}</div>
-              <div className="mt-1 text-xs text-ink-soft">{o.d}</div>
-            </label>
-          ))}
+        <div>
+          <span className={lbl}>Lease &amp; tenancy details</span>
+          <p className="mt-1 text-xs text-ink-faint">
+            For your records — dates, rent, and deposit from their current lease.
+            Nothing here bills the tenant.
+          </p>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -122,12 +110,10 @@ export function AddTenantForm({ units }: { units: UnitOption[] }) {
             <label className={lbl} htmlFor="lease_start_date">Lease start</label>
             <input id="lease_start_date" name="lease_start_date" type="date" className={field} />
           </div>
-          {leaseType === "existing" && (
-            <div>
-              <label className={lbl} htmlFor="lease_signed_date">Lease signed</label>
-              <input id="lease_signed_date" name="lease_signed_date" type="date" className={field} />
-            </div>
-          )}
+          <div>
+            <label className={lbl} htmlFor="lease_signed_date">Lease signed</label>
+            <input id="lease_signed_date" name="lease_signed_date" type="date" className={field} />
+          </div>
           <div>
             <label className={lbl} htmlFor="lease_end_date">Lease end</label>
             <input id="lease_end_date" name="lease_end_date" type="date" className={field} />
@@ -153,16 +139,10 @@ export function AddTenantForm({ units }: { units: UnitOption[] }) {
 
       <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending
-            ? "Saving…"
-            : leaseType === "new"
-              ? "Add tenant & draft lease"
-              : "Add tenant"}
+          {pending ? "Saving…" : "Save tenant record"}
         </Button>
         <span className="text-xs text-ink-faint">
-          {leaseType === "new"
-            ? "You'll be taken to the lease to send for signature."
-            : "Creates an active lease — ready to bill."}
+          Saves their info to the unit. No account or billing unless you ask for it.
         </span>
       </div>
     </form>

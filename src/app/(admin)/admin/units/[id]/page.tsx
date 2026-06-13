@@ -4,6 +4,8 @@ import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
+import { UnitLogForm } from "@/components/unit-log-form";
+import { deleteLogEntry } from "@/app/(admin)/admin/units/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -44,6 +46,16 @@ type PhotoRow = {
   kind: string;
   path: string;
   caption: string | null;
+};
+
+type LogRow = {
+  id: string;
+  kind: string;
+  body: string;
+  performed_on: string | null;
+  cost_cents: number | null;
+  created_at: string;
+  author: { full_name: string | null } | null;
 };
 
 export default async function UnitDetail({
@@ -89,6 +101,14 @@ export default async function UnitDetail({
   const turnList = turns ?? [];
   const templateList = templates ?? [];
   const activeTurn = turnList.find((t) => t.status !== "complete");
+
+  const { data: logEntries } = await db
+    .from("unit_log_entries")
+    .select("id, kind, body, performed_on, cost_cents, created_at, author:author_id(full_name)")
+    .eq("unit_id", id)
+    .order("created_at", { ascending: false })
+    .returns<LogRow[]>();
+  const logList = logEntries ?? [];
 
   // Unit photos — staff client reads rows; URLs are resolved server-side
   // (public URL for listing, signed URL for the private condition bucket).
@@ -147,6 +167,70 @@ export default async function UnitDetail({
             moveOut={moveOutPhotos}
           />
         </div>
+
+        <Card className="space-y-5 p-6">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Notes &amp; service log
+            </h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              A running history for this unit — tenant notes and maintenance you&apos;ve
+              performed. Visible to staff only.
+            </p>
+          </div>
+
+          <UnitLogForm unitId={unit.id} />
+
+          {logList.length > 0 ? (
+            <ul className="space-y-3 border-t border-clay pt-4">
+              {logList.map((e) => (
+                <li key={e.id} className="flex gap-3">
+                  <span
+                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                      e.kind === "maintenance" ? "bg-terracotta" : "bg-pine"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-faint">
+                      <span
+                        className={`rounded-full px-2 py-0.5 font-medium ${
+                          e.kind === "maintenance"
+                            ? "bg-terracotta-soft text-terracotta-dark"
+                            : "bg-sand text-ink-soft"
+                        }`}
+                      >
+                        {e.kind === "maintenance" ? "Maintenance" : "Note"}
+                      </span>
+                      <span>
+                        {formatDate(e.performed_on ?? e.created_at)}
+                      </span>
+                      {e.author?.full_name && <span>· {e.author.full_name}</span>}
+                      {e.cost_cents != null && (
+                        <span>· {formatCents(e.cost_cents)}</span>
+                      )}
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{e.body}</p>
+                  </div>
+                  <form action={deleteLogEntry}>
+                    <input type="hidden" name="id" value={e.id} />
+                    <input type="hidden" name="unit_id" value={unit.id} />
+                    <button
+                      type="submit"
+                      className="text-xs text-ink-faint hover:text-terracotta-dark"
+                      title="Delete entry"
+                    >
+                      ✕
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="border-t border-clay pt-4 text-sm text-ink-faint">
+              No entries yet. Add the first note or maintenance record above.
+            </p>
+          )}
+        </Card>
 
         <Card className="space-y-4 p-6">
           <h2 className="font-display text-lg font-semibold text-ink">Make-ready</h2>
