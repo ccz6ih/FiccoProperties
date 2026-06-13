@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui";
 import { saveUnit } from "@/app/(admin)/admin/properties/actions";
 import { humanize } from "@/lib/format";
@@ -56,29 +57,60 @@ export function UnitEditForm({
   propertySlug: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
-      >
-        Edit
-      </button>
-    );
-  }
+  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
-  return (
-    <form
-      action={async (formData) => {
-        await saveUnit(formData);
-        setOpen(false);
-      }}
-      className="space-y-6 rounded-xl border border-clay bg-white/70 p-4"
+  const trigger = (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
     >
-      <input type="hidden" name="id" value={unit.id} />
-      <input type="hidden" name="property_slug" value={propertySlug} />
+      Edit
+    </button>
+  );
+
+  const dialog = (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/40 p-4"
+      onClick={() => setOpen(false)}
+    >
+      <div
+        className="my-8 w-full max-w-2xl rounded-2xl bg-cream p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="font-display text-lg font-semibold text-ink">
+            Edit {unit.label}
+          </h3>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-soft hover:bg-sand"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <form
+          action={async (formData) => {
+            await saveUnit(formData);
+            setOpen(false);
+          }}
+          className="space-y-6"
+        >
+          <input type="hidden" name="id" value={unit.id} />
+          <input type="hidden" name="property_slug" value={propertySlug} />
 
       {/* — Unit — */}
       <section className="space-y-4">
@@ -289,18 +321,27 @@ export function UnitEditForm({
         </label>
       </section>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="primary">
-          Save changes
-        </Button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-sm font-medium text-ink-soft hover:text-ink"
-        >
-          Cancel
-        </button>
+          <div className="flex items-center gap-3">
+            <Button type="submit" variant="primary">
+              Save changes
+            </Button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-sm font-medium text-ink-soft hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
+  );
+
+  return (
+    <>
+      {trigger}
+      {open && mounted && createPortal(dialog, document.body)}
+    </>
   );
 }
