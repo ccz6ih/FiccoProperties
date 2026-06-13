@@ -44,7 +44,7 @@ export function DashboardShell({
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream/80 px-4 backdrop-blur sm:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream/80 px-4 backdrop-blur sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <MobileNav nav={nav} brandLabel={brandLabel} brandHref={brandHref} />
             <Link
