@@ -10,7 +10,7 @@ const nav = [
 
 export function SiteHeader({ user }: { user?: { email?: string | null } | null }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-clay/70 bg-cream/85 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-clay/70 bg-cream">
       <Container className="flex h-16 items-center justify-between gap-3 sm:gap-6">
         <Link href="/" className="flex items-center gap-2.5">
           <Logo />
