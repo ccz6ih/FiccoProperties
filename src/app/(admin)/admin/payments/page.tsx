@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { PaymentsGenerateForm } from "@/components/payments-generate-form";
 import { PaymentsTable, type PaymentRow } from "@/components/payments-table";
@@ -56,6 +57,14 @@ export default async function AdminPayments() {
       <PageHeader
         title="Payments"
         subtitle="Generate rent charges, track who's paid, and record offline payments."
+        action={
+          <Link
+            href="/owner-report"
+            className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+          >
+            Owner report →
+          </Link>
+        }
       />
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
