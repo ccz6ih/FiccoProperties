@@ -20,4 +20,5 @@ export const navIcons: Record<string, ReactNode> = {
   info: s(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.5" strokeLinecap="round" /></>),
   alert: s(<path d="M12 4l9 16H3l9-16zM12 10v4M12 17.5v.5" strokeLinecap="round" strokeLinejoin="round" />),
   notice: s(<><path d="M8 4h8a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2z" strokeLinejoin="round" /><path d="M9 9h6M9 12.5h6" strokeLinecap="round" /></>),
+  search: s(<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></>),
 };

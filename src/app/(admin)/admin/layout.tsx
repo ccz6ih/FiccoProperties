@@ -13,6 +13,7 @@ export default async function AdminLayout({
 
   const nav: NavItem[] = [
     { href: "/admin", label: "Overview", icon: navIcons.home },
+    { href: "/admin/search", label: "Search", icon: navIcons.search },
     { href: "/admin/properties", label: "Properties", icon: navIcons.building },
     { href: "/admin/tenants/new", label: "Add tenant", icon: navIcons.users },
     { href: "/admin/import", label: "Import tenants", icon: navIcons.inbox },
