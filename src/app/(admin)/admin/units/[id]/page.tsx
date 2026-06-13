@@ -5,6 +5,11 @@ import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
 import { UnitLogForm } from "@/components/unit-log-form";
+import {
+  UnitEditForm,
+  type OccupancyValues,
+  type ResidentOption,
+} from "@/components/unit-edit-form";
 import { deleteLogEntry } from "@/app/(admin)/admin/units/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -18,8 +23,10 @@ type UnitRow = {
   status: string;
   bedrooms: number | null;
   bathrooms: number | null;
+  sqft: number | null;
   rent_cents: number | null;
-  properties: { name: string | null } | null;
+  notes: string | null;
+  properties: { name: string | null; slug: string } | null;
 };
 
 type RequestRow = {
@@ -70,12 +77,27 @@ export default async function UnitDetail({
 
   const { data: unit } = await supabase
     .from("units")
-    .select("id, label, status, bedrooms, bathrooms, rent_cents, properties(name)")
+    .select("id, label, status, bedrooms, bathrooms, sqft, rent_cents, notes, properties(name, slug)")
     .eq("id", id)
     .maybeSingle()
     .returns<UnitRow>();
 
   if (!unit) notFound();
+
+  const [{ data: occ }, { data: residents }] = await Promise.all([
+    supabase
+      .from("unit_occupancy")
+      .select(
+        "occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, notes"
+      )
+      .eq("unit_id", id)
+      .maybeSingle<OccupancyValues>(),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .order("full_name")
+      .returns<ResidentOption[]>(),
+  ]);
 
   const [{ data: requests }, { data: turns }, { data: templates }] = await Promise.all([
     supabase
@@ -158,6 +180,51 @@ export default async function UnitDetail({
       />
 
       <div className="space-y-6">
+        <Card className="space-y-4 p-6">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Tenant &amp; lease
+            </h2>
+            <p className="mt-1 text-sm text-ink-soft">
+              Who lives here and their lease details. Click Edit to add or change a
+              phone, email, dates, or rent.
+            </p>
+          </div>
+
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            <Field label="Tenant" value={occ?.tenant_name} />
+            <Field
+              label="Account"
+              value={occ?.occupant_profile_id ? "Linked ✓" : "Records only"}
+            />
+            <Field label="Email" value={occ?.tenant_email} />
+            <Field label="Phone" value={occ?.tenant_phone} />
+            <Field
+              label="Rent"
+              value={occ?.rent_cents != null ? formatCents(occ.rent_cents) : null}
+            />
+            <Field label="Move-in" value={formatDate(occ?.move_in_date) || null} />
+            <Field label="Lease start" value={formatDate(occ?.lease_start_date) || null} />
+            <Field label="Lease end" value={formatDate(occ?.lease_end_date) || null} />
+          </dl>
+
+          <UnitEditForm
+            unit={{
+              id: unit.id,
+              label: unit.label,
+              status: unit.status,
+              bedrooms: unit.bedrooms,
+              bathrooms: unit.bathrooms,
+              sqft: unit.sqft,
+              rent_cents: unit.rent_cents,
+              notes: unit.notes,
+            }}
+            occupancy={occ ?? null}
+            residents={residents ?? []}
+            propertySlug={unit.properties?.slug ?? ""}
+          />
+        </Card>
+
         <div>
           <h2 className="mb-4 font-display text-lg font-semibold text-ink">Photos</h2>
           <UnitPhotosManager
@@ -329,6 +396,15 @@ export default async function UnitDetail({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-clay/50 py-1.5 sm:border-0 sm:py-0">
+      <dt className="text-ink-faint">{label}</dt>
+      <dd className="text-right font-medium text-ink">{value || "—"}</dd>
     </div>
   );
 }
