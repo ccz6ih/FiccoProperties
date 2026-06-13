@@ -189,8 +189,17 @@ export async function inviteTenant(
     }>();
 
   if (occ?.occupant_profile_id) return { ok: true, notice: "Already linked to an account." };
-  const email = occ?.tenant_email?.trim().toLowerCase();
+
+  // Optionally take an email supplied inline (for records entered without one).
+  const emailInput = (form.get("email") as string)?.trim().toLowerCase() || null;
+  const email = emailInput ?? occ?.tenant_email?.trim().toLowerCase();
   if (!email) return { ok: false, error: "Add a tenant email first, then save." };
+  if (emailInput && emailInput !== occ?.tenant_email?.trim().toLowerCase()) {
+    await supabase
+      .from("unit_occupancy")
+      .update({ tenant_email: emailInput })
+      .eq("unit_id", unitId);
+  }
 
   const home = occ?.units?.properties?.name
     ? `${occ.units.properties.name} — ${occ.units.label}`
@@ -226,6 +235,10 @@ export async function inviteTenant(
     .from("unit_occupancy")
     .update({ occupant_profile_id: profileId })
     .eq("unit_id", unitId);
+
+  revalidatePath("/admin/properties");
+  revalidatePath("/admin/properties/[slug]", "page");
+  revalidatePath("/admin/residents");
 
   const greeting = occ?.tenant_name?.split(" ")[0] ?? "there";
   if (tempPassword) {

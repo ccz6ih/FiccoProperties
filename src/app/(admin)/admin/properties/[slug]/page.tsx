@@ -9,7 +9,7 @@ import {
   type ResidentOption,
 } from "@/components/unit-edit-form";
 import { PropertyCoverForm } from "@/components/property-cover-form";
-import { InviteTenantButton } from "@/components/invite-tenant-button";
+import { TenantAccountControl } from "@/components/tenant-account-control";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -197,21 +197,29 @@ export default async function PropertyDetail({
                       </td>
                       <td className="px-5 py-3">
                         {occProfile ? (
-                          <Link
-                            href={`/admin/residents/${occProfile.id}`}
-                            className="font-medium text-pine hover:text-pine-dark"
-                          >
-                            {occProfile.full_name ?? occProfile.email ?? "Resident"}
-                          </Link>
+                          <div>
+                            <Link
+                              href={`/admin/residents/${occProfile.id}`}
+                              className="font-medium text-pine hover:text-pine-dark"
+                            >
+                              {occProfile.full_name ?? occProfile.email ?? "Resident"}
+                            </Link>
+                            <span className="mt-1 block w-fit rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                              Account linked ✓
+                            </span>
+                          </div>
                         ) : occ?.tenant_name ? (
                           <div>
                             <div className="font-medium text-ink">
                               {occ.tenant_name}
                             </div>
                             <div className="text-xs text-ink-faint">
-                              {occ.tenant_email ?? occ.tenant_phone ?? ""}
+                              {occ.tenant_email ?? occ.tenant_phone ?? "No email on file"}
                             </div>
-                            {occ.tenant_email && <InviteTenantButton unitId={u.id} />}
+                            <span className="mt-1 inline-block rounded-full bg-sand px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                              Records only
+                            </span>
+                            <TenantAccountControl unitId={u.id} email={occ.tenant_email} />
                           </div>
                         ) : (
                           <span className="text-ink-faint">Vacant</span>
