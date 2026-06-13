@@ -202,13 +202,18 @@ function ExpenseForm({
       </label>
 
       <label className={lbl}>
-        Receipt photo / PDF (optional)
+        Receipt photo(s) / PDF (optional)
         <input
           type="file"
           name="file"
           accept="application/pdf,image/*"
+          multiple
           className="mt-1 block text-xs text-ink-soft file:mr-2 file:rounded-lg file:border file:border-clay-deep file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-soft"
         />
+        <span className="mt-1 block text-[11px] text-ink-faint">
+          Multi-page receipt? Attach the PDF, or snap a photo of each page and
+          select them all.
+        </span>
       </label>
 
       {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}

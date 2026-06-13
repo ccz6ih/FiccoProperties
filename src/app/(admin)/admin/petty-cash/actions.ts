@@ -48,20 +48,25 @@ export async function addExpense(
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
-  // Optional receipt upload to the private bucket.
-  let receiptPath: string | null = null;
-  const file = form.get("file");
-  if (file instanceof File && file.size > 0) {
-    if (!DOC_TYPES.has(file.type)) {
-      return { ok: false, error: "Receipt must be a PDF or image." };
-    }
+  // Optional receipt upload — one or more files (multi-page receipts).
+  const files = form
+    .getAll("file")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  const receiptPaths: string[] = [];
+  if (files.length > 0) {
     const admin = createAdminClient();
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    receiptPath = `${staffId}/${crypto.randomUUID()}.${ext}`;
-    const { error: upErr } = await admin.storage
-      .from(RECEIPT_BUCKET)
-      .upload(receiptPath, file, { contentType: file.type, upsert: false });
-    if (upErr) return { ok: false, error: "Receipt upload failed." };
+    for (const file of files) {
+      if (!DOC_TYPES.has(file.type)) {
+        return { ok: false, error: "Receipts must be PDFs or images." };
+      }
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${staffId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await admin.storage
+        .from(RECEIPT_BUCKET)
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) return { ok: false, error: "Receipt upload failed." };
+      receiptPaths.push(path);
+    }
   }
 
   const { error } = await db.from("petty_cash_entries").insert({
@@ -75,7 +80,8 @@ export async function addExpense(
     unit_id: str(form.get("unit_id")),
     receipt_total_cents: receiptTotal,
     amount_cents: amount,
-    receipt_path: receiptPath,
+    receipt_path: receiptPaths[0] ?? null,
+    receipt_paths: receiptPaths.length > 0 ? receiptPaths : null,
     created_by: user.id,
   });
   if (error) return { ok: false, error: "Could not save the expense." };
@@ -164,13 +170,17 @@ export async function deletePettyEntry(form: FormData): Promise<void> {
 
   const { data: row } = await db
     .from("petty_cash_entries")
-    .select("receipt_path")
+    .select("receipt_path, receipt_paths")
     .eq("id", id)
-    .maybeSingle<{ receipt_path: string | null }>();
+    .maybeSingle<{ receipt_path: string | null; receipt_paths: string[] | null }>();
 
-  if (row?.receipt_path) {
+  const paths = [
+    ...(row?.receipt_paths ?? []),
+    ...(row?.receipt_path ? [row.receipt_path] : []),
+  ];
+  if (paths.length > 0) {
     const admin = createAdminClient();
-    await admin.storage.from(RECEIPT_BUCKET).remove([row.receipt_path]);
+    await admin.storage.from(RECEIPT_BUCKET).remove([...new Set(paths)]);
   }
   await db.from("petty_cash_entries").delete().eq("id", id);
 

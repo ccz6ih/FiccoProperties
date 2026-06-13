@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Allow ID-photo uploads (passed through a Server Action) up to 8 MB.
+    // Uploads pass through Server Actions — allow multi-page receipt scans/PDFs.
     serverActions: {
-      bodySizeLimit: "8mb",
+      bodySizeLimit: "25mb",
     },
   },
   // Forward the old brand domain to the new one (permanent 308), preserving path.

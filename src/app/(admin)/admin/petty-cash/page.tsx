@@ -26,6 +26,7 @@ type EntryRow = {
   receipt_total_cents: number | null;
   amount_cents: number;
   receipt_path: string | null;
+  receipt_paths: string[] | null;
   staff: { full_name: string | null } | null;
   unit: { label: string; properties: { name: string | null } | null } | null;
   property: { name: string | null } | null;
@@ -49,7 +50,7 @@ export default async function AdminPettyCash() {
       db
         .from("petty_cash_entries")
         .select(
-          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
+          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
         )
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
@@ -83,18 +84,26 @@ export default async function AdminPettyCash() {
     balances.set(e.staff_id, b);
   }
 
-  // Sign receipt images for viewing.
+  // Sign every receipt page for viewing (handles multi-page entries).
   const admin = createAdminClient();
-  const withReceipts = (entries ?? []).filter((e) => e.receipt_path);
-  const signed = await Promise.all(
-    withReceipts.map((e) =>
-      admin.storage.from(RECEIPT_BUCKET).createSignedUrl(e.receipt_path!, 3600)
-    )
+  const pathsByEntry = new Map<string, string[]>();
+  for (const e of entries ?? []) {
+    const paths = e.receipt_paths ?? (e.receipt_path ? [e.receipt_path] : []);
+    if (paths.length > 0) pathsByEntry.set(e.id, paths);
+  }
+  const flat = [...pathsByEntry.entries()].flatMap(([id, paths]) =>
+    paths.map((p) => ({ id, p }))
   );
-  const receiptUrl = new Map<string, string>();
-  withReceipts.forEach((e, i) => {
+  const signed = await Promise.all(
+    flat.map((f) => admin.storage.from(RECEIPT_BUCKET).createSignedUrl(f.p, 3600))
+  );
+  const receiptUrls = new Map<string, string[]>();
+  flat.forEach((f, i) => {
     const url = signed[i]?.data?.signedUrl;
-    if (url) receiptUrl.set(e.id, url);
+    if (!url) return;
+    const arr = receiptUrls.get(f.id) ?? [];
+    arr.push(url);
+    receiptUrls.set(f.id, arr);
   });
 
   return (
@@ -201,15 +210,20 @@ export default async function AdminPettyCash() {
                         {formatCents(e.amount_cents)}
                       </td>
                       <td className="px-4 py-3">
-                        {receiptUrl.has(e.id) ? (
-                          <a
-                            href={receiptUrl.get(e.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs font-medium text-pine hover:underline"
-                          >
-                            View
-                          </a>
+                        {receiptUrls.has(e.id) ? (
+                          <div className="flex flex-wrap gap-2">
+                            {receiptUrls.get(e.id)!.map((url, i, arr) => (
+                              <a
+                                key={i}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs font-medium text-pine hover:underline"
+                              >
+                                {arr.length > 1 ? `Pg ${i + 1}` : "View"}
+                              </a>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-xs text-ink-faint">—</span>
                         )}
