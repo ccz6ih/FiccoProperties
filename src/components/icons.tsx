@@ -23,4 +23,5 @@ export const navIcons: Record<string, ReactNode> = {
   search: s(<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></>),
   tasks: s(<><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 3h6v3H9zM8.5 11l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3" strokeLinecap="round" strokeLinejoin="round" /></>),
   receipt: s(<path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h3" strokeLinecap="round" strokeLinejoin="round" />),
+  book: s(<path d="M4 4h9a3 3 0 013 3v13a2.5 2.5 0 00-2.5-2.5H4zM20 4h-2a3 3 0 00-3 3v13a2.5 2.5 0 012.5-2.5H20z" strokeLinecap="round" strokeLinejoin="round" />),
 };

@@ -17,6 +17,7 @@ export default async function PortalLayout({
     { href: "/portal/payments", label: "Payments", icon: navIcons.card },
     { href: "/portal/messages", label: "Messages", icon: navIcons.chat },
     { href: "/portal/notices", label: "Notices", icon: navIcons.notice },
+    { href: "/portal/guide", label: "House rules", icon: navIcons.book },
     { href: "/portal/community", label: "Community", icon: navIcons.info },
   ];
   if (isStaff(profile)) {
