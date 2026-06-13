@@ -15,8 +15,16 @@ type PropertyRow = {
 };
 
 type UnitRow = {
+  id: string;
   property_id: string;
   status: string;
+};
+
+type OccRow = {
+  unit_id: string;
+  occupant_profile_id: string | null;
+  tenant_name: string | null;
+  tenant_email: string | null;
 };
 
 const VACANT_STATUSES = new Set(["available", "make_ready"]);
@@ -24,22 +32,43 @@ const VACANT_STATUSES = new Set(["available", "make_ready"]);
 export default async function AdminProperties() {
   const supabase = await createClient();
 
-  const [{ data: properties }, { data: units }] = await Promise.all([
+  const [{ data: properties }, { data: units }, { data: occ }] = await Promise.all([
     supabase
       .from("properties")
       .select("id, name, slug, type, address_line1, city, state")
       .order("created_at")
       .returns<PropertyRow[]>(),
-    supabase.from("units").select("property_id, status").returns<UnitRow[]>(),
+    supabase.from("units").select("id, property_id, status").returns<UnitRow[]>(),
+    supabase
+      .from("unit_occupancy")
+      .select("unit_id, occupant_profile_id, tenant_name, tenant_email")
+      .returns<OccRow[]>(),
   ]);
 
-  const counts = new Map<string, { total: number; occupied: number; vacant: number }>();
+  const unitProperty = new Map<string, string>();
+  const counts = new Map<
+    string,
+    { total: number; occupied: number; vacant: number; tenanted: number; linked: number }
+  >();
   for (const u of units ?? []) {
-    const agg = counts.get(u.property_id) ?? { total: 0, occupied: 0, vacant: 0 };
+    unitProperty.set(u.id, u.property_id);
+    const agg =
+      counts.get(u.property_id) ??
+      { total: 0, occupied: 0, vacant: 0, tenanted: 0, linked: 0 };
     agg.total += 1;
     if (u.status === "occupied") agg.occupied += 1;
     if (VACANT_STATUSES.has(u.status)) agg.vacant += 1;
     counts.set(u.property_id, agg);
+  }
+
+  // Tenant-account linkage per community.
+  for (const o of occ ?? []) {
+    const pid = unitProperty.get(o.unit_id);
+    if (!pid) continue;
+    const agg = counts.get(pid);
+    if (!agg) continue;
+    if (o.occupant_profile_id || o.tenant_name || o.tenant_email) agg.tenanted += 1;
+    if (o.occupant_profile_id) agg.linked += 1;
   }
 
   return (
@@ -52,8 +81,11 @@ export default async function AdminProperties() {
       {properties && properties.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2">
           {properties.map((p) => {
-            const c = counts.get(p.id) ?? { total: 0, occupied: 0, vacant: 0 };
+            const c =
+              counts.get(p.id) ??
+              { total: 0, occupied: 0, vacant: 0, tenanted: 0, linked: 0 };
             const occupiedPct = c.total > 0 ? Math.round((c.occupied / c.total) * 100) : 0;
+            const needsLink = c.tenanted - c.linked;
             const address = [p.address_line1, p.city, p.state].filter(Boolean).join(", ");
 
             return (
@@ -95,6 +127,19 @@ export default async function AdminProperties() {
                       {occupiedPct}% occupied
                     </div>
                   </div>
+
+                  {c.tenanted > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-xs">
+                      <span className="text-ink-soft">
+                        {c.linked} of {c.tenanted} tenants linked
+                      </span>
+                      {needsLink > 0 && (
+                        <span className="rounded-full bg-sand px-2 py-0.5 font-medium text-ink-soft">
+                          {needsLink} need connecting
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </Card>
               </Link>
             );

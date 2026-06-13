@@ -68,10 +68,13 @@ function labelSortKey(label: string): number {
 
 export default async function PropertyDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ show?: string }>;
 }) {
   const { slug } = await params;
+  const { show } = await searchParams;
   const supabase = await createClient();
 
   const { data: property } = await supabase
@@ -126,6 +129,22 @@ export default async function PropertyDetail({
     .filter(Boolean)
     .join(", ");
 
+  // Tenant-account linkage + the "records only" filter.
+  const isTenanted = (u: UnitRow) => {
+    const o = occByUnit.get(u.id);
+    return !!o && !!(o.occupant_profile_id || o.tenant_name || o.tenant_email);
+  };
+  const isLinked = (u: UnitRow) => !!occByUnit.get(u.id)?.occupant_profile_id;
+  const tenantedUnits = unitList.filter(isTenanted);
+  const tenanted = tenantedUnits.length;
+  const linked = tenantedUnits.filter(isLinked).length;
+  const recordsOnly = tenanted - linked;
+
+  const recordsOnlyView = show === "records-only";
+  const displayList = recordsOnlyView
+    ? tenantedUnits.filter((u) => !isLinked(u))
+    : unitList;
+
   return (
     <div className="mx-auto max-w-6xl">
       <Link
@@ -145,13 +164,44 @@ export default async function PropertyDetail({
         />
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total units" value={total} />
         <StatCard label="Occupied" value={occupied} tone="pine" />
         <StatCard label="Vacant" value={vacant} tone="terracotta" />
+        <StatCard
+          label="Accounts linked"
+          value={`${linked}/${tenanted}`}
+          tone="gold"
+          hint={recordsOnly > 0 ? `${recordsOnly} records-only` : "All connected"}
+        />
       </div>
 
-      {unitList.length > 0 ? (
+      {tenanted > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2 text-sm">
+          <Link
+            href={`/admin/properties/${slug}`}
+            className={`rounded-lg px-3 py-1.5 font-medium ${
+              recordsOnlyView
+                ? "text-ink-soft hover:bg-sand"
+                : "bg-pine text-cream"
+            }`}
+          >
+            All units ({total})
+          </Link>
+          <Link
+            href={`/admin/properties/${slug}?show=records-only`}
+            className={`rounded-lg px-3 py-1.5 font-medium ${
+              recordsOnlyView
+                ? "bg-pine text-cream"
+                : "text-ink-soft hover:bg-sand"
+            }`}
+          >
+            Records only ({recordsOnly})
+          </Link>
+        </div>
+      )}
+
+      {displayList.length > 0 ? (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -167,7 +217,7 @@ export default async function PropertyDetail({
                 </tr>
               </thead>
               <tbody className="divide-y divide-clay">
-                {unitList.map((u) => {
+                {displayList.map((u) => {
                   const occ = occByUnit.get(u.id);
                   const specs = [
                     u.bedrooms != null ? `${u.bedrooms} bd` : null,
@@ -295,6 +345,11 @@ export default async function PropertyDetail({
             </table>
           </div>
         </Card>
+      ) : recordsOnlyView ? (
+        <EmptyState
+          title="Everyone's connected 🎉"
+          body="Every tenant in this community has a linked portal account."
+        />
       ) : (
         <EmptyState
           title="No units yet"
