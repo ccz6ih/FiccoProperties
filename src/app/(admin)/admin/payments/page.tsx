@@ -1,8 +1,7 @@
-import { Card } from "@/components/ui";
-import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
+import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { PaymentsGenerateForm } from "@/components/payments-generate-form";
-import { PaymentsRecordButton } from "@/components/payments-record-button";
-import { formatCents, formatDate } from "@/lib/format";
+import { PaymentsTable, type PaymentRow } from "@/components/payments-table";
+import { formatCents } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -41,6 +40,17 @@ export default async function AdminPayments() {
     .filter((c) => c.status === "paid")
     .reduce((s, c) => s + c.amount_cents, 0);
 
+  const rows: PaymentRow[] = all.map((c) => ({
+    id: c.id,
+    residentName: c.profiles?.full_name ?? null,
+    residentEmail: c.profiles?.email ?? null,
+    description: c.description,
+    period: c.period,
+    dueDate: c.due_date,
+    amountCents: c.amount_cents,
+    status: c.status,
+  }));
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -74,53 +84,7 @@ export default async function AdminPayments() {
       </div>
 
       {all.length > 0 ? (
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-clay bg-sand/50 text-left text-xs uppercase tracking-wide text-ink-faint">
-                  <th className="px-5 py-3 font-medium">Resident</th>
-                  <th className="px-5 py-3 font-medium">Charge</th>
-                  <th className="px-5 py-3 font-medium">Period</th>
-                  <th className="px-5 py-3 font-medium">Due</th>
-                  <th className="px-5 py-3 font-medium">Amount</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-clay">
-                {all.map((c) => (
-                  <tr key={c.id} className="hover:bg-sand/30">
-                    <td className="px-5 py-3">
-                      <div className="font-medium text-ink">
-                        {c.profiles?.full_name ?? "—"}
-                      </div>
-                      <div className="text-xs text-ink-faint">
-                        {c.profiles?.email ?? ""}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-ink-soft">
-                      {c.description ?? "Rent"}
-                    </td>
-                    <td className="px-5 py-3 text-ink-soft">{c.period ?? "—"}</td>
-                    <td className="px-5 py-3 text-ink-soft">{formatDate(c.due_date)}</td>
-                    <td className="px-5 py-3 font-medium text-ink">
-                      {formatCents(c.amount_cents)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusPill value={c.status} />
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {c.status === "open" || c.status === "past_due" ? (
-                        <PaymentsRecordButton chargeId={c.id} />
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <PaymentsTable charges={rows} />
       ) : (
         <EmptyState
           title="No charges yet"

@@ -122,6 +122,81 @@ export async function generateMonthlyCharges(
 }
 
 /**
+ * Mark several charges paid at once (the monthly "tick everyone who paid"
+ * batch). Reads each charge amount from the DB, then inserts succeeded
+ * payments + negative ledger entries and flips the charges to paid — all
+ * server-side. Charges already paid/void are silently skipped.
+ */
+export async function recordOfflinePayments(
+  _prev: AdminPaymentsState,
+  form: FormData
+): Promise<AdminPaymentsState> {
+  const { profile } = await requireProfile("/admin/payments");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const ids = form
+    .getAll("charge_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "No charges selected." };
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: charges } = await db
+    .from("charges")
+    .select("id, resident_id, lease_id, amount_cents, status, description, period")
+    .in("id", ids)
+    .returns<ChargeForPaymentRow[]>();
+
+  const billable = (charges ?? []).filter(
+    (c) => c.status === "open" || c.status === "past_due"
+  );
+  if (billable.length === 0) {
+    return { ok: false, error: "Those charges are already settled." };
+  }
+
+  const { error: payErr } = await db.from("payments").insert(
+    billable.map((c) => ({
+      charge_id: c.id,
+      resident_id: c.resident_id,
+      amount_cents: c.amount_cents,
+      method_id: null,
+      provider_ref: "offline",
+      status: "succeeded",
+    }))
+  );
+  if (payErr) return { ok: false, error: "Could not record the payments." };
+
+  await db.from("ledger_entries").insert(
+    billable.map((c) => ({
+      resident_id: c.resident_id,
+      lease_id: c.lease_id,
+      kind: "payment",
+      amount_cents: -c.amount_cents,
+      ref_id: c.id,
+      memo: `Offline payment — ${c.description ?? c.period ?? "charge"}`,
+    }))
+  );
+
+  await db
+    .from("charges")
+    .update({ status: "paid" })
+    .in(
+      "id",
+      billable.map((c) => c.id)
+    );
+
+  revalidatePath("/admin/payments");
+  return {
+    ok: true,
+    notice: `Marked ${billable.length} payment${
+      billable.length === 1 ? "" : "s"
+    } as paid.`,
+  };
+}
+
+/**
  * Record a manual / offline payment against a charge (e.g. a mailed check).
  * Server-side and atomic: reads the charge amount from the DB, inserts a
  * succeeded payment + negative ledger entry, and marks the charge paid.
