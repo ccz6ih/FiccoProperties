@@ -8,6 +8,7 @@ import {
   type PropOpt,
 } from "@/components/petty-cash-forms";
 import { deletePettyEntry } from "./actions";
+import { PettyEntryEdit } from "@/components/petty-entry-edit";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -165,7 +166,14 @@ export default async function AdminPettyCash() {
                       <td className="px-4 py-3 text-ink-soft">{e.staff?.full_name ?? "—"}</td>
                       <td className="px-4 py-3">
                         {isTopup ? (
-                          <span className="font-medium text-pine">Envelope top-up</span>
+                          <div>
+                            <span className="font-medium text-pine">Cash received</span>
+                            <div className="text-xs text-ink-faint">
+                              {[e.store ? `from ${e.store}` : null, e.description]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          </div>
                         ) : (
                           <div>
                             <div className="font-medium text-ink">
@@ -207,16 +215,33 @@ export default async function AdminPettyCash() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <form action={deletePettyEntry}>
-                          <input type="hidden" name="id" value={e.id} />
-                          <button
-                            type="submit"
-                            className="text-xs text-ink-faint hover:text-terracotta-dark"
-                            title="Delete entry"
-                          >
-                            ✕
-                          </button>
-                        </form>
+                        <div className="flex items-center justify-end gap-3">
+                          <PettyEntryEdit
+                            entry={{
+                              id: e.id,
+                              kind: e.kind,
+                              occurred_on: e.occurred_on,
+                              store: e.store,
+                              description: e.description,
+                              category: e.category,
+                              amountDollars: (e.amount_cents / 100).toString(),
+                              receiptTotalDollars:
+                                e.receipt_total_cents != null
+                                  ? (e.receipt_total_cents / 100).toString()
+                                  : "",
+                            }}
+                          />
+                          <form action={deletePettyEntry}>
+                            <input type="hidden" name="id" value={e.id} />
+                            <button
+                              type="submit"
+                              className="text-xs text-ink-faint hover:text-terracotta-dark"
+                              title="Delete entry"
+                            >
+                              ✕
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   );

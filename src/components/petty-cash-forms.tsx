@@ -41,7 +41,7 @@ export function PettyCashForms({
     <div className="rounded-2xl border border-clay bg-cream p-5 shadow-sm">
       <div className="mb-4 flex gap-2">
         <Tab active={tab === "expense"} onClick={() => setTab("expense")} label="Log expense" />
-        <Tab active={tab === "topup"} onClick={() => setTab("topup")} label="Top up envelope" />
+        <Tab active={tab === "topup"} onClick={() => setTab("topup")} label="+ Add cash received" />
       </div>
       {tab === "expense" ? (
         <ExpenseForm
@@ -228,6 +228,10 @@ function TopupForm({ staff, defaultStaffId }: { staff: StaffOpt[]; defaultStaffI
 
   return (
     <form ref={formRef} action={action} className="space-y-3">
+      <p className="text-xs text-ink-soft">
+        Record cash you received for the envelope (e.g. what Lou hands you). This
+        raises the envelope&apos;s balance.
+      </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className={lbl}>
           Envelope
@@ -238,7 +242,7 @@ function TopupForm({ staff, defaultStaffId }: { staff: StaffOpt[]; defaultStaffI
           </select>
         </label>
         <label className={lbl}>
-          Date
+          Date received
           <input type="date" name="occurred_on" defaultValue={today()} className={field} />
         </label>
         <label className={lbl}>
@@ -246,13 +250,19 @@ function TopupForm({ staff, defaultStaffId }: { staff: StaffOpt[]; defaultStaffI
           <input inputMode="decimal" name="amount" required placeholder="200" className={field} />
         </label>
       </div>
-      <label className={lbl}>
-        Note (optional)
-        <input name="description" placeholder="Monthly refill" className={field} />
-      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={lbl}>
+          Received from
+          <input name="received_from" defaultValue="Lou" className={field} />
+        </label>
+        <label className={lbl}>
+          Note (optional)
+          <input name="description" placeholder="Monthly refill" className={field} />
+        </label>
+      </div>
       {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}
       <Button type="submit" variant="primary" disabled={pending}>
-        {pending ? "Saving…" : "Add to envelope"}
+        {pending ? "Saving…" : "Add cash to envelope"}
       </Button>
     </form>
   );

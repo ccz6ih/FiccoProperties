@@ -105,11 +105,47 @@ export async function addTopup(
     staff_id: staffId,
     kind: "topup",
     occurred_on: occurredOn,
-    description: str(form.get("description")) ?? "Envelope top-up",
+    store: str(form.get("received_from")) ?? "Lou",
+    description: str(form.get("description")),
     amount_cents: amount,
     created_by: user.id,
   });
-  if (error) return { ok: false, error: "Could not record the top-up." };
+  if (error) return { ok: false, error: "Could not record the cash." };
+
+  revalidatePath("/admin/petty-cash");
+  return { ok: true };
+}
+
+/** Edit an existing entry (expense or top-up). */
+export async function editPettyEntry(
+  _prev: CashState,
+  form: FormData
+): Promise<CashState> {
+  const { profile } = await requireProfile("/admin/petty-cash");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const id = str(form.get("id"));
+  if (!id) return { ok: false, error: "Missing entry." };
+  const amount = cents(form.get("amount"));
+  if (amount == null || amount <= 0) return { ok: false, error: "Enter an amount." };
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const updates: Record<string, unknown> = {
+    amount_cents: amount,
+    store: str(form.get("store")),
+    description: str(form.get("description")),
+  };
+  const d = str(form.get("occurred_on"));
+  if (d) updates.occurred_on = d;
+  if (str(form.get("kind")) === "expense") {
+    updates.category = str(form.get("category"));
+    updates.receipt_total_cents = cents(form.get("receipt_total"));
+  }
+
+  const { error } = await db.from("petty_cash_entries").update(updates).eq("id", id);
+  if (error) return { ok: false, error: "Could not save changes." };
 
   revalidatePath("/admin/petty-cash");
   return { ok: true };
