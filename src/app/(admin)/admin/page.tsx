@@ -54,6 +54,8 @@ export default async function AdminOverview() {
     { data: conversations },
     { data: occ },
     { data: charges },
+    { data: recentResidents },
+    { data: homeLinks },
   ] = await Promise.all([
     loadSearchItems(),
     supabase.from("units").select("*", { count: "exact", head: true }),
@@ -95,7 +97,32 @@ export default async function AdminOverview() {
       .select("amount_cents, status")
       .in("status", ["open", "past_due"])
       .returns<{ amount_cents: number; status: string }[]>(),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, created_at")
+      .eq("role", "resident")
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .returns<{ id: string; full_name: string | null; email: string | null; created_at: string }[]>(),
+    db
+      .from("unit_occupancy")
+      .select("occupant_profile_id, tenant_name, units(label, properties(name))")
+      .not("occupant_profile_id", "is", null)
+      .returns<{ occupant_profile_id: string; tenant_name: string | null; units: { label: string; properties: { name: string | null } | null } | null }[]>(),
   ]);
+
+  // Map each linked account to its home + the tenancy name (to confirm matches).
+  const homeByProfile = new Map<string, { home: string; tenantName: string | null }>();
+  for (const l of homeLinks ?? []) {
+    homeByProfile.set(l.occupant_profile_id, {
+      home: `${l.units?.properties?.name ?? "—"} · ${l.units?.label ?? "—"}`,
+      tenantName: l.tenant_name,
+    });
+  }
+  const newResidents = (recentResidents ?? []).map((r) => ({
+    ...r,
+    link: homeByProfile.get(r.id) ?? null,
+  }));
 
   const occupied = units?.filter((u) => u.status === "occupied").length ?? 0;
   const total = unitCount ?? 0;
@@ -147,6 +174,39 @@ export default async function AdminOverview() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <DashCard title="Recently joined" href="/admin/residents" linkLabel="All residents">
+          {newResidents.length > 0 ? (
+            <ul className="divide-y divide-clay">
+              {newResidents.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/admin/residents/${r.id}`}
+                      className="block truncate text-sm font-medium text-pine hover:underline"
+                    >
+                      {r.full_name ?? r.email ?? "Resident"}
+                    </Link>
+                    <div className="text-xs text-ink-faint">
+                      joined {formatDate(r.created_at)}
+                    </div>
+                  </div>
+                  {r.link ? (
+                    <span className="shrink-0 rounded-full bg-pine/10 px-2.5 py-0.5 text-xs font-medium text-pine">
+                      {r.link.home}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-gold/20 px-2.5 py-0.5 text-xs font-medium text-ink">
+                      ⚠ No home linked
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No resident accounts yet.</Empty>
+          )}
+        </DashCard>
+
         <DashCard title="Open maintenance" href="/admin/maintenance" linkLabel="View board">
           {openMaint && openMaint.length > 0 ? (
             <ul className="divide-y divide-clay">

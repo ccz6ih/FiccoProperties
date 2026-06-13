@@ -102,8 +102,15 @@ export default async function AdminResidents({
 
   // Residents (portal accounts) who haven't acknowledged the house rules.
   const pendingCount = all.filter((r) => r.isResident && !r.ackAt).length;
+  // Resident accounts that didn't attach to a unit (signed up but unlinked).
+  const noHomeCount = all.filter((r) => r.isResident && r.linked && !r.home).length;
   const pendingView = show === "rules-pending";
-  const rows = pendingView ? all.filter((r) => r.isResident && !r.ackAt) : all;
+  const needsHomeView = show === "needs-home";
+  const rows = pendingView
+    ? all.filter((r) => r.isResident && !r.ackAt)
+    : needsHomeView
+      ? all.filter((r) => r.isResident && r.linked && !r.home)
+      : all;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -113,7 +120,14 @@ export default async function AdminResidents({
       />
 
       <div className="mb-6 flex flex-wrap gap-2 text-sm">
-        <Filter active={!pendingView} href="/admin/residents" label={`Everyone (${all.length})`} />
+        <Filter active={!pendingView && !needsHomeView} href="/admin/residents" label={`Everyone (${all.length})`} />
+        {noHomeCount > 0 && (
+          <Filter
+            active={needsHomeView}
+            href="/admin/residents?show=needs-home"
+            label={`⚠ No home linked (${noHomeCount})`}
+          />
+        )}
         <Filter
           active={pendingView}
           href="/admin/residents?show=rules-pending"
@@ -146,7 +160,17 @@ export default async function AdminResidents({
                       </div>
                     </td>
                     <td className="px-5 py-3 text-ink-soft">{r.email ?? "—"}</td>
-                    <td className="px-5 py-3 text-ink-soft">{r.home ?? "—"}</td>
+                    <td className="px-5 py-3 text-ink-soft">
+                      {r.home ? (
+                        r.home
+                      ) : r.isResident && r.linked ? (
+                        <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-medium text-ink">
+                          ⚠ No home
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="px-5 py-3">
                       {!r.isResident ? (
                         <span className="text-ink-faint">—</span>
@@ -177,11 +201,19 @@ export default async function AdminResidents({
         </Card>
       ) : (
         <EmptyState
-          title={pendingView ? "Everyone's acknowledged 🎉" : "No one on file yet"}
+          title={
+            pendingView
+              ? "Everyone's acknowledged 🎉"
+              : needsHomeView
+                ? "Every account is linked to a home 🎉"
+                : "No one on file yet"
+          }
           body={
             pendingView
               ? "Every resident with a portal account has acknowledged the house rules."
-              : "Tenants and staff will appear here as you add them."
+              : needsHomeView
+                ? "No accounts are missing a home — all good."
+                : "Tenants and staff will appear here as you add them."
           }
         />
       )}
