@@ -11,6 +11,7 @@ export default async function PortalLayout({
 
   const nav: NavItem[] = [
     { href: "/portal", label: "My home", icon: navIcons.home },
+    { href: "/portal/tenancy", label: "My tenancy", icon: navIcons.calendar },
     { href: "/portal/maintenance", label: "Maintenance", icon: navIcons.wrench },
     { href: "/portal/lease", label: "Lease", icon: navIcons.doc },
     { href: "/portal/payments", label: "Payments", icon: navIcons.card },
