@@ -164,6 +164,28 @@ export default async function UnitDetail({
   const pettyForUnit = pettyRows ?? [];
   const costById = new Map(costs.map((c) => [c.id, c]));
 
+  // Open tasks tagged to this unit.
+  const { data: unitTaskRows } = await db
+    .from("tasks")
+    .select("id, title, status, priority, category, due_date, assignee:assignee_id(full_name)")
+    .eq("unit_id", id)
+    .neq("status", "done")
+    .neq("status", "cancelled")
+    .order("due_date", { ascending: true, nullsFirst: false })
+    .returns<
+      {
+        id: string;
+        title: string;
+        status: string;
+        priority: string;
+        category: string;
+        due_date: string | null;
+        assignee: { full_name: string | null } | null;
+      }[]
+    >();
+  const unitTasks = unitTaskRows ?? [];
+  const todayIso2 = new Date().toISOString().slice(0, 10);
+
   const costSigned = await Promise.all(
     costs.filter((c) => c.doc_path).map((c) =>
       leaseAdmin.storage.from("unit-cost-docs").createSignedUrl(c.doc_path!, 3600)
@@ -553,6 +575,47 @@ export default async function UnitDetail({
           )}
 
           <UnitCostForm unitId={unit.id} />
+        </Card>
+
+        <Card className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-ink">Open tasks</h2>
+            <Link href="/admin/tasks" className="text-sm font-medium text-pine hover:text-pine-dark">
+              All tasks
+            </Link>
+          </div>
+          {unitTasks.length > 0 ? (
+            <ul className="divide-y divide-clay">
+              {unitTasks.map((t) => {
+                const overdue = t.due_date != null && t.due_date < todayIso2;
+                return (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-ink">{t.title}</div>
+                      <div className="text-xs text-ink-faint">
+                        {[humanize(t.category), t.assignee?.full_name, t.status === "in_progress" ? "in progress" : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    </div>
+                    {t.due_date && (
+                      <span className={`shrink-0 text-xs ${overdue ? "font-medium text-terracotta-dark" : "text-ink-faint"}`}>
+                        {formatDate(t.due_date)}
+                        {overdue ? " · overdue" : ""}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-faint">
+              No open tasks for this unit.{" "}
+              <Link href="/admin/tasks" className="font-medium text-pine hover:underline">
+                Add one →
+              </Link>
+            </p>
+          )}
         </Card>
 
         <Card className="p-6">

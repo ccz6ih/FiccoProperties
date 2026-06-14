@@ -33,6 +33,15 @@ type AnnivRow = {
   profiles: { full_name: string | null } | null;
 };
 
+type TaskWidgetRow = {
+  id: string;
+  title: string;
+  status: string;
+  due_date: string | null;
+  assignee: { full_name: string | null } | null;
+  unit: { id: string; label: string; properties: { name: string | null } | null } | null;
+};
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -56,6 +65,7 @@ export default async function AdminOverview() {
     { data: charges },
     { data: recentResidents },
     { data: homeLinks },
+    { data: openTasks },
   ] = await Promise.all([
     loadSearchItems(),
     supabase.from("units").select("*", { count: "exact", head: true }),
@@ -109,6 +119,14 @@ export default async function AdminOverview() {
       .select("occupant_profile_id, tenant_name, units(label, properties(name))")
       .not("occupant_profile_id", "is", null)
       .returns<{ occupant_profile_id: string; tenant_name: string | null; units: { label: string; properties: { name: string | null } | null } | null }[]>(),
+    db
+      .from("tasks")
+      .select("id, title, status, due_date, assignee:assignee_id(full_name), unit:unit_id(id, label, properties(name))")
+      .neq("status", "done")
+      .neq("status", "cancelled")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(8)
+      .returns<TaskWidgetRow[]>(),
   ]);
 
   // Map each linked account to its home + the tenancy name (to confirm matches).
@@ -123,6 +141,10 @@ export default async function AdminOverview() {
     ...r,
     link: homeByProfile.get(r.id) ?? null,
   }));
+
+  const tasks = openTasks ?? [];
+  const todayStr = today.toISOString().slice(0, 10);
+  const overdueTasks = tasks.filter((t) => t.due_date && t.due_date < todayStr).length;
 
   const occupied = units?.filter((u) => u.status === "occupied").length ?? 0;
   const total = unitCount ?? 0;
@@ -174,6 +196,40 @@ export default async function AdminOverview() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <DashCard
+          title={overdueTasks > 0 ? `Open tasks · ${overdueTasks} overdue` : "Open tasks"}
+          href="/admin/tasks"
+          linkLabel="Task board"
+        >
+          {tasks.length > 0 ? (
+            <ul className="divide-y divide-clay">
+              {tasks.slice(0, 5).map((t) => {
+                const overdue = t.due_date != null && t.due_date < todayStr;
+                const home = t.unit
+                  ? `${t.unit.properties?.name ?? ""} · ${t.unit.label}`
+                  : null;
+                return (
+                  <li key={t.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-ink">{t.title}</div>
+                      <div className="truncate text-xs text-ink-faint">
+                        {[t.assignee?.full_name, home].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    {t.due_date && (
+                      <span className={`shrink-0 text-xs ${overdue ? "font-medium text-terracotta-dark" : "text-ink-faint"}`}>
+                        {formatDate(t.due_date)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Empty>No open tasks. 🎉</Empty>
+          )}
+        </DashCard>
+
         <DashCard title="Recently joined" href="/admin/residents" linkLabel="All residents">
           {newResidents.length > 0 ? (
             <ul className="divide-y divide-clay">

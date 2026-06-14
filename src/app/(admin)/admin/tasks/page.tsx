@@ -21,7 +21,7 @@ type TaskRow = {
   due_date: string | null;
   assignee_id: string | null;
   assignee: { full_name: string | null } | null;
-  property: { name: string | null } | null;
+  property: { name: string | null; slug: string } | null;
   unit: { id: string; label: string; properties: { name: string | null } | null } | null;
 };
 
@@ -60,7 +60,7 @@ export default async function AdminTasks({
       db
         .from("tasks")
         .select(
-          "id, title, details, category, status, priority, due_date, assignee_id, assignee:assignee_id(full_name), property:property_id(name), unit:unit_id(id, label, properties(name))"
+          "id, title, details, category, status, priority, due_date, assignee_id, assignee:assignee_id(full_name), property:property_id(name, slug), unit:unit_id(id, label, properties(name))"
         )
         .neq("status", "cancelled")
         .order("due_date", { ascending: true, nullsFirst: false })
@@ -223,6 +223,10 @@ function TaskCard({ t }: { t: TaskRow }) {
             📍{" "}
             {t.unit ? (
               <Link href={`/admin/units/${t.unit.id}`} className="text-pine hover:underline">
+                {home}
+              </Link>
+            ) : t.property?.slug ? (
+              <Link href={`/admin/properties/${t.property.slug}`} className="text-pine hover:underline">
                 {home}
               </Link>
             ) : (
