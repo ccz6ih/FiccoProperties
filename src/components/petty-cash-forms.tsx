@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { formatCents } from "@/lib/format";
+import { pdfToImages } from "@/lib/pdf-to-images";
 import {
   addExpense,
   addTopup,
@@ -86,8 +87,10 @@ function ExpenseForm({
   const [state, action, pending] = useActionState(addExpense, initial);
   const [total, setTotal] = useState("");
   const [amount, setAmount] = useState("");
+  const [converting, setConverting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     if (state.ok) {
@@ -97,6 +100,38 @@ function ExpenseForm({
       router.refresh();
     }
   }, [state, router]);
+
+  // Convert any PDF receipts to page images before submitting (so they embed
+  // in the report). Falls back to the original PDF if conversion fails.
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    const files = fd
+      .getAll("file")
+      .filter((f): f is File => f instanceof File && f.size > 0);
+    fd.delete("file");
+
+    if (files.length > 0) setConverting(true);
+    try {
+      for (const f of files) {
+        if (f.type === "application/pdf") {
+          try {
+            const imgs = await pdfToImages(f);
+            imgs.forEach((img) => fd.append("file", img));
+          } catch {
+            fd.append("file", f); // keep the PDF (will show as a link)
+          }
+        } else {
+          fd.append("file", f);
+        }
+      }
+    } finally {
+      setConverting(false);
+    }
+    startTransition(() => action(fd));
+  }
 
   const t = parseFloat(total);
   const a = parseFloat(amount);
@@ -111,7 +146,7 @@ function ExpenseForm({
   }
 
   return (
-    <form ref={formRef} action={action} className="space-y-3">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={lbl}>
           Envelope
@@ -214,8 +249,8 @@ function ExpenseForm({
           className="mt-1 block text-xs text-ink-soft file:mr-2 file:rounded-lg file:border file:border-clay-deep file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-soft"
         />
         <span className="mt-1 block text-[11px] text-ink-faint">
-          Multi-page receipt? Attach the PDF, or snap a photo of each page and
-          select them all.
+          Multi-page receipt? Attach the PDF (we&apos;ll split it into pages) or snap
+          a photo of each page and select them all.
         </span>
       </label>
 
@@ -225,8 +260,8 @@ function ExpenseForm({
           ✓ Expense logged — the balance and list updated below.
         </p>
       )}
-      <Button type="submit" variant="primary" disabled={pending}>
-        {pending ? "Saving…" : "Log expense"}
+      <Button type="submit" variant="primary" disabled={pending || converting}>
+        {converting ? "Preparing receipt…" : pending ? "Saving…" : "Log expense"}
       </Button>
     </form>
   );
