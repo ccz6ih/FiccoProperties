@@ -11,7 +11,8 @@ import {
   type ResidentOption,
 } from "@/components/unit-edit-form";
 import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
-import { deleteLogEntry } from "@/app/(admin)/admin/units/actions";
+import { UnitCostForm } from "@/components/unit-cost-form";
+import { deleteLogEntry, deleteUnitCost } from "@/app/(admin)/admin/units/actions";
 
 const LEASE_BUCKET = "lease-docs";
 import { formatCents, formatDate, humanize } from "@/lib/format";
@@ -68,6 +69,26 @@ type LogRow = {
   author: { full_name: string | null } | null;
 };
 
+type CostRow = {
+  id: string;
+  vendor: string | null;
+  trade: string | null;
+  description: string | null;
+  amount_cents: number;
+  hours: number | string | null;
+  incurred_on: string;
+  doc_path: string | null;
+};
+
+type PettyForUnitRow = {
+  id: string;
+  store: string | null;
+  category: string | null;
+  description: string | null;
+  amount_cents: number;
+  occurred_on: string;
+};
+
 export default async function UnitDetail({
   params,
 }: {
@@ -121,6 +142,72 @@ export default async function UnitDetail({
     url: leaseSigned[i]?.data?.signedUrl ?? "",
     created: d.created_at,
   }));
+
+  // Unit costs (contractor bills) + petty-cash expenses tagged to this unit.
+  const [{ data: costRows }, { data: pettyRows }] = await Promise.all([
+    db
+      .from("unit_costs")
+      .select("id, vendor, trade, description, amount_cents, hours, incurred_on, doc_path")
+      .eq("unit_id", id)
+      .order("incurred_on", { ascending: false })
+      .returns<CostRow[]>(),
+    db
+      .from("petty_cash_entries")
+      .select("id, store, category, description, amount_cents, occurred_on")
+      .eq("unit_id", id)
+      .eq("kind", "expense")
+      .returns<PettyForUnitRow[]>(),
+  ]);
+  const costs = costRows ?? [];
+  const pettyForUnit = pettyRows ?? [];
+
+  const costSigned = await Promise.all(
+    costs.filter((c) => c.doc_path).map((c) =>
+      leaseAdmin.storage.from("unit-cost-docs").createSignedUrl(c.doc_path!, 3600)
+    )
+  );
+  const costDocUrl = new Map<string, string>();
+  costs.filter((c) => c.doc_path).forEach((c, i) => {
+    const url = costSigned[i]?.data?.signedUrl;
+    if (url) costDocUrl.set(c.id, url);
+  });
+
+  const costTotal = costs.reduce((s, c) => s + c.amount_cents, 0);
+  const pettyTotal = pettyForUnit.reduce((s, p) => s + p.amount_cents, 0);
+  const grandTotal = costTotal + pettyTotal;
+  const totalHours = costs.reduce((s, c) => s + (c.hours ? Number(c.hours) : 0), 0);
+
+  const byTrade = new Map<string, number>();
+  for (const c of costs) {
+    const k = c.trade ?? "other";
+    byTrade.set(k, (byTrade.get(k) ?? 0) + c.amount_cents);
+  }
+  for (const p of pettyForUnit) {
+    const k = p.category ?? "supplies";
+    byTrade.set(k, (byTrade.get(k) ?? 0) + p.amount_cents);
+  }
+  const tradeRows = [...byTrade.entries()].sort((a, b) => b[1] - a[1]);
+
+  const costLines = [
+    ...costs.map((c) => ({
+      type: "bill" as const,
+      id: c.id,
+      date: c.incurred_on,
+      title: c.vendor ?? (c.trade ? c.trade : "Contractor cost"),
+      sub: [c.trade, c.description, c.hours ? `${Number(c.hours)} hrs` : null]
+        .filter(Boolean)
+        .join(" · "),
+      amount: c.amount_cents,
+    })),
+    ...pettyForUnit.map((p) => ({
+      type: "petty" as const,
+      id: p.id,
+      date: p.occurred_on,
+      title: p.store ?? "Petty cash",
+      sub: [p.category, p.description].filter(Boolean).join(" · "),
+      amount: p.amount_cents,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
 
   const [{ data: requests }, { data: turns }, { data: templates }] = await Promise.all([
     supabase
@@ -349,6 +436,94 @@ export default async function UnitDetail({
           ) : (
             <MakereadyStartForm unitId={unit.id} templates={templateList} />
           )}
+        </Card>
+
+        <Card className="space-y-5 p-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-ink">
+                Make-ready &amp; repair costs
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft">
+                Contractor bills plus petty cash tagged to this unit.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="font-display text-3xl font-semibold text-ink">
+                {formatCents(grandTotal)}
+              </div>
+              <div className="text-xs text-ink-faint">
+                {formatCents(costTotal)} bills · {formatCents(pettyTotal)} petty cash
+                {totalHours > 0 ? ` · ${totalHours} hrs` : ""}
+              </div>
+            </div>
+          </div>
+
+          {tradeRows.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {tradeRows.map(([t, c]) => (
+                <span key={t} className="rounded-full bg-sand px-3 py-1 text-xs capitalize text-ink-soft">
+                  {t} <span className="font-semibold text-ink">{formatCents(c)}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {costLines.length > 0 ? (
+            <ul className="divide-y divide-clay">
+              {costLines.map((l) => (
+                <li key={`${l.type}-${l.id}`} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-ink">
+                      {l.title}
+                      {l.type === "petty" && (
+                        <span className="ml-2 rounded-full bg-pine/10 px-2 py-0.5 text-[10px] font-medium text-pine">
+                          Petty cash
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-ink-faint">
+                      {[formatDate(l.date), l.sub].filter(Boolean).join(" · ")}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-medium text-ink">{formatCents(l.amount)}</span>
+                    {l.type === "bill" && costDocUrl.has(l.id) && (
+                      <a
+                        href={costDocUrl.get(l.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-pine hover:underline"
+                      >
+                        Invoice
+                      </a>
+                    )}
+                    {l.type === "bill" ? (
+                      <form action={deleteUnitCost}>
+                        <input type="hidden" name="id" value={l.id} />
+                        <input type="hidden" name="unit_id" value={unit.id} />
+                        <button
+                          type="submit"
+                          className="text-xs text-ink-faint hover:text-terracotta-dark"
+                          title="Delete cost"
+                        >
+                          ✕
+                        </button>
+                      </form>
+                    ) : (
+                      <Link href="/admin/petty-cash" className="text-xs text-ink-faint hover:text-pine" title="Petty cash">
+                        ↗
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-ink-faint">No costs recorded for this unit yet.</p>
+          )}
+
+          <UnitCostForm unitId={unit.id} />
         </Card>
 
         <Card className="p-6">
