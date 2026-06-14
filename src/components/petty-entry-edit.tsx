@@ -19,16 +19,36 @@ export type PettyEntry = {
   store: string | null;
   description: string | null;
   category: string | null;
+  propertyId: string | null;
+  unitId: string | null;
   amountDollars: string;
   receiptTotalDollars: string;
 };
 
-export function PettyEntryEdit({ entry }: { entry: PettyEntry }) {
+type PropOpt = { id: string; name: string };
+type UnitOpt = { id: string; label: string; property: string };
+
+export function PettyEntryEdit({
+  entry,
+  properties,
+  units,
+}: {
+  entry: PettyEntry;
+  properties: PropOpt[];
+  units: UnitOpt[];
+}) {
   const [state, action, pending] = useActionState(editPettyEntry, initial);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const isTopup = entry.kind === "topup";
   const router = useRouter();
+
+  const unitsByProperty = new Map<string, UnitOpt[]>();
+  for (const u of units) {
+    const arr = unitsByProperty.get(u.property) ?? [];
+    arr.push(u);
+    unitsByProperty.set(u.property, arr);
+  }
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -128,6 +148,30 @@ export function PettyEntryEdit({ entry }: { entry: PettyEntry }) {
                   ))}
                 </select>
               </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={lbl}>
+                  Community
+                  <select name="property_id" defaultValue={entry.propertyId ?? ""} className={field}>
+                    <option value="">—</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={lbl}>
+                  Unit
+                  <select name="unit_id" defaultValue={entry.unitId ?? ""} className={field}>
+                    <option value="">—</option>
+                    {[...unitsByProperty.entries()].map(([prop, list]) => (
+                      <optgroup key={prop} label={prop}>
+                        {list.map((u) => (
+                          <option key={u.id} value={u.id}>{prop} · {u.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </>
           )}
 

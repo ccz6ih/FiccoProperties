@@ -27,6 +27,8 @@ type EntryRow = {
   amount_cents: number;
   receipt_path: string | null;
   receipt_paths: string[] | null;
+  property_id: string | null;
+  unit_id: string | null;
   staff: { full_name: string | null } | null;
   unit: { label: string; properties: { name: string | null } | null } | null;
   property: { name: string | null } | null;
@@ -50,7 +52,7 @@ export default async function AdminPettyCash() {
       db
         .from("petty_cash_entries")
         .select(
-          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
+          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, property_id, unit_id, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
         )
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
@@ -231,6 +233,8 @@ export default async function AdminPettyCash() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
                           <PettyEntryEdit
+                            properties={propOpts}
+                            units={unitOpts}
                             entry={{
                               id: e.id,
                               kind: e.kind,
@@ -238,6 +242,8 @@ export default async function AdminPettyCash() {
                               store: e.store,
                               description: e.description,
                               category: e.category,
+                              propertyId: e.property_id,
+                              unitId: e.unit_id,
                               amountDollars: (e.amount_cents / 100).toString(),
                               receiptTotalDollars:
                                 e.receipt_total_cents != null

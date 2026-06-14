@@ -148,6 +148,8 @@ export async function editPettyEntry(
   if (str(form.get("kind")) === "expense") {
     updates.category = str(form.get("category"));
     updates.receipt_total_cents = cents(form.get("receipt_total"));
+    updates.property_id = str(form.get("property_id"));
+    updates.unit_id = str(form.get("unit_id"));
   }
 
   const { error } = await db.from("petty_cash_entries").update(updates).eq("id", id);
