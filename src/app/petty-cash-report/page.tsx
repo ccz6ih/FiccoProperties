@@ -37,7 +37,13 @@ const isImage = (p: string) => /\.(jpe?g|png|webp|heic|heif)$/i.test(p);
 export default async function PettyCashReport({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; staff?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    staff?: string;
+    place?: string;
+    sort?: string;
+  }>;
 }) {
   const { profile } = await requireProfile("/petty-cash-report");
   if (!isStaff(profile)) redirect("/portal");
@@ -49,6 +55,8 @@ export default async function PettyCashReport({
   const from = re.test(sp.from ?? "") ? sp.from! : iso(startOfMonth);
   const to = re.test(sp.to ?? "") ? sp.to! : iso(now);
   const staffId = sp.staff || null;
+  const placeName = sp.place || null;
+  const sortMode = sp.sort === "person" || sp.sort === "place" ? sp.sort : "date";
 
   // Preset ranges.
   const weekStart = new Date(now);
@@ -65,13 +73,14 @@ export default async function PettyCashReport({
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
-  const [{ data: staff }, entriesRes] = await Promise.all([
+  const [{ data: staff }, { data: properties }, entriesRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, full_name")
       .in("role", ["owner", "admin"])
       .order("full_name")
       .returns<{ id: string; full_name: string | null }[]>(),
+    supabase.from("properties").select("name").order("name").returns<{ name: string }[]>(),
     (async () => {
       let q = db
         .from("petty_cash_entries")
@@ -86,7 +95,26 @@ export default async function PettyCashReport({
     })(),
   ]);
 
-  const entries = entriesRes.data ?? [];
+  const placeOf = (e: EntryRow) =>
+    e.unit?.properties?.name ?? e.property?.name ?? "Unassigned";
+
+  const allEntries = entriesRes.data ?? [];
+  const filtered = placeName
+    ? allEntries.filter((e) => placeOf(e) === placeName)
+    : allEntries;
+  const entries = [...filtered].sort((a, b) => {
+    if (sortMode === "person") {
+      const an = a.staff?.full_name ?? "";
+      const bn = b.staff?.full_name ?? "";
+      if (an !== bn) return an.localeCompare(bn);
+    } else if (sortMode === "place") {
+      const ap = placeOf(a);
+      const bp = placeOf(b);
+      if (ap !== bp) return ap.localeCompare(bp);
+    }
+    return a.occurred_on.localeCompare(b.occurred_on);
+  });
+
   const receivedCents = entries.filter((e) => e.kind === "topup").reduce((s, e) => s + e.amount_cents, 0);
   const spentCents = entries.filter((e) => e.kind === "expense").reduce((s, e) => s + e.amount_cents, 0);
 
@@ -127,8 +155,22 @@ export default async function PettyCashReport({
     amount: ((e.kind === "topup" ? 1 : -1) * e.amount_cents / 100).toFixed(2),
   }));
 
-  const presetHref = (p: { from: string; to: string }) =>
-    `/petty-cash-report?from=${p.from}&to=${p.to}${staffId ? `&staff=${staffId}` : ""}`;
+  const current = {
+    from,
+    to,
+    staff: staffId ?? "",
+    place: placeName ?? "",
+    sort: sortMode,
+  };
+  const hrefWith = (over: Partial<typeof current>) => {
+    const merged = { ...current, ...over };
+    const q = Object.entries(merged)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join("&");
+    return `/petty-cash-report?${q}`;
+  };
+  const communities = (properties ?? []).map((p) => p.name);
 
   return (
     <main className="min-h-dvh bg-cream py-10 print:bg-white print:py-0">
@@ -151,7 +193,7 @@ export default async function PettyCashReport({
               return (
                 <Link
                   key={p.label}
-                  href={presetHref(p)}
+                  href={hrefWith({ from: p.from, to: p.to })}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
                     active ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"
                   }`}
@@ -162,6 +204,7 @@ export default async function PettyCashReport({
             })}
           </div>
           <form method="get" className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="sort" value={sortMode} />
             <label className="text-xs text-ink-soft">
               From
               <input type="date" name="from" defaultValue={from} className="block rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm" />
@@ -179,10 +222,28 @@ export default async function PettyCashReport({
                 ))}
               </select>
             </label>
+            <label className="text-xs text-ink-soft">
+              Community
+              <select name="place" defaultValue={placeName ?? ""} className="block rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm">
+                <option value="">All places</option>
+                {communities.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option value="Unassigned">Unassigned</option>
+              </select>
+            </label>
             <button type="submit" className="rounded-lg border border-clay-deep px-3 py-1.5 text-sm font-medium text-ink-soft hover:bg-sand">
               Apply
             </button>
           </form>
+        </div>
+
+        {/* Sort */}
+        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm print:hidden">
+          <span className="text-xs uppercase tracking-wide text-ink-faint">Sort by</span>
+          <Link href={hrefWith({ sort: "date" })} className={`rounded-lg px-2.5 py-1 text-xs font-medium ${sortMode === "date" ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"}`}>Date</Link>
+          <Link href={hrefWith({ sort: "person" })} className={`rounded-lg px-2.5 py-1 text-xs font-medium ${sortMode === "person" ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"}`}>Person</Link>
+          <Link href={hrefWith({ sort: "place" })} className={`rounded-lg px-2.5 py-1 text-xs font-medium ${sortMode === "place" ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"}`}>Place</Link>
         </div>
 
         <div className="rounded-2xl border border-clay bg-white p-8 print:rounded-none print:border-0 print:p-0">
@@ -190,7 +251,10 @@ export default async function PettyCashReport({
           <div className="mb-6 flex items-start justify-between border-b border-clay pb-5">
             <div>
               <div className="font-display text-2xl font-semibold text-pine">38th Ave Properties</div>
-              <div className="text-sm text-ink-soft">Petty cash report · {staffName}</div>
+              <div className="text-sm text-ink-soft">
+                Petty cash report · {staffName}
+                {placeName ? ` · ${placeName}` : ""}
+              </div>
             </div>
             <div className="text-right text-sm text-ink-soft">
               <div className="font-medium text-ink">
