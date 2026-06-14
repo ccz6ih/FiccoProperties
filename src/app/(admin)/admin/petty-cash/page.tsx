@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Card } from "@/components/ui";
+import { Card, Eyebrow } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import {
   PettyCashForms,
@@ -35,7 +35,12 @@ type EntryRow = {
   property: { name: string | null } | null;
 };
 
-export default async function AdminPettyCash() {
+export default async function AdminPettyCash({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort } = await searchParams;
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
   const {
@@ -86,6 +91,33 @@ export default async function AdminPettyCash() {
     else b.spent += e.amount_cents;
     balances.set(e.staff_id, b);
   }
+
+  const placeOf = (e: EntryRow) =>
+    e.unit?.properties?.name ?? e.property?.name ?? "Unassigned";
+
+  // Spending grouped by community (expenses only).
+  const placeTotals = new Map<string, number>();
+  for (const e of entries ?? []) {
+    if (e.kind !== "expense") continue;
+    const k = placeOf(e);
+    placeTotals.set(k, (placeTotals.get(k) ?? 0) + e.amount_cents);
+  }
+  const placeRows = [...placeTotals.entries()].sort((a, b) => b[1] - a[1]);
+
+  // Sort the log.
+  const sortMode = sort === "person" || sort === "place" ? sort : "date";
+  const sorted = [...(entries ?? [])].sort((a, b) => {
+    if (sortMode === "person") {
+      const an = a.staff?.full_name ?? "";
+      const bn = b.staff?.full_name ?? "";
+      if (an !== bn) return an.localeCompare(bn);
+    } else if (sortMode === "place") {
+      const ap = placeOf(a);
+      const bp = placeOf(b);
+      if (ap !== bp) return ap.localeCompare(bp);
+    }
+    return b.occurred_on.localeCompare(a.occurred_on);
+  });
 
   // Sign every receipt page for viewing (handles multi-page entries).
   const admin = createAdminClient();
@@ -157,8 +189,31 @@ export default async function AdminPettyCash() {
         />
       </div>
 
+      {/* Spending by place */}
+      {placeRows.length > 0 && (
+        <Card className="mb-6 p-5">
+          <Eyebrow>Spending by community</Eyebrow>
+          <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {placeRows.map(([place, cents]) => (
+              <li key={place} className="flex items-baseline gap-2">
+                <span className="text-ink-soft">{place}</span>
+                <span className="font-display text-base font-semibold text-ink">
+                  {formatCents(cents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {entries && entries.length > 0 ? (
         <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 border-b border-clay px-4 py-3 text-sm">
+            <span className="text-xs uppercase tracking-wide text-ink-faint">Sort by</span>
+            <SortLink active={sortMode === "date"} href="/admin/petty-cash" label="Date" />
+            <SortLink active={sortMode === "person"} href="/admin/petty-cash?sort=person" label="Person" />
+            <SortLink active={sortMode === "place"} href="/admin/petty-cash?sort=place" label="Place" />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -173,7 +228,7 @@ export default async function AdminPettyCash() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-clay">
-                {entries.map((e) => {
+                {sorted.map((e) => {
                   const where = e.unit
                     ? `${e.unit.properties?.name ?? ""} · ${e.unit.label}`
                     : e.property?.name ?? "—";
@@ -286,5 +341,18 @@ export default async function AdminPettyCash() {
         />
       )}
     </div>
+  );
+}
+
+function SortLink({ active, href, label }: { active: boolean; href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+        active ? "bg-pine text-cream" : "text-ink-soft hover:bg-sand"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }
