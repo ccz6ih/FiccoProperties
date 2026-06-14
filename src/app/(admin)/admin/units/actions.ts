@@ -63,6 +63,7 @@ export async function addUnitCost(
     description: str(form.get("description")),
     amount_cents: amount,
     hours,
+    rate_cents: costCents(form.get("rate")),
     incurred_on: str(form.get("incurred_on")) ?? undefined,
     doc_path: docPath,
     created_by: user.id,
@@ -70,6 +71,43 @@ export async function addUnitCost(
   if (error) return { ok: false, error: "Could not save the cost." };
 
   revalidatePath(`/admin/units/${unitId}`);
+  return { ok: true };
+}
+
+/** Edit a unit cost's details (not its invoice file). Staff-only. */
+export async function editUnitCost(
+  _prev: CostState,
+  form: FormData
+): Promise<CostState> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const id = str(form.get("id"));
+  const unitId = str(form.get("unit_id"));
+  if (!id) return { ok: false, error: "Missing cost." };
+  const amount = costCents(form.get("amount"));
+  if (amount == null || amount <= 0) return { ok: false, error: "Enter an amount." };
+
+  const hoursRaw = str(form.get("hours"));
+  const hours = hoursRaw != null && Number.isFinite(Number(hoursRaw)) ? Number(hoursRaw) : null;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const updates: Record<string, unknown> = {
+    vendor: str(form.get("vendor")),
+    trade: str(form.get("trade")),
+    description: str(form.get("description")),
+    amount_cents: amount,
+    hours,
+    rate_cents: costCents(form.get("rate")),
+  };
+  const d = str(form.get("incurred_on"));
+  if (d) updates.incurred_on = d;
+
+  const { error } = await db.from("unit_costs").update(updates).eq("id", id);
+  if (error) return { ok: false, error: "Could not save changes." };
+
+  if (unitId) revalidatePath(`/admin/units/${unitId}`);
   return { ok: true };
 }
 

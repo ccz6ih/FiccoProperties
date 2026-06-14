@@ -22,13 +22,23 @@ function today() {
 export function UnitCostForm({ unitId }: { unitId: string }) {
   const [state, action, pending] = useActionState(addUnitCost, initial);
   const [open, setOpen] = useState(false);
+  const [hours, setHours] = useState("");
+  const [rate, setRate] = useState("");
+  const [amount, setAmount] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
+
+  // hours × rate auto-fills the amount (you can still override it).
+  const computed = Number(hours) > 0 && Number(rate) > 0
+    ? (Number(hours) * Number(rate)).toFixed(2)
+    : null;
+  const amountValue = amount || (computed ?? "");
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       setOpen(false);
+      setHours(""); setRate(""); setAmount("");
       router.refresh();
     }
   }, [state, router]);
@@ -60,18 +70,35 @@ export function UnitCostForm({ unitId }: { unitId: string }) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className={lbl}>
-          Amount ($)
-          <input inputMode="decimal" name="amount" required placeholder="250" className={field} />
-        </label>
-        <label className={lbl}>
           Hours (optional)
-          <input inputMode="decimal" name="hours" placeholder="3" className={field} />
+          <input inputMode="decimal" name="hours" value={hours} onChange={(e) => setHours(e.target.value)} placeholder="3" className={field} />
         </label>
         <label className={lbl}>
-          Date
-          <input type="date" name="incurred_on" defaultValue={today()} className={field} />
+          Rate ($/hr, optional)
+          <input inputMode="decimal" name="rate" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="25" className={field} />
+        </label>
+        <label className={lbl}>
+          Amount ($)
+          <input
+            inputMode="decimal"
+            name="amount"
+            required
+            value={amountValue}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="250"
+            className={field}
+          />
         </label>
       </div>
+      {computed && !amount && (
+        <p className="text-[11px] text-ink-faint">
+          {hours} hrs × ${rate}/hr = <span className="font-medium text-ink">${computed}</span> (edit Amount to override)
+        </p>
+      )}
+      <label className={lbl}>
+        Date
+        <input type="date" name="incurred_on" defaultValue={today()} className={field} />
+      </label>
 
       <input type="hidden" name="unit_id" value={unitId} />
       <label className={lbl}>

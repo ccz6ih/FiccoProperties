@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { UnitStatusControl } from "@/components/unit-status-control";
@@ -116,6 +117,30 @@ export default async function PropertyDetail({
   const occByUnit = new Map<string, OccupancyRow>();
   for (const o of occupancies ?? []) occByUnit.set(o.unit_id, o);
 
+  // Spend per unit = contractor bills + petty-cash expenses tagged to the unit.
+  const db = supabase as unknown as SupabaseClient;
+  const unitIds = unitList.map((u) => u.id);
+  const spendByUnit = new Map<string, number>();
+  if (unitIds.length > 0) {
+    const [{ data: costAgg }, { data: pettyAgg }] = await Promise.all([
+      db
+        .from("unit_costs")
+        .select("unit_id, amount_cents")
+        .in("unit_id", unitIds)
+        .returns<{ unit_id: string; amount_cents: number }[]>(),
+      db
+        .from("petty_cash_entries")
+        .select("unit_id, amount_cents")
+        .eq("kind", "expense")
+        .in("unit_id", unitIds)
+        .returns<{ unit_id: string; amount_cents: number }[]>(),
+    ]);
+    for (const c of costAgg ?? [])
+      spendByUnit.set(c.unit_id, (spendByUnit.get(c.unit_id) ?? 0) + c.amount_cents);
+    for (const p of pettyAgg ?? [])
+      spendByUnit.set(p.unit_id, (spendByUnit.get(p.unit_id) ?? 0) + p.amount_cents);
+  }
+
   const residentOptions: ResidentOption[] = (profiles ?? []).map((p) => ({
     id: p.id,
     full_name: p.full_name,
@@ -211,6 +236,7 @@ export default async function PropertyDetail({
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium">Tenant</th>
                   <th className="px-5 py-3 font-medium">Rent</th>
+                  <th className="px-5 py-3 font-medium">Spent</th>
                   <th className="px-5 py-3 font-medium">Lease signed</th>
                   <th className="px-5 py-3 font-medium">Term</th>
                   <th className="px-5 py-3 font-medium" />
@@ -277,6 +303,15 @@ export default async function PropertyDetail({
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
                         {formatCents(rentCents)}
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {spendByUnit.has(u.id) ? (
+                          <Link href={`/admin/units/${u.id}`} className="font-medium text-ink hover:text-pine">
+                            {formatCents(spendByUnit.get(u.id)!)}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
                         {formatDate(occ?.lease_signed_date)}

@@ -12,6 +12,7 @@ import {
 } from "@/components/unit-edit-form";
 import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
 import { UnitCostForm } from "@/components/unit-cost-form";
+import { UnitCostEdit } from "@/components/unit-cost-edit";
 import { deleteLogEntry, deleteUnitCost } from "@/app/(admin)/admin/units/actions";
 
 const LEASE_BUCKET = "lease-docs";
@@ -76,6 +77,7 @@ type CostRow = {
   description: string | null;
   amount_cents: number;
   hours: number | string | null;
+  rate_cents: number | null;
   incurred_on: string;
   doc_path: string | null;
 };
@@ -147,7 +149,7 @@ export default async function UnitDetail({
   const [{ data: costRows }, { data: pettyRows }] = await Promise.all([
     db
       .from("unit_costs")
-      .select("id, vendor, trade, description, amount_cents, hours, incurred_on, doc_path")
+      .select("id, vendor, trade, description, amount_cents, hours, rate_cents, incurred_on, doc_path")
       .eq("unit_id", id)
       .order("incurred_on", { ascending: false })
       .returns<CostRow[]>(),
@@ -160,6 +162,7 @@ export default async function UnitDetail({
   ]);
   const costs = costRows ?? [];
   const pettyForUnit = pettyRows ?? [];
+  const costById = new Map(costs.map((c) => [c.id, c]));
 
   const costSigned = await Promise.all(
     costs.filter((c) => c.doc_path).map((c) =>
@@ -445,7 +448,10 @@ export default async function UnitDetail({
                 Make-ready &amp; repair costs
               </h2>
               <p className="mt-1 text-sm text-ink-soft">
-                Contractor bills plus petty cash tagged to this unit.
+                Contractor bills plus petty cash tagged to this unit.{" "}
+                <Link href={`/unit-cost-report?unit=${unit.id}`} className="font-medium text-pine hover:underline">
+                  Print report →
+                </Link>
               </p>
             </div>
             <div className="text-right">
@@ -499,17 +505,40 @@ export default async function UnitDetail({
                       </a>
                     )}
                     {l.type === "bill" ? (
-                      <form action={deleteUnitCost}>
-                        <input type="hidden" name="id" value={l.id} />
-                        <input type="hidden" name="unit_id" value={unit.id} />
-                        <button
-                          type="submit"
-                          className="text-xs text-ink-faint hover:text-terracotta-dark"
-                          title="Delete cost"
-                        >
-                          ✕
-                        </button>
-                      </form>
+                      <>
+                        {costById.has(l.id) && (
+                          <UnitCostEdit
+                            entry={{
+                              id: l.id,
+                              unitId: unit.id,
+                              vendor: costById.get(l.id)!.vendor,
+                              trade: costById.get(l.id)!.trade,
+                              description: costById.get(l.id)!.description,
+                              incurred_on: costById.get(l.id)!.incurred_on,
+                              amountDollars: (costById.get(l.id)!.amount_cents / 100).toString(),
+                              hoursValue:
+                                costById.get(l.id)!.hours != null
+                                  ? String(Number(costById.get(l.id)!.hours))
+                                  : "",
+                              rateDollars:
+                                costById.get(l.id)!.rate_cents != null
+                                  ? (costById.get(l.id)!.rate_cents! / 100).toString()
+                                  : "",
+                            }}
+                          />
+                        )}
+                        <form action={deleteUnitCost}>
+                          <input type="hidden" name="id" value={l.id} />
+                          <input type="hidden" name="unit_id" value={unit.id} />
+                          <button
+                            type="submit"
+                            className="text-xs text-ink-faint hover:text-terracotta-dark"
+                            title="Delete cost"
+                          >
+                            ✕
+                          </button>
+                        </form>
+                      </>
                     ) : (
                       <Link href="/admin/petty-cash" className="text-xs text-ink-faint hover:text-pine" title="Petty cash">
                         ↗
