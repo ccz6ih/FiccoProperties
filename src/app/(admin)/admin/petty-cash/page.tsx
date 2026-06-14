@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
@@ -113,6 +114,14 @@ export default async function AdminPettyCash() {
       <PageHeader
         title="Petty cash"
         subtitle="Each envelope's running balance, with receipts. Log only the business portion of a receipt — the rest stays yours."
+        action={
+          <Link
+            href="/petty-cash-report"
+            className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+          >
+            Export / report →
+          </Link>
+        }
       />
 
       {/* Envelope balances */}
