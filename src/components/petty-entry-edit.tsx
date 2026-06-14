@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui";
 import { editPettyEntry, type CashState } from "@/app/(admin)/admin/petty-cash/actions";
@@ -27,6 +28,7 @@ export function PettyEntryEdit({ entry }: { entry: PettyEntry }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const isTopup = entry.kind === "topup";
+  const router = useRouter();
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -36,8 +38,11 @@ export function PettyEntryEdit({ entry }: { entry: PettyEntry }) {
     };
   }, [open]);
   useEffect(() => {
-    if (state.ok) setOpen(false);
-  }, [state]);
+    if (state.ok) {
+      setOpen(false);
+      router.refresh();
+    }
+  }, [state, router]);
 
   const trigger = (
     <button

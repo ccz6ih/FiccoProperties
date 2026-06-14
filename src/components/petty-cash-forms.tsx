@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { formatCents } from "@/lib/format";
 import {
@@ -86,14 +87,16 @@ function ExpenseForm({
   const [total, setTotal] = useState("");
   const [amount, setAmount] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
       setTotal("");
       setAmount("");
+      router.refresh();
     }
-  }, [state]);
+  }, [state, router]);
 
   const t = parseFloat(total);
   const a = parseFloat(amount);
@@ -217,6 +220,11 @@ function ExpenseForm({
       </label>
 
       {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}
+      {state.ok && (
+        <p className="text-xs font-medium text-pine">
+          ✓ Expense logged — the balance and list updated below.
+        </p>
+      )}
       <Button type="submit" variant="primary" disabled={pending}>
         {pending ? "Saving…" : "Log expense"}
       </Button>
@@ -227,9 +235,13 @@ function ExpenseForm({
 function TopupForm({ staff, defaultStaffId }: { staff: StaffOpt[]; defaultStaffId: string }) {
   const [state, action, pending] = useActionState(addTopup, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
   useEffect(() => {
-    if (state.ok) formRef.current?.reset();
-  }, [state]);
+    if (state.ok) {
+      formRef.current?.reset();
+      router.refresh();
+    }
+  }, [state, router]);
 
   return (
     <form ref={formRef} action={action} className="space-y-3">
@@ -266,6 +278,11 @@ function TopupForm({ staff, defaultStaffId }: { staff: StaffOpt[]; defaultStaffI
         </label>
       </div>
       {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}
+      {state.ok && (
+        <p className="text-xs font-medium text-pine">
+          ✓ Cash added — the envelope balance updated above.
+        </p>
+      )}
       <Button type="submit" variant="primary" disabled={pending}>
         {pending ? "Saving…" : "Add cash to envelope"}
       </Button>
