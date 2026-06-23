@@ -24,7 +24,21 @@ export type LeaseTemplateData = {
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
+  /** Household counts for the occupancy clause + header. */
+  adults?: string | number | null;
+  children?: string | number | null;
+  /** Appliances provided with the unit (defaults to range/fridge/dishwasher). */
+  appliances?: string | null;
 };
+
+function householdLine(adults: string | number | null | undefined, children: string | number | null | undefined): string {
+  const a = Number(adults);
+  const c = Number(children);
+  const parts: string[] = [];
+  if (Number.isFinite(a) && a > 0) parts.push(`${a} adult${a === 1 ? "" : "s"}`);
+  if (Number.isFinite(c) && c > 0) parts.push(`${c} child${c === 1 ? "" : "ren"}`);
+  return parts.join(" and ");
+}
 
 function utilitiesClause(mode: "standard" | "tenant" | "landlord" | undefined): string {
   if (mode === "tenant") {
@@ -66,17 +80,30 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
         .filter(Boolean)
         .join(", ")
     : "W 38th Ave, Wheat Ridge, CO 80033";
+  const household = householdLine(data.adults, data.children);
+  const appliances = data.appliances?.trim() || "a range/stove, a refrigerator, and a dishwasher";
+
+  const header = [
+    `Tenant: ${tenant}`,
+    `Premises: ${home}, ${addressLine}`,
+    `Term: ${start} to ${end}`,
+    `Monthly rent: ${rent}     Security deposit: ${deposit}`,
+    household ? `Household: ${household}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const sections: string[] = [
     `Parties. This Lease is made between 38th Ave Properties ("Landlord") and ${tenant} ("Tenant"). If more than one person signs as Tenant, each is jointly and individually responsible for the full performance of this Lease.`,
-    `Premises. Landlord leases to Tenant the residence located at ${home}, ${addressLine} (the "Premises"), to be used only as a private home for the Tenant and the members of the Tenant's household listed on the application.`,
+    `Premises. Landlord leases to Tenant the residence located at ${home}, ${addressLine} (the "Premises"), to be used only as a private home for the Tenant and the members of the Tenant's household.`,
+    `Appliances. The Premises is provided with ${appliances}. These appliances remain the Landlord's property, are to be kept clean and in good working order, and must be returned at move-out in the condition received, ordinary wear and tear excepted. Tenant shall not remove them from the Premises.`,
     `Term. The lease term begins on ${start} and runs ${end}. Possession of the Premises is delivered at 12:00 noon on the start date.`,
     `Rent. Tenant shall pay rent of ${rent} per month, in advance, on or before the 1st day of each month, at the Landlord's office or as the Landlord otherwise directs. Rent is due in full regardless of any setoff or claim.`,
     `Late charge & returned payments. If rent is not received within five (5) days after its due date, Tenant shall pay a late charge equal to ten percent (10%) of the monthly rent, treated as additional rent, all within the limits allowed by Colorado law. Acceptance of a late or partial payment does not waive the Landlord's rights or the default. A reasonable fee applies to any payment returned unpaid by the bank.`,
     `Security deposit. Tenant has deposited ${deposit} as a security deposit, held as security for the full performance of this Lease. Landlord may apply it to unpaid rent, charges, cleaning, or damage beyond ordinary wear and tear. The deposit may not be used by Tenant as last month's rent. Landlord will return the deposit, without interest, within sixty (60) days after Tenant returns possession and the Premises are left clean and undamaged, together with an itemized statement of any amounts withheld, as required by Colorado law.`,
     utilitiesClause(data.utilities),
     `Use & lawful conduct. Tenant shall use the Premises only as a private residence and shall obey all applicable laws, ordinances, and health, fire, and safety codes. Tenant shall not use the Premises for any business, unlawful, hazardous, or improper purpose, shall not keep flammable or dangerous materials on the Premises, and shall not create or allow any odor, condition, or activity that is offensive or a nuisance to neighbors.`,
-    `Occupancy & guests. Only the household members named on the application may occupy the Premises. The Premises may not be used to take in roomers or boarders. A guest may not stay more than fourteen (14) days in any six-month period without the Landlord's written consent.`,
+    `Occupancy & guests. The Premises will be occupied by ${household ? `${household} (the members of the Tenant's household)` : "the members of the Tenant's household"} and by no one else on a permanent basis. The Premises may not be used to take in roomers or boarders. A guest may not stay more than fourteen (14) days in any six-month period without the Landlord's written consent.`,
     `Pets. No dogs, cats, or other animals are permitted on the Premises or property. (An assistance animal is not a pet and may be requested as a reasonable accommodation under fair housing law.)`,
     `Renters insurance. Tenant shall obtain renters insurance on or before the move-in date and keep it in force throughout the tenancy, and shall provide proof on request.`,
     `Condition & care. Tenant accepts the Premises in good condition and shall keep them clean, sanitary, and free of refuse. Tenant shall not damage the Premises and is responsible for damage caused by Tenant, the household, or guests, beyond ordinary wear and tear. At move-out Tenant shall leave the Premises clean and in the condition received, ordinary wear and tear excepted.`,
@@ -123,6 +150,8 @@ ${TOWN_HOME_RULES.map((r, i) => `   ${i + 1}. ${r.title}. ${r.body}`).join("\n")
     : "";
 
   return `RESIDENTIAL LEASE AGREEMENT — 38TH AVE PROPERTIES
+
+${header}
 
 ${body}
 ${townhomeAddendum}

@@ -34,6 +34,9 @@ export function LeaseTermsEditor({
   const [terms, setTerms] = useState(initialTerms ?? "");
   const [utilities, setUtilities] = useState<"standard" | "tenant" | "landlord">("standard");
   const [garage, setGarage] = useState(false);
+  const [adults, setAdults] = useState("1");
+  const [children, setChildren] = useState("0");
+  const [appliances, setAppliances] = useState("a range/stove, a refrigerator, and a dishwasher");
 
   const townhome = ["The Villa", "Villa Victoria"].includes(regen.propertyName ?? "");
 
@@ -54,6 +57,9 @@ export function LeaseTermsEditor({
         city: regen.city,
         state: regen.state,
         postalCode: regen.postalCode,
+        adults,
+        children,
+        appliances,
       })
     );
   }
@@ -73,6 +79,26 @@ export function LeaseTermsEditor({
             <option value="tenant">Tenant pays all</option>
             <option value="landlord">Landlord pays all</option>
           </select>
+        </label>
+        <label className="flex items-center gap-1.5">
+          Adults
+          <input
+            type="number"
+            min="0"
+            value={adults}
+            onChange={(e) => setAdults(e.target.value)}
+            className="w-14 rounded-lg border border-clay-deep bg-white px-2 py-1"
+          />
+        </label>
+        <label className="flex items-center gap-1.5">
+          Children
+          <input
+            type="number"
+            min="0"
+            value={children}
+            onChange={(e) => setChildren(e.target.value)}
+            className="w-14 rounded-lg border border-clay-deep bg-white px-2 py-1"
+          />
         </label>
         <label className="flex items-center gap-1.5">
           <input

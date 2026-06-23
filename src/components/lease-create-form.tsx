@@ -71,6 +71,9 @@ export function LeaseCreateForm({
         city: unit?.city,
         state: unit?.state,
         postalCode: unit?.postal_code,
+        adults: val("adults"),
+        children: val("children"),
+        appliances: val("appliances"),
       })
     );
   }
@@ -160,6 +163,25 @@ export function LeaseCreateForm({
               step="1"
               className={inputClass}
               placeholder="1450"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">Adults</span>
+            <input type="number" name="adults" min="0" step="1" className={inputClass} placeholder="1" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">Children</span>
+            <input type="number" name="children" min="0" step="1" className={inputClass} placeholder="0" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-ink">Appliances included</span>
+            <input
+              name="appliances"
+              defaultValue="a range/stove, a refrigerator, and a dishwasher"
+              className={inputClass}
             />
           </label>
         </div>
