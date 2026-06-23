@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { ApplicationStatusControl } from "@/components/application-status-control";
+import { startLeaseFromApplication } from "./actions";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
@@ -63,12 +64,15 @@ export default async function AdminApplications() {
                       <div className="flex items-center gap-3">
                         <ApplicationStatusControl id={a.id} status={a.status} />
                         {a.status === "approved" && (
-                          <Link
-                            href={`/admin/leases/new?application=${a.id}`}
-                            className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
-                          >
-                            Create lease →
-                          </Link>
+                          <form action={startLeaseFromApplication}>
+                            <input type="hidden" name="application_id" value={a.id} />
+                            <button
+                              type="submit"
+                              className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                            >
+                              Create lease →
+                            </button>
+                          </form>
                         )}
                         {a.status === "denied" && !a.adverse_action_sent_at && (
                           <Link

@@ -1,10 +1,64 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile, isStaff } from "@/lib/auth";
 import { sendNotification, notificationHtml } from "@/lib/email";
 
 const ALLOWED = ["new", "reviewing", "approved", "denied", "withdrawn"];
+
+/**
+ * Turn an approved applicant into a resident account (if they don't have one
+ * yet), then go to the lease form with them pre-selected. A lease needs a real
+ * profile, and applicants live only in the applications table until now.
+ */
+export async function startLeaseFromApplication(form: FormData) {
+  const { profile } = await requireProfile("/admin/applications");
+  if (!isStaff(profile)) return;
+
+  const appId = (form.get("application_id") as string)?.trim();
+  if (!appId) return;
+
+  const supabase = await createClient();
+  const { data: app } = await supabase
+    .from("applications")
+    .select("first_name, last_name, email, phone")
+    .eq("id", appId)
+    .maybeSingle<{
+      first_name: string;
+      last_name: string;
+      email: string;
+      phone: string | null;
+    }>();
+
+  const email = app?.email?.trim().toLowerCase();
+  if (email) {
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (!existing) {
+      const admin = createAdminClient();
+      const fullName = [app!.first_name, app!.last_name].filter(Boolean).join(" ") || null;
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password: `38thAve-${crypto.randomUUID().slice(0, 8)}`,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      });
+      // Copy the applicant's phone onto the new account (no role change).
+      if (!error && data.user && app!.phone) {
+        await admin.from("profiles").update({ phone: app!.phone }).eq("id", data.user.id);
+      }
+    }
+  }
+
+  redirect(`/admin/leases/new?application=${appId}`);
+}
 
 export async function setApplicationStatus(form: FormData) {
   const id = form.get("id") as string;

@@ -5,6 +5,7 @@ import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import { ApplicationStatusControl } from "@/components/application-status-control";
 import { ScreeningRecordForm } from "@/components/screening-record-form";
 import { setAdverseActionSent } from "@/app/(admin)/admin/applications/[id]/actions";
+import { startLeaseFromApplication } from "@/app/(admin)/admin/applications/actions";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -246,12 +247,15 @@ export default async function ApplicationDetail({
               <div className="flex items-center gap-3">
                 <ApplicationStatusControl id={a.id} status={a.status} />
                 {a.status === "approved" && (
-                  <Link
-                    href={`/admin/leases/new?application=${a.id}`}
-                    className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
-                  >
-                    Create lease →
-                  </Link>
+                  <form action={startLeaseFromApplication}>
+                    <input type="hidden" name="application_id" value={a.id} />
+                    <button
+                      type="submit"
+                      className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                    >
+                      Create lease →
+                    </button>
+                  </form>
                 )}
               </div>
             </div>
