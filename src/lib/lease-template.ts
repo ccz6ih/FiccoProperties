@@ -20,6 +20,10 @@ export type LeaseTemplateData = {
   includeTownhomeRules?: boolean;
   /** Who pays utilities. Defaults to "standard" (landlord: water/sewer/trash). */
   utilities?: "standard" | "tenant" | "landlord";
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
 };
 
 function utilitiesClause(mode: "standard" | "tenant" | "landlord" | undefined): string {
@@ -57,10 +61,15 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
   const end = data.endDate
     ? longDate(data.endDate)
     : "month-to-month until terminated as provided below";
+  const addressLine = data.addressLine1
+    ? [data.addressLine1, data.city, [data.state, data.postalCode].filter(Boolean).join(" ")]
+        .filter(Boolean)
+        .join(", ")
+    : "W 38th Ave, Wheat Ridge, CO 80033";
 
   const sections: string[] = [
     `Parties. This Lease is made between 38th Ave Properties ("Landlord") and ${tenant} ("Tenant"). If more than one person signs as Tenant, each is jointly and individually responsible for the full performance of this Lease.`,
-    `Premises. Landlord leases to Tenant the residence located at ${home}, W 38th Ave, Wheat Ridge, CO 80033 (the "Premises"), to be used only as a private home for the Tenant and the members of the Tenant's household listed on the application.`,
+    `Premises. Landlord leases to Tenant the residence located at ${home}, ${addressLine} (the "Premises"), to be used only as a private home for the Tenant and the members of the Tenant's household listed on the application.`,
     `Term. The lease term begins on ${start} and runs ${end}. Possession of the Premises is delivered at 12:00 noon on the start date.`,
     `Rent. Tenant shall pay rent of ${rent} per month, in advance, on or before the 1st day of each month, at the Landlord's office or as the Landlord otherwise directs. Rent is due in full regardless of any setoff or claim.`,
     `Late charge & returned payments. If rent is not received within five (5) days after its due date, Tenant shall pay a late charge equal to ten percent (10%) of the monthly rent, treated as additional rent, all within the limits allowed by Colorado law. Acceptance of a late or partial payment does not waive the Landlord's rights or the default. A reasonable fee applies to any payment returned unpaid by the bank.`,

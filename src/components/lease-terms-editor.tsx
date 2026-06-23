@@ -15,6 +15,10 @@ export type LeaseRegenData = {
   depositDollars: string;
   startDate: string | null;
   endDate: string | null;
+  addressLine1: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
 };
 
 export function LeaseTermsEditor({
@@ -46,6 +50,10 @@ export function LeaseTermsEditor({
         includeGarage: garage,
         includeTownhomeRules: townhome,
         utilities,
+        addressLine1: regen.addressLine1,
+        city: regen.city,
+        state: regen.state,
+        postalCode: regen.postalCode,
       })
     );
   }

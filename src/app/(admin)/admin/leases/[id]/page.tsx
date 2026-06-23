@@ -26,7 +26,16 @@ type LeaseDetail = {
   signature_name: string | null;
   signature_ip: string | null;
   signed_at: string | null;
-  units: { label: string; properties: { name: string | null } | null } | null;
+  units: {
+    label: string;
+    properties: {
+      name: string | null;
+      address_line1: string | null;
+      city: string | null;
+      state: string | null;
+      postal_code: string | null;
+    } | null;
+  } | null;
   profiles: { full_name: string | null; email: string | null } | null;
 };
 
@@ -41,7 +50,7 @@ export default async function LeaseDetailPage({
   const { data: lease } = await supabase
     .from("leases")
     .select(
-      "id, rent_cents, deposit_cents, start_date, end_date, status, terms, signature_name, signature_ip, signed_at, units(label, properties(name)), profiles(full_name, email)"
+      "id, rent_cents, deposit_cents, start_date, end_date, status, terms, signature_name, signature_ip, signed_at, units(label, properties(name, address_line1, city, state, postal_code)), profiles(full_name, email)"
     )
     .eq("id", id)
     .maybeSingle<LeaseDetail>();
@@ -105,6 +114,10 @@ export default async function LeaseDetailPage({
                   depositDollars: String(lease.deposit_cents / 100),
                   startDate: lease.start_date,
                   endDate: lease.end_date,
+                  addressLine1: lease.units?.properties?.address_line1 ?? null,
+                  city: lease.units?.properties?.city ?? null,
+                  state: lease.units?.properties?.state ?? null,
+                  postalCode: lease.units?.properties?.postal_code ?? null,
                 }}
               />
             ) : (

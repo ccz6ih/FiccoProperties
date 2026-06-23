@@ -15,6 +15,10 @@ export type UnitOption = {
   label: string;
   property_name: string | null;
   rent_cents: number | null;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
 };
 
 export type ResidentOption = {
@@ -63,6 +67,10 @@ export function LeaseCreateForm({
         includeGarage,
         includeTownhomeRules: townhome,
         utilities,
+        addressLine1: unit?.address_line1,
+        city: unit?.city,
+        state: unit?.state,
+        postalCode: unit?.postal_code,
       })
     );
   }

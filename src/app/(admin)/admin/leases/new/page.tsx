@@ -11,7 +11,13 @@ type UnitRow = {
   id: string;
   label: string;
   rent_cents: number | null;
-  properties: { name: string | null } | null;
+  properties: {
+    name: string | null;
+    address_line1: string | null;
+    city: string | null;
+    state: string | null;
+    postal_code: string | null;
+  } | null;
 };
 
 type ProfileRow = {
@@ -38,7 +44,7 @@ export default async function NewLeasePage({
   const [{ data: units }, { data: profiles }] = await Promise.all([
     supabase
       .from("units")
-      .select("id, label, rent_cents, properties(name)")
+      .select("id, label, rent_cents, properties(name, address_line1, city, state, postal_code)")
       .order("label", { ascending: true })
       .returns<UnitRow[]>(),
     supabase
@@ -90,6 +96,10 @@ export default async function NewLeasePage({
     label: u.label,
     property_name: u.properties?.name ?? null,
     rent_cents: u.rent_cents,
+    address_line1: u.properties?.address_line1 ?? null,
+    city: u.properties?.city ?? null,
+    state: u.properties?.state ?? null,
+    postal_code: u.properties?.postal_code ?? null,
   }));
 
   const residentOptions: ResidentOption[] = (profiles ?? [])
