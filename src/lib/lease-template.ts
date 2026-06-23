@@ -5,6 +5,8 @@
  * additional provisions. Staff can edit the result before sending. This is a
  * convenience template, not legal advice — have it reviewed by an attorney.
  */
+import { TOWN_HOME_RULES } from "@/lib/house-guides";
+
 export type LeaseTemplateData = {
   tenantName?: string | null;
   propertyName?: string | null;
@@ -15,6 +17,8 @@ export type LeaseTemplateData = {
   endDate?: string | null; // YYYY-MM-DD
   /** Include the $150 garage deposit clause (only the Villa Victoria house). */
   includeGarage?: boolean;
+  /** Append the full Town Home community-rules addendum (The Villa / Villa Victoria). */
+  includeTownhomeRules?: boolean;
 };
 
 function money(v: string | number | null | undefined): string {
@@ -48,6 +52,7 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
     "No pets. No dogs, cats, or other pets are permitted. (Assistance animals are not pets and may be requested as a reasonable accommodation under fair housing law.)",
     "No satellite dishes may be installed on the building or Premises.",
     "Renters insurance. Tenant shall provide proof of renters insurance on or before the move-in date and keep it in force throughout the tenancy.",
+    "Plumbing & drains. Only human waste and toilet paper may be flushed. Wipes (including those labeled “flushable”), paper towels, hygiene products, diapers, grease, and similar items must never be flushed or poured down any drain. Tenant is responsible for the cost of clearing clogs and damage caused by improper use of the plumbing.",
   ];
   if (data.includeGarage) {
     provisions.push(
@@ -57,6 +62,16 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
   const provisionLines = provisions
     .map((p, i) => `   ${String.fromCharCode(97 + i)}. ${p}`)
     .join("\n");
+
+  const townhomeAddendum = data.includeTownhomeRules
+    ? `
+
+COMMUNITY RULES ADDENDUM — TOWN HOMES
+
+These rules are part of this Lease for our town home communities (The Villa and Villa Victoria). They keep the community clean, safe, and in compliance with City of Wheat Ridge code. Tenant agrees to follow them; violations may be charged to the Tenant and may be grounds for lease enforcement.
+
+${TOWN_HOME_RULES.map((r, i) => `   ${i + 1}. ${r.title}. ${r.body}`).join("\n")}`
+    : "";
 
   return `RESIDENTIAL LEASE AGREEMENT — 38TH AVE PROPERTIES
 
@@ -88,6 +103,7 @@ ${provisionLines}
 13. Default. If Tenant fails to pay rent or breaches this Lease, Landlord may pursue all remedies available under the Colorado Forcible Entry and Detainer statute and other applicable law, after any notice required by law.
 
 14. Governing law. This Lease is governed by the laws of the State of Colorado.
+${townhomeAddendum}
 
-By signing below electronically, Tenant acknowledges that Tenant has read and agrees to the terms of this Lease.`;
+By signing below electronically, Tenant acknowledges that Tenant has read and agrees to the terms of this Lease${data.includeTownhomeRules ? ", including the Community Rules Addendum above" : ""}.`;
 }

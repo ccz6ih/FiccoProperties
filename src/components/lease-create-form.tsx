@@ -49,6 +49,7 @@ export function LeaseCreateForm({
       (f.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "";
     const unit = units.find((u) => u.id === val("unit_id"));
     const resident = residents.find((r) => r.id === val("resident_id"));
+    const townhome = ["The Villa", "Villa Victoria"].includes(unit?.property_name ?? "");
     setTerms(
       buildLeaseTerms({
         tenantName: resident?.full_name,
@@ -59,6 +60,7 @@ export function LeaseCreateForm({
         startDate: val("start_date"),
         endDate: val("end_date"),
         includeGarage,
+        includeTownhomeRules: townhome,
       })
     );
   }
