@@ -18,7 +18,19 @@ export type LeaseTemplateData = {
   includeGarage?: boolean;
   /** Append the full Town Home community-rules addendum (The Villa / Villa Victoria). */
   includeTownhomeRules?: boolean;
+  /** Who pays utilities. Defaults to "standard" (landlord: water/sewer/trash). */
+  utilities?: "standard" | "tenant" | "landlord";
 };
+
+function utilitiesClause(mode: "standard" | "tenant" | "landlord" | undefined): string {
+  if (mode === "tenant") {
+    return `Utilities. Tenant is responsible for all utilities and services to the Premises — water, sewer, trash, electricity, and natural gas — and shall place those accounts in Tenant's name by the move-in date. Landlord is not liable for any interruption of a utility or service caused by anything beyond the Landlord's reasonable control.`;
+  }
+  if (mode === "landlord") {
+    return `Utilities. Landlord provides water, sewer, trash, electricity, and natural gas service to the Premises. Tenant shall use utilities reasonably and shall not waste them. Landlord is not liable for any interruption of a utility or service caused by anything beyond the Landlord's reasonable control.`;
+  }
+  return `Utilities. Unless stated otherwise in writing, Landlord provides water, sewer, and trash service, and Tenant is responsible for electricity and natural gas service to the Premises and for placing those accounts in Tenant's name by the move-in date. Landlord is not liable for any interruption of a utility or service caused by anything beyond the Landlord's reasonable control.`;
+}
 
 function money(v: string | number | null | undefined): string {
   if (v == null || v === "") return "$________";
@@ -53,7 +65,7 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
     `Rent. Tenant shall pay rent of ${rent} per month, in advance, on or before the 1st day of each month, at the Landlord's office or as the Landlord otherwise directs. Rent is due in full regardless of any setoff or claim.`,
     `Late charge & returned payments. If rent is not received within five (5) days after its due date, Tenant shall pay a late charge equal to ten percent (10%) of the monthly rent, treated as additional rent, all within the limits allowed by Colorado law. Acceptance of a late or partial payment does not waive the Landlord's rights or the default. A reasonable fee applies to any payment returned unpaid by the bank.`,
     `Security deposit. Tenant has deposited ${deposit} as a security deposit, held as security for the full performance of this Lease. Landlord may apply it to unpaid rent, charges, cleaning, or damage beyond ordinary wear and tear. The deposit may not be used by Tenant as last month's rent. Landlord will return the deposit, without interest, within sixty (60) days after Tenant returns possession and the Premises are left clean and undamaged, together with an itemized statement of any amounts withheld, as required by Colorado law.`,
-    `Utilities. Unless stated otherwise in writing, Landlord provides water, sewer, and trash service, and Tenant is responsible for electricity and natural gas service to the Premises and for placing those accounts in Tenant's name by the move-in date. Landlord is not liable for any interruption of a utility or service caused by anything beyond the Landlord's reasonable control.`,
+    utilitiesClause(data.utilities),
     `Use & lawful conduct. Tenant shall use the Premises only as a private residence and shall obey all applicable laws, ordinances, and health, fire, and safety codes. Tenant shall not use the Premises for any business, unlawful, hazardous, or improper purpose, shall not keep flammable or dangerous materials on the Premises, and shall not create or allow any odor, condition, or activity that is offensive or a nuisance to neighbors.`,
     `Occupancy & guests. Only the household members named on the application may occupy the Premises. The Premises may not be used to take in roomers or boarders. A guest may not stay more than fourteen (14) days in any six-month period without the Landlord's written consent.`,
     `Pets. No dogs, cats, or other animals are permitted on the Premises or property. (An assistance animal is not a pet and may be requested as a reasonable accommodation under fair housing law.)`,

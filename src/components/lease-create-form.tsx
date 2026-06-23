@@ -40,6 +40,7 @@ export function LeaseCreateForm({
   const [state, action, pending] = useActionState(createLease, initial);
   const [terms, setTerms] = useState("");
   const [includeGarage, setIncludeGarage] = useState(false);
+  const [utilities, setUtilities] = useState<"standard" | "tenant" | "landlord">("standard");
   const formRef = useRef<HTMLFormElement>(null);
 
   function fillStandardTerms() {
@@ -61,6 +62,7 @@ export function LeaseCreateForm({
         endDate: val("end_date"),
         includeGarage,
         includeTownhomeRules: townhome,
+        utilities,
       })
     );
   }
@@ -157,7 +159,19 @@ export function LeaseCreateForm({
         <label className="block space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm font-medium text-ink">Lease terms</span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+                Utilities
+                <select
+                  value={utilities}
+                  onChange={(e) => setUtilities(e.target.value as "standard" | "tenant" | "landlord")}
+                  className="rounded-lg border border-clay-deep bg-white px-2 py-1 text-xs text-ink"
+                >
+                  <option value="standard">LL: water/sewer/trash · Tenant: elec/gas</option>
+                  <option value="tenant">Tenant pays all</option>
+                  <option value="landlord">Landlord pays all</option>
+                </select>
+              </label>
               <label className="flex items-center gap-1.5 text-xs text-ink-soft">
                 <input
                   type="checkbox"

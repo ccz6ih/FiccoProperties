@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card, Button } from "@/components/ui";
 import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import { LeaseTimeline, type LeaseEvent } from "@/components/lease-timeline";
+import { LeaseTermsEditor } from "@/components/lease-terms-editor";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -92,9 +93,25 @@ export default async function LeaseDetailPage({
 
           <Card className="p-6">
             <h2 className="mb-3 font-display text-lg font-semibold text-ink">Terms</h2>
-            <div className="max-h-80 overflow-y-auto rounded-xl border border-clay bg-cream px-4 py-3 text-sm leading-relaxed text-ink-soft whitespace-pre-wrap">
-              {lease.terms?.trim() || "No terms have been added to this lease."}
-            </div>
+            {lease.status === "draft" ? (
+              <LeaseTermsEditor
+                leaseId={lease.id}
+                initialTerms={lease.terms}
+                regen={{
+                  tenantName: lease.profiles?.full_name ?? null,
+                  propertyName: lease.units?.properties?.name ?? null,
+                  unitLabel: lease.units?.label ?? null,
+                  rentDollars: String(lease.rent_cents / 100),
+                  depositDollars: String(lease.deposit_cents / 100),
+                  startDate: lease.start_date,
+                  endDate: lease.end_date,
+                }}
+              />
+            ) : (
+              <div className="max-h-80 overflow-y-auto rounded-xl border border-clay bg-cream px-4 py-3 text-sm leading-relaxed text-ink-soft whitespace-pre-wrap">
+                {lease.terms?.trim() || "No terms have been added to this lease."}
+              </div>
+            )}
           </Card>
 
           <Card className="p-6">

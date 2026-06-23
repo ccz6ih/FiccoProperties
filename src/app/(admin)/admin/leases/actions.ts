@@ -27,6 +27,31 @@ async function requireStaff(supabase: Awaited<ReturnType<typeof createClient>>) 
   return user;
 }
 
+export type LeaseTermsState = { ok: boolean; error?: string };
+
+/** Save edited / regenerated terms onto a DRAFT lease. */
+export async function updateLeaseTerms(
+  _prev: LeaseTermsState,
+  form: FormData
+): Promise<LeaseTermsState> {
+  const supabase = await createClient();
+  if (!(await requireStaff(supabase))) return { ok: false, error: "Staff only." };
+
+  const id = (form.get("id") as string)?.trim();
+  const terms = (form.get("terms") as string) ?? "";
+  if (!id) return { ok: false, error: "Missing lease." };
+
+  const { error } = await loose(supabase)
+    .from("leases")
+    .update({ terms: terms.trim() || null })
+    .eq("id", id)
+    .eq("status", "draft");
+  if (error) return { ok: false, error: "Could not save the terms." };
+
+  revalidatePath(`/admin/leases/${id}`);
+  return { ok: true };
+}
+
 /** Create a draft lease, optionally from an approved application. */
 export async function createLease(
   _prev: LeaseFormState,
