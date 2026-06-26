@@ -84,10 +84,20 @@ export default async function LeasePage() {
       <PageHeader title="Lease" subtitle="Your current agreement and terms." />
 
       {lease.status === "active" && lease.signed_at && (
-        <div className="mb-6 flex items-center gap-2 rounded-xl border border-pine/30 bg-pine-soft px-4 py-3 text-sm text-pine-dark">
-          <span aria-hidden>✓</span>
-          Signed on {formatDate(lease.signed_at)}
-          {lease.signature_name ? ` by ${lease.signature_name}` : ""}.
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-pine/30 bg-pine-soft px-4 py-3 text-sm text-pine-dark">
+          <span className="flex items-center gap-2">
+            <span aria-hidden>✓</span>
+            Signed on {formatDate(lease.signed_at)}
+            {lease.signature_name ? ` by ${lease.signature_name}` : ""}.
+          </span>
+          <a
+            href={`/lease-print?id=${lease.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-pine hover:underline"
+          >
+            Print / Save as PDF →
+          </a>
         </div>
       )}
 

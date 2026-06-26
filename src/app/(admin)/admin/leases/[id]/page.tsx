@@ -129,9 +129,19 @@ export default async function LeaseDetailPage({
           </Card>
 
           <Card className="p-6">
-            <h2 className="mb-3 font-display text-lg font-semibold text-ink">
-              Signature record
-            </h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-display text-lg font-semibold text-ink">
+                Signature record
+              </h2>
+              <a
+                href={`/lease-print?id=${lease.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-pine hover:underline"
+              >
+                Print / Save as PDF →
+              </a>
+            </div>
             {lease.signed_at ? (
               <dl className="space-y-1.5 text-sm">
                 <RecordRow label="Signed by" value={lease.signature_name ?? "—"} />
