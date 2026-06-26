@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
+import { signInLink } from "@/lib/portal-invite";
 import type { EmailActionState } from "@/lib/action-state";
 
 export type LeaseFormState = { ok: boolean; error?: string };
@@ -158,21 +158,10 @@ export async function sendForSignature(
       ? `${lease.units.properties.name} — ${lease.units.label}`
       : "your home";
     const greeting = lease?.profiles?.full_name?.split(" ")[0] ?? "there";
-    const signUrl = "https://38thaveproperties.com/portal/lease";
 
-    // A magic link signs the resident in and drops them on the lease page.
-    let link = signUrl;
-    try {
-      const admin = createAdminClient();
-      const { data: linkData } = await admin.auth.admin.generateLink({
-        type: "magiclink",
-        email,
-        options: { redirectTo: signUrl },
-      });
-      if (linkData?.properties?.action_link) link = linkData.properties.action_link;
-    } catch {
-      // fall back to the plain portal URL + login instructions below
-    }
+    // A magic link that signs the resident in (via /auth/confirm so the SSR
+    // session cookie is set) and drops them on the lease page.
+    const link = await signInLink(email, "/portal/lease");
 
     await sendNotification({
       to: email,

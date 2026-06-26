@@ -1,26 +1,41 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
 
+const BASE_URL = "https://38thaveproperties.com";
+
+/**
+ * Build a one-click sign-in link that lands the user signed in on `next`.
+ * Routes through /auth/confirm so the SSR session cookie is actually set
+ * (Supabase's default token-hash link only sets a client-side session). Falls
+ * back to the login page if a link can't be generated.
+ */
+export async function signInLink(email: string, next: string): Promise<string> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email,
+      options: { redirectTo: `${BASE_URL}${next}` },
+    });
+    const tokenHash = data?.properties?.hashed_token;
+    if (tokenHash) {
+      return `${BASE_URL}/auth/confirm?token_hash=${encodeURIComponent(
+        tokenHash
+      )}&type=magiclink&next=${encodeURIComponent(next)}`;
+    }
+  } catch {
+    // fall through to the login page
+  }
+  return `${BASE_URL}/login`;
+}
+
 /**
  * Email a resident a one-click magic sign-in link to their portal, with
  * forgot-password instructions to set a password for future logins. Server-only.
  */
 export async function emailPortalLogin(email: string, fullName: string | null): Promise<void> {
   const greeting = fullName?.split(" ")[0] ?? "there";
-  const portal = "https://38thaveproperties.com/portal";
-
-  let link = "https://38thaveproperties.com/login";
-  try {
-    const admin = createAdminClient();
-    const { data } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: portal },
-    });
-    if (data?.properties?.action_link) link = data.properties.action_link;
-  } catch {
-    // fall back to the login page + forgot-password instructions
-  }
+  const link = await signInLink(email, "/portal");
 
   await sendNotification({
     to: email,
