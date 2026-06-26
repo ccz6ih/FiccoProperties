@@ -42,6 +42,25 @@ type TaskWidgetRow = {
   unit: { id: string; label: string; properties: { name: string | null } | null } | null;
 };
 
+type LeaseEventRow = {
+  id: string;
+  type: string;
+  created_at: string;
+  lease: {
+    id: string;
+    profiles: { full_name: string | null } | null;
+    units: { label: string; properties: { name: string | null } | null } | null;
+  } | null;
+};
+
+const LEASE_EVENT: Record<string, { text: string; tone: string }> = {
+  created: { text: "lease drafted", tone: "text-ink-soft" },
+  sent: { text: "sent for signature", tone: "text-ink-soft" },
+  signed: { text: "signed the lease ✓", tone: "text-pine" },
+  ended: { text: "lease ended", tone: "text-ink-soft" },
+  terminated: { text: "lease terminated", tone: "text-terracotta-dark" },
+};
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -66,6 +85,7 @@ export default async function AdminOverview() {
     { data: recentResidents },
     { data: homeLinks },
     { data: openTasks },
+    { data: leaseEvents },
   ] = await Promise.all([
     loadSearchItems(),
     supabase.from("units").select("*", { count: "exact", head: true }),
@@ -127,6 +147,12 @@ export default async function AdminOverview() {
       .order("due_date", { ascending: true, nullsFirst: false })
       .limit(8)
       .returns<TaskWidgetRow[]>(),
+    db
+      .from("lease_events")
+      .select("id, type, created_at, lease:lease_id(id, profiles(full_name), units(label, properties(name)))")
+      .order("created_at", { ascending: false })
+      .limit(8)
+      .returns<LeaseEventRow[]>(),
   ]);
 
   // Map each linked account to its home + the tenancy name (to confirm matches).
@@ -196,6 +222,42 @@ export default async function AdminOverview() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <DashCard title="Recent lease activity" href="/admin/leases" linkLabel="All leases">
+          {leaseEvents && leaseEvents.length > 0 ? (
+            <ul className="divide-y divide-clay">
+              {leaseEvents.slice(0, 6).map((e) => {
+                const meta = LEASE_EVENT[e.type] ?? { text: e.type, tone: "text-ink-soft" };
+                const home = e.lease?.units
+                  ? `${e.lease.units.properties?.name ?? ""} · ${e.lease.units.label}`
+                  : null;
+                return (
+                  <li key={e.id}>
+                    <Link
+                      href={e.lease ? `/admin/leases/${e.lease.id}` : "/admin/leases"}
+                      className="flex items-center justify-between gap-3 py-3 hover:bg-sand/30"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-ink">
+                          <span className="font-medium">
+                            {e.lease?.profiles?.full_name ?? "Resident"}
+                          </span>{" "}
+                          <span className={meta.tone}>{meta.text}</span>
+                        </div>
+                        {home && <div className="truncate text-xs text-ink-faint">{home}</div>}
+                      </div>
+                      <span className="shrink-0 text-xs text-ink-faint">
+                        {formatDate(e.created_at)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <Empty>No lease activity yet.</Empty>
+          )}
+        </DashCard>
+
         <DashCard
           title={overdueTasks > 0 ? `Open tasks · ${overdueTasks} overdue` : "Open tasks"}
           href="/admin/tasks"

@@ -193,6 +193,18 @@ export default async function ResidentDetailPage({
     (profile as unknown as { house_rules_ack_at: string | null })
       .house_rules_ack_at ?? null;
 
+  // Move-in check-in progress (mirrors the resident's portal checklist).
+  const pendingLease = (leases ?? []).find((l) => l.status === "pending_signature");
+  const hasLease = (leases ?? []).length > 0;
+  const checkin = [
+    { label: "Lease signed", done: hasLease && !pendingLease },
+    { label: "House rules acknowledged", done: !!rulesAckAt },
+    { label: "Renters insurance", done: !!(profile.insurance_provider || profile.insurance_doc_path) },
+    { label: "Emergency contact", done: !!(profile.emergency_contact_name || profile.emergency_contact_phone) },
+    { label: "Phone on file", done: !!(profile.phone || occupancy?.tenant_phone) },
+  ];
+  const checkinDone = checkin.filter((s) => s.done).length;
+
   const insStatus = insuranceStatus(profile);
   let insuranceDocUrl: string | null = null;
   if (profile.insurance_doc_path) {
@@ -233,6 +245,31 @@ export default async function ResidentDetailPage({
           hint={balanceCents > 0 ? "Owed" : "Up to date"}
         />
       </div>
+
+      {profile.role === "resident" && (
+        <Card className="mb-8 p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-ink">Move-in check-in</h2>
+            <span className={`text-sm font-medium ${checkinDone === checkin.length ? "text-pine" : "text-ink-soft"}`}>
+              {checkinDone}/{checkin.length} done
+            </span>
+          </div>
+          <ul className="flex flex-wrap gap-x-6 gap-y-2">
+            {checkin.map((s) => (
+              <li key={s.label} className="flex items-center gap-2 text-sm">
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                    s.done ? "bg-pine text-cream" : "border border-clay-deep text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span className={s.done ? "text-ink-soft" : "text-ink"}>{s.label}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Person & contact */}
