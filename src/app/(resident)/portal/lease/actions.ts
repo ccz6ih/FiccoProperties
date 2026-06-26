@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification, esc } from "@/lib/email";
 import { formatCents } from "@/lib/format";
 
@@ -68,17 +69,20 @@ async function emailLeaseCopies(
     });
   }
 
-  const { data: owners } = await supabase
+  // Read staff emails with the service-role client — the resident's own session
+  // can't see other profiles under RLS (which is why no notice was sent before).
+  const { data: owners } = await createAdminClient()
     .from("profiles")
     .select("email")
     .in("role", ["owner", "admin"]);
-  const ownerEmails = (owners ?? [])
-    .map((o) => o.email)
-    .filter((e): e is string => !!e)
-    .join(",");
-  if (ownerEmails) {
+  const ownerEmails = [
+    ...(owners ?? []).map((o) => o.email).filter((e): e is string => !!e),
+    ...(process.env.NOTIFY_EMAIL ? [process.env.NOTIFY_EMAIL] : []),
+  ];
+  const staffTo = [...new Set(ownerEmails)].join(",");
+  if (staffTo) {
     await sendNotification({
-      to: ownerEmails,
+      to: staffTo,
       subject: `Lease signed — ${signatureName} (${home})`,
       html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:620px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:20px;color:#2f5d50">Lease signed</div><p style="font-size:14px">A lease was just e-signed.</p>${details}<p style="font-size:13px"><a href="https://38thaveproperties.com/admin/leases/${leaseId}" style="color:#2f5d50;font-weight:600">Open in admin →</a></p>${termsBlock}</div>`,
     });

@@ -10,6 +10,8 @@ type LeaseRow = {
   start_date: string;
   end_date: string | null;
   status: string;
+  signed_at: string | null;
+  signature_name: string | null;
   units: { label: string; properties: { name: string | null } | null } | null;
   profiles: { full_name: string | null; email: string | null } | null;
 };
@@ -18,7 +20,7 @@ export default async function AdminLeases() {
   const supabase = await createClient();
   const { data: leases } = await supabase
     .from("leases")
-    .select("id, rent_cents, start_date, end_date, status, units(label, properties(name)), profiles(full_name, email)")
+    .select("id, rent_cents, start_date, end_date, status, signed_at, signature_name, units(label, properties(name)), profiles(full_name, email)")
     .order("start_date", { ascending: false })
     .returns<LeaseRow[]>();
 
@@ -67,6 +69,11 @@ export default async function AdminLeases() {
                     </td>
                     <td className="px-5 py-3">
                       <StatusPill value={l.status} />
+                      {l.signed_at && (
+                        <div className="mt-1 text-xs font-medium text-pine">
+                          ✓ Signed {formatDate(l.signed_at)}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

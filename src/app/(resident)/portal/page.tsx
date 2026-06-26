@@ -77,6 +77,29 @@ export default async function PortalHome() {
     (profile as unknown as { house_rules_ack_at: string | null } | null)
       ?.house_rules_ack_at ?? null;
 
+  const signedLease = leases?.find((l) => l.status === "active" && l.signed_at) ?? null;
+  const pendingLease = leases?.find((l) => l.status === "pending_signature") ?? null;
+  const hasHome = !!occupancy || !!activeLease;
+
+  // Move-in check-in steps.
+  const checkin = [
+    { label: "Sign your lease", done: !pendingLease, href: "/portal/lease" },
+    { label: "Read & acknowledge the house rules", done: !!rulesAck, href: "/portal/guide" },
+    {
+      label: "Add your renters insurance",
+      done: !!(profile?.insurance_provider || profile?.insurance_doc_path),
+      href: "/account",
+    },
+    {
+      label: "Add an emergency contact",
+      done: !!(profile?.emergency_contact_name || profile?.emergency_contact_phone),
+      href: "/account",
+    },
+    { label: "Add your phone number", done: !!profile?.phone, href: "/account" },
+  ];
+  const checkinDone = checkin.filter((s) => s.done).length;
+  const checkinComplete = checkinDone === checkin.length;
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
@@ -84,23 +107,52 @@ export default async function PortalHome() {
         subtitle="Here's everything about your home in one place."
       />
 
-      {!rulesAck && (
-        <Card className="mb-8 flex flex-wrap items-center justify-between gap-4 border-pine/30 bg-pine/5 p-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <span aria-hidden className="text-lg">👋</span>
-              <h3 className="font-display text-lg font-semibold text-ink">
-                New here? Please read the house rules
-              </h3>
-            </div>
-            <p className="mt-1 text-sm text-ink-soft">
-              A quick read on keeping our community great and your plumbing happy —
-              then check the box to acknowledge.
-            </p>
+      {hasHome && !checkinComplete && (
+        <Card className="mb-8 border-pine/30 bg-pine/5 p-6">
+          <div className="flex items-center gap-2">
+            <span aria-hidden className="text-xl">🎉</span>
+            <h3 className="font-display text-lg font-semibold text-ink">
+              {signedLease ? `Welcome home, ${firstName}!` : `Welcome, ${firstName}!`}
+            </h3>
           </div>
-          <ButtonLink href="/portal/guide" variant="primary">
-            Read &amp; acknowledge →
-          </ButtonLink>
+          <p className="mt-1 text-sm text-ink-soft">
+            {signedLease ? "Your lease is signed — l" : "L"}et&apos;s get you settled.
+            A few quick things to finish your move-in check-in ({checkinDone}/
+            {checkin.length} done).
+          </p>
+          <ul className="mt-4 space-y-2">
+            {checkin.map((s) => (
+              <li key={s.label} className="flex items-center justify-between gap-3 rounded-xl bg-cream px-4 py-2.5">
+                <span className="flex items-center gap-2.5 text-sm">
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${
+                      s.done ? "bg-pine text-cream" : "border border-clay-deep text-transparent"
+                    }`}
+                  >
+                    ✓
+                  </span>
+                  <span className={s.done ? "text-ink-faint line-through" : "font-medium text-ink"}>
+                    {s.label}
+                  </span>
+                </span>
+                {!s.done && (
+                  <Link href={s.href} className="text-sm font-medium text-pine hover:underline">
+                    Do it →
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {hasHome && checkinComplete && signedLease && (
+        <Card className="mb-8 flex items-center gap-3 border-pine/30 bg-pine/5 p-5">
+          <span aria-hidden className="text-xl">🏡</span>
+          <p className="text-sm text-ink">
+            <span className="font-semibold">You&apos;re all checked in — welcome home, {firstName}!</span>{" "}
+            Everything about your home lives right here.
+          </p>
         </Card>
       )}
 
