@@ -157,9 +157,18 @@ export default async function LeaseDetailPage({
               )}
 
               {lease.status === "pending_signature" && (
-                <p className="rounded-xl border border-clay bg-cream px-4 py-2.5 text-sm text-ink-soft">
-                  Awaiting the resident&apos;s signature.
-                </p>
+                <div className="space-y-2">
+                  <p className="rounded-xl border border-clay bg-cream px-4 py-2.5 text-sm text-ink-soft">
+                    Awaiting the resident&apos;s signature. We emailed them a sign link
+                    when it was sent.
+                  </p>
+                  <form action={sendForSignature}>
+                    <input type="hidden" name="id" value={lease.id} />
+                    <Button type="submit" variant="outline" className="w-full">
+                      Resend sign link to {lease.profiles?.email ?? "resident"}
+                    </Button>
+                  </form>
+                </div>
               )}
 
               {lease.status === "active" && (

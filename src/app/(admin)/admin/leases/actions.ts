@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendNotification } from "@/lib/email";
 
 export type LeaseFormState = { ok: boolean; error?: string };
 
@@ -107,7 +109,17 @@ export async function createLease(
   redirect(`/admin/leases/${lease.id}`);
 }
 
-/** Move a draft lease to pending_signature so the resident can e-sign. */
+type LeaseForSend = {
+  status: string;
+  profiles: { full_name: string | null; email: string | null } | null;
+  units: { label: string; properties: { name: string | null } | null } | null;
+};
+
+/**
+ * Move a draft lease to pending_signature AND email the resident a sign link.
+ * Re-runnable as a "resend" — it generates a fresh magic sign-in link that
+ * lands the resident right on the portal lease page to review and e-sign.
+ */
 export async function sendForSignature(form: FormData) {
   const id = (form.get("id") as string)?.trim();
   if (!id) return;
@@ -117,13 +129,54 @@ export async function sendForSignature(form: FormData) {
   if (!user) return;
 
   const db = loose(supabase);
-  await db.from("leases").update({ status: "pending_signature" }).eq("id", id);
+
+  const { data: lease } = await db
+    .from("leases")
+    .select("status, profiles(full_name, email), units(label, properties(name))")
+    .eq("id", id)
+    .maybeSingle<LeaseForSend>();
+
+  const resend = lease?.status === "pending_signature";
+  if (!resend) {
+    await db.from("leases").update({ status: "pending_signature" }).eq("id", id);
+  }
   await db.from("lease_events").insert({
     lease_id: id,
     actor_id: user.id,
     type: "sent",
-    note: "Sent to resident for signature",
+    note: resend ? "Resent signature request" : "Sent to resident for signature",
   });
+
+  // Email the resident a link to review & sign.
+  const email = lease?.profiles?.email?.trim();
+  if (email) {
+    const home = lease?.units?.properties?.name
+      ? `${lease.units.properties.name} — ${lease.units.label}`
+      : "your home";
+    const greeting = lease?.profiles?.full_name?.split(" ")[0] ?? "there";
+    const signUrl = "https://38thaveproperties.com/portal/lease";
+
+    // A magic link signs the resident in and drops them on the lease page.
+    let link = signUrl;
+    try {
+      const admin = createAdminClient();
+      const { data: linkData } = await admin.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: signUrl },
+      });
+      if (linkData?.properties?.action_link) link = linkData.properties.action_link;
+    } catch {
+      // fall back to the plain portal URL + login instructions below
+    }
+
+    await sendNotification({
+      to: email,
+      replyTo: "hello@38thaveproperties.com",
+      subject: `Action needed: sign your lease for ${home}`,
+      html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Your lease is ready to sign, ${greeting}</div><p>Your lease for <strong>${home}</strong> is ready for your review and electronic signature.</p><p style="margin:22px 0"><a href="${link}" style="background:#2f5d50;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;display:inline-block">Review &amp; sign your lease →</a></p><p style="font-size:13px;color:#6f655a">This secure link signs you in and takes you straight to your lease. If it has expired, go to <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> (email: ${email}) and use “Forgot password?” to set a password, then open Lease in your resident portal.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
+    });
+  }
 
   revalidatePath(`/admin/leases/${id}`);
   revalidatePath("/admin/leases");
