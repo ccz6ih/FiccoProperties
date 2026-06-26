@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
-import { emailPortalLogin } from "@/lib/portal-invite";
+import { resetPortalPassword } from "@/lib/portal-invite";
 import type { EmailActionState } from "@/lib/action-state";
 
 export type ContactState = { ok: boolean; error?: string };
@@ -32,7 +32,8 @@ export async function sendPortalLogin(
   const email = p?.email?.trim();
   if (!email) return { ok: false, error: "No email on file." };
 
-  await emailPortalLogin(email, p?.full_name ?? null);
+  const ok = await resetPortalPassword(id, email, p?.full_name ?? null);
+  if (!ok) return { ok: false, error: "Could not set a login. Please try again." };
   revalidatePath(`/admin/residents/${id}`);
   return { ok: true, sentTo: email };
 }

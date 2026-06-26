@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
-import { signInLink } from "@/lib/portal-invite";
 import type { EmailActionState } from "@/lib/action-state";
 
 export type LeaseFormState = { ok: boolean; error?: string };
@@ -112,14 +112,16 @@ export async function createLease(
 
 type LeaseForSend = {
   status: string;
+  resident_id: string;
   profiles: { full_name: string | null; email: string | null } | null;
   units: { label: string; properties: { name: string | null } | null } | null;
 };
 
 /**
- * Move a draft lease to pending_signature AND email the resident a sign link.
- * Re-runnable as a "resend" — it generates a fresh magic sign-in link that
- * lands the resident right on the portal lease page to review and e-sign.
+ * Move a draft lease to pending_signature AND email the resident to sign.
+ * Re-runnable as a "resend". If the resident has never logged in, it sets a
+ * temporary password and includes their email + password sign-in details so
+ * they can get in reliably (standard login sets the SSR cookie session).
  */
 export async function sendForSignature(
   _prev: EmailActionState,
@@ -136,7 +138,7 @@ export async function sendForSignature(
 
   const { data: lease } = await db
     .from("leases")
-    .select("status, profiles(full_name, email), units(label, properties(name))")
+    .select("status, resident_id, profiles(full_name, email), units(label, properties(name))")
     .eq("id", id)
     .maybeSingle<LeaseForSend>();
 
@@ -151,23 +153,36 @@ export async function sendForSignature(
     note: resend ? "Resent signature request" : "Sent to resident for signature",
   });
 
-  // Email the resident a link to review & sign.
+  // Email the resident to sign — with login credentials if they're new.
   const email = lease?.profiles?.email?.trim();
-  if (email) {
-    const home = lease?.units?.properties?.name
+  if (email && lease) {
+    const home = lease.units?.properties?.name
       ? `${lease.units.properties.name} — ${lease.units.label}`
       : "your home";
-    const greeting = lease?.profiles?.full_name?.split(" ")[0] ?? "there";
+    const greeting = lease.profiles?.full_name?.split(" ")[0] ?? "there";
 
-    // A magic link that signs the resident in (via /auth/confirm so the SSR
-    // session cookie is set) and drops them on the lease page.
-    const link = await signInLink(email, "/portal/lease");
+    // If they've never signed in, set a temp password so they can get in.
+    let howTo = `<p style="font-size:14px">Sign in to your resident portal at <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> (use “Forgot password?” if you need to), then open the <strong>Lease</strong> page to review and e-sign.</p>`;
+    try {
+      const admin = createAdminClient();
+      const { data: u } = await admin.auth.admin.getUserById(lease.resident_id);
+      if (u?.user && !u.user.last_sign_in_at) {
+        const tempPassword = `38thAve-${crypto.randomUUID().slice(0, 8)}`;
+        await admin.auth.admin.updateUserById(lease.resident_id, {
+          password: tempPassword,
+          email_confirm: true,
+        });
+        howTo = `<div style="background:#faf7f1;border:1px solid #e6dcc8;border-radius:12px;padding:16px;margin:14px 0"><p style="margin:0 0 8px;font-weight:600">How to review &amp; sign:</p><ol style="margin:0;padding-left:20px"><li style="margin-bottom:6px">Go to <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a></li><li style="margin-bottom:6px">Email: <strong>${email}</strong></li><li style="margin-bottom:6px">Temporary password: <strong>${tempPassword}</strong></li><li>Open the <strong>Lease</strong> page and e-sign</li></ol></div>`;
+      }
+    } catch {
+      // keep the generic sign-in instructions
+    }
 
     await sendNotification({
       to: email,
       replyTo: "hello@38thaveproperties.com",
       subject: `Action needed: sign your lease for ${home}`,
-      html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Your lease is ready to sign, ${greeting}</div><p>Your lease for <strong>${home}</strong> is ready for your review and electronic signature.</p><p style="margin:22px 0"><a href="${link}" style="background:#2f5d50;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;display:inline-block">Review &amp; sign your lease →</a></p><p style="font-size:13px;color:#6f655a">This secure link signs you in and takes you straight to your lease. If it has expired, go to <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> (email: ${email}) and use “Forgot password?” to set a password, then open Lease in your resident portal.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
+      html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Your lease is ready to sign, ${greeting}</div><p>Your lease for <strong>${home}</strong> is ready for your review and electronic signature.</p>${howTo}<p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
     });
   }
 
