@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { sendNotification, notificationHtml } from "@/lib/email";
+import { emailPortalLogin } from "@/lib/portal-invite";
 
 const ALLOWED = ["new", "reviewing", "approved", "denied", "withdrawn"];
 
@@ -50,9 +51,13 @@ export async function startLeaseFromApplication(form: FormData) {
         email_confirm: true,
         user_metadata: { full_name: fullName },
       });
-      // Copy the applicant's phone onto the new account (no role change).
-      if (!error && data.user && app!.phone) {
-        await admin.from("profiles").update({ phone: app!.phone }).eq("id", data.user.id);
+      if (!error && data.user) {
+        // Copy the applicant's phone onto the new account (no role change).
+        if (app!.phone) {
+          await admin.from("profiles").update({ phone: app!.phone }).eq("id", data.user.id);
+        }
+        // Email them their portal login so they can sign in right away.
+        await emailPortalLogin(email, fullName);
       }
     }
   }

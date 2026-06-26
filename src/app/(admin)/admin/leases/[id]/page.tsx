@@ -5,6 +5,7 @@ import { Card, Button } from "@/components/ui";
 import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import { LeaseTimeline, type LeaseEvent } from "@/components/lease-timeline";
 import { LeaseTermsEditor } from "@/components/lease-terms-editor";
+import { ActionFeedbackButton } from "@/components/action-feedback-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -148,26 +149,30 @@ export default async function LeaseDetailPage({
             <h2 className="mb-4 font-display text-lg font-semibold text-ink">Actions</h2>
             <div className="space-y-3">
               {lease.status === "draft" && (
-                <form action={sendForSignature}>
-                  <input type="hidden" name="id" value={lease.id} />
-                  <Button type="submit" variant="primary" className="w-full">
-                    Send for signature
-                  </Button>
-                </form>
+                <ActionFeedbackButton
+                  action={sendForSignature}
+                  hidden={<input type="hidden" name="id" value={lease.id} />}
+                  label="Send for signature"
+                  successLabel="Sign link sent"
+                  sendingLabel="Sending…"
+                  variant="primary"
+                />
               )}
 
               {lease.status === "pending_signature" && (
                 <div className="space-y-2">
                   <p className="rounded-xl border border-clay bg-cream px-4 py-2.5 text-sm text-ink-soft">
-                    Awaiting the resident&apos;s signature. We emailed them a sign link
-                    when it was sent.
+                    Awaiting the resident&apos;s signature. We email them a sign link
+                    each time you send.
                   </p>
-                  <form action={sendForSignature}>
-                    <input type="hidden" name="id" value={lease.id} />
-                    <Button type="submit" variant="outline" className="w-full">
-                      Resend sign link to {lease.profiles?.email ?? "resident"}
-                    </Button>
-                  </form>
+                  <ActionFeedbackButton
+                    action={sendForSignature}
+                    hidden={<input type="hidden" name="id" value={lease.id} />}
+                    label={`Resend sign link to ${lease.profiles?.email ?? "resident"}`}
+                    successLabel="Sign link sent"
+                    sendingLabel="Sending…"
+                    variant="outline"
+                  />
                 </div>
               )}
 

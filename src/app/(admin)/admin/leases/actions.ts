@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
+import type { EmailActionState } from "@/lib/action-state";
 
 export type LeaseFormState = { ok: boolean; error?: string };
 
@@ -120,13 +121,16 @@ type LeaseForSend = {
  * Re-runnable as a "resend" — it generates a fresh magic sign-in link that
  * lands the resident right on the portal lease page to review and e-sign.
  */
-export async function sendForSignature(form: FormData) {
+export async function sendForSignature(
+  _prev: EmailActionState,
+  form: FormData
+): Promise<EmailActionState> {
   const id = (form.get("id") as string)?.trim();
-  if (!id) return;
+  if (!id) return { ok: false, error: "Missing lease." };
 
   const supabase = await createClient();
   const user = await requireStaff(supabase);
-  if (!user) return;
+  if (!user) return { ok: false, error: "Staff only." };
 
   const db = loose(supabase);
 
@@ -181,6 +185,9 @@ export async function sendForSignature(form: FormData) {
   revalidatePath(`/admin/leases/${id}`);
   revalidatePath("/admin/leases");
   revalidatePath("/portal/lease");
+  return email
+    ? { ok: true, sentTo: email }
+    : { ok: true, error: "No email on file — add one to email a sign link." };
 }
 
 /** End an active lease (normal expiry/move-out). */

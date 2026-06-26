@@ -3,21 +3,24 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
-import { sendNotification } from "@/lib/email";
+import { emailPortalLogin } from "@/lib/portal-invite";
+import type { EmailActionState } from "@/lib/action-state";
 
 export type ContactState = { ok: boolean; error?: string };
 
 /**
- * Email a resident a one-click sign-in link to their portal (a magic link that
- * logs them in), plus instructions to set a password for future logins. Use it
- * for residents created from an application who never received credentials.
+ * Email a resident a one-click sign-in link to their portal, for accounts
+ * created from an application that never received credentials.
  */
-export async function sendPortalLogin(form: FormData): Promise<void> {
+export async function sendPortalLogin(
+  _prev: EmailActionState,
+  form: FormData
+): Promise<EmailActionState> {
   const { profile } = await requireProfile("/admin/residents");
-  if (!isStaff(profile)) return;
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
 
   const id = (form.get("profile_id") as string)?.trim();
-  if (!id) return;
+  if (!id) return { ok: false, error: "Missing resident." };
 
   const admin = createAdminClient();
   const { data: p } = await admin
@@ -27,30 +30,11 @@ export async function sendPortalLogin(form: FormData): Promise<void> {
     .maybeSingle<{ full_name: string | null; email: string | null }>();
 
   const email = p?.email?.trim();
-  if (!email) return;
-  const greeting = p?.full_name?.split(" ")[0] ?? "there";
-  const portal = "https://38thaveproperties.com/portal";
+  if (!email) return { ok: false, error: "No email on file." };
 
-  let link = "https://38thaveproperties.com/login";
-  try {
-    const { data } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: portal },
-    });
-    if (data?.properties?.action_link) link = data.properties.action_link;
-  } catch {
-    // fall back to the login page + forgot-password instructions
-  }
-
-  await sendNotification({
-    to: email,
-    replyTo: "hello@38thaveproperties.com",
-    subject: "Your 38th Ave Properties resident portal",
-    html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Welcome to your resident portal, ${greeting}</div><p>Your portal is where you can review and sign your lease, pay rent, request maintenance, and message our team.</p><p style="margin:22px 0"><a href="${link}" style="background:#2f5d50;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;display:inline-block">Open your resident portal →</a></p><p style="font-size:13px;color:#6f655a">This secure link signs you in. To set a password for next time, sign in at <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> with <strong>${email}</strong> and use “Forgot password?”.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
-  });
-
+  await emailPortalLogin(email, p?.full_name ?? null);
   revalidatePath(`/admin/residents/${id}`);
+  return { ok: true, sentTo: email };
 }
 
 function str(v: FormDataEntryValue | null): string | null {

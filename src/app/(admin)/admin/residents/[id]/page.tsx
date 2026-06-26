@@ -4,6 +4,7 @@ import { Card } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { ResidentContactEdit } from "@/components/resident-contact-edit";
+import { ActionFeedbackButton } from "@/components/action-feedback-button";
 import { sendPortalLogin } from "@/app/(admin)/admin/residents/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -246,12 +247,14 @@ export default async function ResidentDetailPage({
             </div>
             <div className="flex shrink-0 items-center gap-3">
               {profile.role === "resident" && profile.email && (
-                <form action={sendPortalLogin}>
-                  <input type="hidden" name="profile_id" value={profile.id} />
-                  <button type="submit" className="text-xs font-medium text-pine hover:underline">
-                    Send login
-                  </button>
-                </form>
+                <ActionFeedbackButton
+                  action={sendPortalLogin}
+                  hidden={<input type="hidden" name="profile_id" value={profile.id} />}
+                  label="Send login"
+                  successLabel="Login sent"
+                  sendingLabel="Sending…"
+                  compact
+                />
               )}
               <ResidentContactEdit
                 resident={{
