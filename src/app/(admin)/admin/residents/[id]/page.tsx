@@ -4,6 +4,7 @@ import { Card } from "@/components/ui";
 import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { ResidentContactEdit } from "@/components/resident-contact-edit";
+import { sendPortalLogin } from "@/app/(admin)/admin/residents/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -243,15 +244,25 @@ export default async function ResidentDetailPage({
               </h2>
               <p className="text-sm text-ink-soft">Person & contact</p>
             </div>
-            <ResidentContactEdit
-              resident={{
-                id: profile.id,
-                full_name: profile.full_name,
-                phone: profile.phone ?? occupancy?.tenant_phone ?? null,
-                emergency_contact_name: profile.emergency_contact_name,
-                emergency_contact_phone: profile.emergency_contact_phone,
-              }}
-            />
+            <div className="flex shrink-0 items-center gap-3">
+              {profile.role === "resident" && profile.email && (
+                <form action={sendPortalLogin}>
+                  <input type="hidden" name="profile_id" value={profile.id} />
+                  <button type="submit" className="text-xs font-medium text-pine hover:underline">
+                    Send login
+                  </button>
+                </form>
+              )}
+              <ResidentContactEdit
+                resident={{
+                  id: profile.id,
+                  full_name: profile.full_name,
+                  phone: profile.phone ?? occupancy?.tenant_phone ?? null,
+                  emergency_contact_name: profile.emergency_contact_name,
+                  emergency_contact_phone: profile.emergency_contact_phone,
+                }}
+              />
+            </div>
           </div>
           <dl className="grid grid-cols-2 gap-px bg-clay">
             <Detail label="Full name" value={profile.full_name ?? "—"} />

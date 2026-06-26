@@ -71,7 +71,7 @@ async function emailLeaseCopies(
   const { data: owners } = await supabase
     .from("profiles")
     .select("email")
-    .eq("role", "owner");
+    .in("role", ["owner", "admin"]);
   const ownerEmails = (owners ?? [])
     .map((o) => o.email)
     .filter((e): e is string => !!e)
