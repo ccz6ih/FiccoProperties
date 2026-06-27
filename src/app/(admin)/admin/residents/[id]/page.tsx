@@ -5,11 +5,25 @@ import { Avatar } from "@/components/avatar";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { ResidentContactEdit } from "@/components/resident-contact-edit";
 import { ActionFeedbackButton } from "@/components/action-feedback-button";
-import { sendPortalLogin } from "@/app/(admin)/admin/residents/actions";
+import { ResidentDocsForm } from "@/components/resident-docs-form";
+import {
+  sendPortalLogin,
+  deleteResidentDocument,
+} from "@/app/(admin)/admin/residents/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Tables } from "@/types/database";
+
+type ResidentDocRow = {
+  id: string;
+  label: string | null;
+  note: string | null;
+  path: string | null;
+  created_at: string;
+  uploader: { full_name: string | null } | null;
+};
 
 type Profile = Tables<"profiles">;
 
@@ -205,6 +219,28 @@ export default async function ResidentDetailPage({
   ];
   const checkinDone = checkin.filter((s) => s.done).length;
 
+  // Admin-only document vault (private bucket; staff read via signed URLs).
+  const adminDb = createAdminClient();
+  const { data: docRows } = await (adminDb as unknown as SupabaseClient)
+    .from("resident_documents")
+    .select("id, label, note, path, created_at, uploader:uploaded_by(full_name)")
+    .eq("resident_id", id)
+    .order("created_at", { ascending: false })
+    .returns<ResidentDocRow[]>();
+  const residentDocs = docRows ?? [];
+  const docSigned = await Promise.all(
+    residentDocs
+      .filter((d) => d.path)
+      .map((d) => adminDb.storage.from("resident-docs").createSignedUrl(d.path!, 3600))
+  );
+  const docUrl = new Map<string, string>();
+  residentDocs
+    .filter((d) => d.path)
+    .forEach((d, i) => {
+      const u = docSigned[i]?.data?.signedUrl;
+      if (u) docUrl.set(d.id, u);
+    });
+
   const insStatus = insuranceStatus(profile);
   let insuranceDocUrl: string | null = null;
   if (profile.insurance_doc_path) {
@@ -270,6 +306,68 @@ export default async function ResidentDetailPage({
           </ul>
         </Card>
       )}
+
+      {/* Admin-only files & notes */}
+      <Card className="mb-8 p-6">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-lg font-semibold text-ink">
+            Files &amp; notes
+            <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+              Admin only
+            </span>
+          </h2>
+          <ResidentDocsForm residentId={profile.id} />
+        </div>
+        <p className="mb-4 text-sm text-ink-soft">
+          Private records — credit reports, screening, internal notes. The resident
+          never sees these.
+        </p>
+
+        {residentDocs.length > 0 ? (
+          <ul className="divide-y divide-clay">
+            {residentDocs.map((d) => (
+              <li key={d.id} className="flex items-start justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-ink">
+                    {d.label ?? (d.path ? "Document" : "Note")}
+                  </div>
+                  {d.note && (
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink-soft">{d.note}</p>
+                  )}
+                  <div className="mt-0.5 text-xs text-ink-faint">
+                    {[formatDate(d.created_at), d.uploader?.full_name].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {docUrl.has(d.id) && (
+                    <a
+                      href={docUrl.get(d.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-pine hover:underline"
+                    >
+                      View
+                    </a>
+                  )}
+                  <form action={deleteResidentDocument}>
+                    <input type="hidden" name="id" value={d.id} />
+                    <input type="hidden" name="resident_id" value={profile.id} />
+                    <button
+                      type="submit"
+                      className="text-xs text-ink-faint hover:text-terracotta-dark"
+                      title="Delete"
+                    >
+                      ✕
+                    </button>
+                  </form>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-faint">No files or notes yet.</p>
+        )}
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Person & contact */}
