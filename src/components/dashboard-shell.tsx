@@ -25,7 +25,7 @@ export function DashboardShell({
   return (
     <div className="flex min-h-dvh bg-cream">
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-clay bg-sand/40 lg:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-clay bg-sand/40 lg:flex print:hidden">
         <Link href={brandHref} className="flex h-16 items-center gap-2.5 border-b border-clay px-6">
           <span aria-hidden className="grid h-8 w-8 place-items-center rounded-lg bg-pine text-cream">
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -44,7 +44,7 @@ export function DashboardShell({
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream px-4 sm:px-8">
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream px-4 sm:px-8 print:hidden">
           <div className="flex min-w-0 items-center gap-3">
             <MobileNav nav={nav} brandLabel={brandLabel} brandHref={brandHref} />
             <Link
@@ -80,7 +80,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="flex-1 px-5 py-8 sm:px-8">{children}</main>
+        <main className="flex-1 px-5 py-8 sm:px-8 print:p-0">{children}</main>
       </div>
     </div>
   );
