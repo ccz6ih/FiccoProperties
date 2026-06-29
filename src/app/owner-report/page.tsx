@@ -23,7 +23,7 @@ type ReportChargeRow = {
   } | null;
 };
 
-type PaymentRow = { charge_id: string; created_at: string; status: string };
+type PaymentRow = { charge_id: string; created_at: string; status: string; provider_ref: string | null };
 
 function currentPeriod(): string {
   const now = new Date();
@@ -73,18 +73,24 @@ export default async function OwnerReport({
   const all = (charges ?? []).filter((c) => c.status !== "void");
   const chargeIds = all.map((c) => c.id);
 
-  // Latest succeeded payment per charge = the "paid on" date.
+  // Latest succeeded payment per charge = the "paid on" date + reference.
   const paidOn = new Map<string, string>();
+  const paidRef = new Map<string, string>();
   if (chargeIds.length > 0) {
     const { data: payments } = await supabase
       .from("payments")
-      .select("charge_id, created_at, status")
+      .select("charge_id, created_at, status, provider_ref")
       .in("charge_id", chargeIds)
       .eq("status", "succeeded")
       .returns<PaymentRow[]>();
     for (const p of payments ?? []) {
       const cur = paidOn.get(p.charge_id);
-      if (!cur || p.created_at > cur) paidOn.set(p.charge_id, p.created_at);
+      if (!cur || p.created_at > cur) {
+        paidOn.set(p.charge_id, p.created_at);
+        if (p.provider_ref && p.provider_ref !== "offline") {
+          paidRef.set(p.charge_id, p.provider_ref);
+        }
+      }
     }
   }
 
@@ -96,6 +102,7 @@ export default async function OwnerReport({
     amountCents: number;
     status: "paid" | "late" | "open";
     paidDate: string | null;
+    paidRef: string | null;
     daysLate: number;
   };
 
@@ -111,6 +118,7 @@ export default async function OwnerReport({
       amountCents: c.amount_cents,
       status: isPaid ? "paid" : isLate ? "late" : "open",
       paidDate: isPaid ? paidOn.get(c.id) ?? null : null,
+      paidRef: isPaid ? paidRef.get(c.id) ?? null : null,
       daysLate: isLate && c.due_date ? daysBetween(c.due_date, today) : 0,
     };
   });
@@ -233,11 +241,18 @@ export default async function OwnerReport({
                       )}
                     </td>
                     <td className="py-2 text-ink-soft">
-                      {l.status === "paid"
-                        ? formatDate(l.paidDate)
-                        : l.status === "late"
-                          ? `${l.daysLate} days late`
-                          : "—"}
+                      {l.status === "paid" ? (
+                        <>
+                          {formatDate(l.paidDate)}
+                          {l.paidRef && (
+                            <span className="text-ink-faint"> · {l.paidRef}</span>
+                          )}
+                        </>
+                      ) : l.status === "late" ? (
+                        `${l.daysLate} days late`
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

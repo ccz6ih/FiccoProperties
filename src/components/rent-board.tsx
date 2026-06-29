@@ -148,15 +148,32 @@ export function RentBoard({
 
       {selectedRows.length > 0 && (
         <div className="sticky bottom-4 z-30 mt-4 print:hidden">
-          <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 rounded-2xl border border-pine/30 bg-cream px-5 py-3 shadow-xl">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-cream px-5 py-3 shadow-xl">
             <div className="text-sm">
               <span className="font-semibold text-ink">{selectedRows.length} selected</span>
               <span className="text-ink-faint"> · {formatCents(selectedCents)}</span>
               {state.error && <div className="text-xs text-terracotta-dark">{state.error}</div>}
             </div>
-            <Button type="submit" variant="primary" size="md" disabled={pending}>
-              {pending ? "Recording…" : "Mark selected as paid"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                name="method"
+                defaultValue="Check"
+                className="rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm text-ink"
+              >
+                <option value="Check">Check</option>
+                <option value="Money order">Money order</option>
+                <option value="Cash">Cash</option>
+                <option value="Other">Other</option>
+              </select>
+              <input
+                name="reference"
+                placeholder="Check / MO #"
+                className="w-32 rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm text-ink"
+              />
+              <Button type="submit" variant="primary" size="md" disabled={pending}>
+                {pending ? "Recording…" : "Mark paid"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

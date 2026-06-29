@@ -29,6 +29,7 @@ type PaymentRow = {
   amount_cents: number;
   status: string;
   created_at: string;
+  provider_ref: string | null;
   charges: { description: string | null; period: string | null } | null;
 };
 
@@ -62,7 +63,7 @@ export default async function PortalPayments() {
         .returns<MethodRow[]>(),
       db
         .from("payments")
-        .select("id, amount_cents, status, created_at, charges(description, period)")
+        .select("id, amount_cents, status, created_at, provider_ref, charges(description, period)")
         .eq("resident_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20)
@@ -177,6 +178,9 @@ export default async function PortalPayments() {
                       </div>
                       <div className="text-xs text-ink-faint">
                         {formatDate(p.created_at)}
+                        {p.provider_ref && p.provider_ref !== "offline"
+                          ? ` · ${p.provider_ref}`
+                          : ""}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

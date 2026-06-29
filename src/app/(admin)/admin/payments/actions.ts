@@ -140,6 +140,12 @@ export async function recordOfflinePayments(
     .filter(Boolean);
   if (ids.length === 0) return { ok: false, error: "No charges selected." };
 
+  // Optional payment method + check/money-order number for the record.
+  const method = (form.get("method") as string)?.trim() || null;
+  const reference = (form.get("reference") as string)?.trim() || null;
+  const refLabel = [method, reference].filter(Boolean).join(" ");
+  const providerRef = refLabel || "offline";
+
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
@@ -162,7 +168,7 @@ export async function recordOfflinePayments(
       resident_id: c.resident_id,
       amount_cents: c.amount_cents,
       method_id: null,
-      provider_ref: "offline",
+      provider_ref: providerRef,
       status: "succeeded",
     }))
   );
@@ -175,7 +181,7 @@ export async function recordOfflinePayments(
       kind: "payment",
       amount_cents: -c.amount_cents,
       ref_id: c.id,
-      memo: `Offline payment — ${c.description ?? c.period ?? "charge"}`,
+      memo: `Offline payment${refLabel ? ` — ${refLabel}` : ""} — ${c.description ?? c.period ?? "charge"}`,
     }))
   );
 
