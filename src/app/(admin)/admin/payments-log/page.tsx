@@ -1,0 +1,158 @@
+import Link from "next/link";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { Card } from "@/components/ui";
+import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
+import { PrintButton } from "@/components/print-button";
+import { formatCents, formatDate } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
+
+type PaymentLogRow = {
+  id: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+  provider_ref: string | null;
+  profiles: { full_name: string | null } | null;
+  charges: {
+    description: string | null;
+    period: string | null;
+    leases: { units: { label: string; properties: { name: string | null } | null } | null } | null;
+  } | null;
+};
+
+function currentPeriod(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+function periodLabel(period: string): string {
+  const [y, m] = period.split("-").map(Number);
+  if (!y || !m) return period;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+export default async function PaymentsLog({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const { period: periodParam } = await searchParams;
+  const period = /^\d{4}-\d{2}$/.test(periodParam ?? "") ? periodParam! : currentPeriod();
+  const [y, m] = period.split("-").map(Number);
+  const from = `${period}-01`;
+  const toExclusive = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: payments } = await db
+    .from("payments")
+    .select(
+      "id, amount_cents, status, created_at, provider_ref, profiles:resident_id(full_name), charges:charge_id(description, period, leases(units(label, properties(name))))"
+    )
+    .gte("created_at", from)
+    .lt("created_at", toExclusive)
+    .order("created_at", { ascending: false })
+    .returns<PaymentLogRow[]>();
+
+  const all = payments ?? [];
+  const succeeded = all.filter((p) => p.status === "succeeded");
+  const totalCents = succeeded.reduce((s, p) => s + p.amount_cents, 0);
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <PageHeader
+        title="Payments received"
+        subtitle="Every recorded payment — method, reference, and amount."
+        action={
+          <div className="flex items-center gap-3 print:hidden">
+            <form method="get">
+              <input
+                type="month"
+                name="period"
+                defaultValue={period}
+                className="rounded-lg border border-clay-deep bg-white px-3 py-1.5 text-sm text-ink"
+              />
+            </form>
+            <PrintButton label="Print" />
+          </div>
+        }
+      />
+
+      <div className="mb-4 hidden print:block">
+        <div className="font-display text-xl font-semibold text-ink">
+          38th Ave Properties — Payments received · {periodLabel(period)}
+        </div>
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 print:hidden">
+        <StatCard label={`Received in ${periodLabel(period)}`} value={formatCents(totalCents)} tone="pine" />
+        <StatCard label="Payments" value={succeeded.length} hint="Recorded this month" />
+      </div>
+
+      {all.length > 0 ? (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-clay bg-sand/50 text-left text-xs uppercase tracking-wide text-ink-faint">
+                  <th className="px-4 py-3 font-medium">Date</th>
+                  <th className="px-4 py-3 font-medium">Tenant</th>
+                  <th className="px-4 py-3 font-medium">Home</th>
+                  <th className="px-4 py-3 font-medium">For</th>
+                  <th className="px-4 py-3 font-medium">Method / #</th>
+                  <th className="px-4 py-3 text-right font-medium">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-clay">
+                {all.map((p) => {
+                  const home = p.charges?.leases?.units
+                    ? `${p.charges.leases.units.properties?.name ?? ""} · ${p.charges.leases.units.label}`
+                    : "—";
+                  const ref =
+                    p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : "—";
+                  return (
+                    <tr key={p.id} className="align-top hover:bg-sand/30">
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
+                        {formatDate(p.created_at)}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-ink">
+                        {p.profiles?.full_name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-ink-soft">{home}</td>
+                      <td className="px-4 py-3 text-ink-soft">
+                        {p.charges?.description ?? "Rent"}
+                        {p.charges?.period ? ` · ${p.charges.period}` : ""}
+                      </td>
+                      <td className="px-4 py-3 text-ink-soft">{ref}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-ink">
+                        {formatCents(p.amount_cents)}
+                        {p.status !== "succeeded" && (
+                          <span className="ml-2">
+                            <StatusPill value={p.status} />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-clay font-semibold text-ink">
+                  <td className="px-4 py-3" colSpan={5}>
+                    Total received
+                  </td>
+                  <td className="px-4 py-3 text-right">{formatCents(totalCents)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Card>
+      ) : (
+        <EmptyState
+          title={`No payments recorded in ${periodLabel(period)}`}
+          body="Recorded payments will appear here as you mark rent paid."
+        />
+      )}
+    </div>
+  );
+}

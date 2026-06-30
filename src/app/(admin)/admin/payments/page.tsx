@@ -58,12 +58,18 @@ export default async function AdminPayments() {
         title="Payments"
         subtitle="Generate rent charges, track who's paid, and record offline payments."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/admin/rent-board"
               className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
             >
               Rent board →
+            </Link>
+            <Link
+              href="/admin/payments-log"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Payments log →
             </Link>
             <Link
               href="/owner-report"
