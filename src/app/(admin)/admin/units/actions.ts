@@ -241,16 +241,41 @@ export async function uploadLeaseDocument(
     .eq("unit_id", unitId)
     .maybeSingle<{ occupant_profile_id: string | null }>();
 
+  const residentId = occ?.occupant_profile_id ?? null;
+  // Only share on upload if asked AND there's a portal resident to share with.
+  const share = str(form.get("share")) === "on" && !!residentId;
+
   await db.from("lease_documents").insert({
     unit_id: unitId,
-    resident_id: occ?.occupant_profile_id ?? null,
+    resident_id: residentId,
     label,
     path,
     uploaded_by: user.id,
+    shared_with_resident: share,
   });
 
   revalidatePath(`/admin/units/${unitId}`);
   return { ok: true };
+}
+
+/** Show/hide a scanned lease in the resident's portal. Staff-only. */
+export async function setLeaseDocumentShared(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return;
+
+  const id = str(form.get("id"));
+  const unitId = str(form.get("unit_id"));
+  const share = str(form.get("share")) === "1";
+  if (!id) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  await db
+    .from("lease_documents")
+    .update({ shared_with_resident: share })
+    .eq("id", id);
+
+  if (unitId) revalidatePath(`/admin/units/${unitId}`);
 }
 
 /** Delete a lease document (removes the file + row). Staff-only. */

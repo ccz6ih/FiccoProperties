@@ -128,10 +128,19 @@ export default async function UnitDetail({
   // Lease documents (private bucket) — sign each for viewing.
   const { data: leaseDocRows } = await db
     .from("lease_documents")
-    .select("id, label, path, created_at")
+    .select("id, label, path, created_at, resident_id, shared_with_resident")
     .eq("unit_id", id)
     .order("created_at", { ascending: false })
-    .returns<{ id: string; label: string | null; path: string; created_at: string }[]>();
+    .returns<
+      {
+        id: string;
+        label: string | null;
+        path: string;
+        created_at: string;
+        resident_id: string | null;
+        shared_with_resident: boolean | null;
+      }[]
+    >();
   const leaseAdmin = createAdminClient();
   const leaseSigned = await Promise.all(
     (leaseDocRows ?? []).map((d) =>
@@ -143,6 +152,8 @@ export default async function UnitDetail({
     label: d.label,
     url: leaseSigned[i]?.data?.signedUrl ?? "",
     created: d.created_at,
+    shared: !!d.shared_with_resident,
+    residentLinked: !!d.resident_id,
   }));
 
   // Unit costs (contractor bills) + petty-cash expenses tagged to this unit.
