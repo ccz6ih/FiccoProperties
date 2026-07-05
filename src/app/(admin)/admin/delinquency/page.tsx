@@ -11,17 +11,22 @@ type DChargeRow = {
   amount_cents: number;
   due_date: string | null;
   status: string;
-  resident_id: string;
-  lease_id: string;
+  resident_id: string | null;
+  lease_id: string | null;
+  unit_id: string | null;
   profiles: { full_name: string | null; email: string | null } | null;
-  leases: {
-    units: { label: string; properties: { name: string | null } | null } | null;
+  units: {
+    label: string;
+    properties: { name: string | null } | null;
+    unit_occupancy: { tenant_name: string | null; tenant_email: string | null }[] | null;
   } | null;
 };
 
 type Delinquent = {
-  residentId: string;
-  leaseId: string;
+  key: string;
+  unitId: string | null;
+  residentId: string | null;
+  leaseId: string | null;
   name: string;
   email: string | null;
   unit: string;
@@ -44,7 +49,7 @@ export default async function AdminDelinquency() {
   const { data: charges } = await supabase
     .from("charges")
     .select(
-      "id, amount_cents, due_date, status, resident_id, lease_id, profiles:resident_id(full_name, email), leases(units(label, properties(name)))"
+      "id, amount_cents, due_date, status, resident_id, lease_id, unit_id, profiles:resident_id(full_name, email), units:unit_id(label, properties(name), unit_occupancy(tenant_name, tenant_email))"
     )
     .in("status", ["open", "past_due"])
     .returns<DChargeRow[]>();
@@ -54,21 +59,25 @@ export default async function AdminDelinquency() {
     (c) => c.due_date != null && c.due_date < todayIso
   );
 
-  const byResident = new Map<string, Delinquent>();
+  const byUnit = new Map<string, Delinquent>();
   for (const c of overdue) {
-    const cur = byResident.get(c.resident_id);
+    const key = c.unit_id ?? c.resident_id ?? c.id;
+    const occ = c.units?.unit_occupancy?.[0] ?? null;
+    const cur = byUnit.get(key);
     if (cur) {
       cur.overdueCents += c.amount_cents;
       cur.count += 1;
       if (c.due_date! < cur.oldestDue) cur.oldestDue = c.due_date!;
     } else {
-      byResident.set(c.resident_id, {
+      byUnit.set(key, {
+        key,
+        unitId: c.unit_id,
         residentId: c.resident_id,
         leaseId: c.lease_id,
-        name: c.profiles?.full_name ?? "—",
-        email: c.profiles?.email ?? null,
-        unit: c.leases?.units?.label ?? "—",
-        property: c.leases?.units?.properties?.name ?? "—",
+        name: c.profiles?.full_name ?? occ?.tenant_name ?? "—",
+        email: c.profiles?.email ?? occ?.tenant_email ?? null,
+        unit: c.units?.label ?? "—",
+        property: c.units?.properties?.name ?? "—",
         overdueCents: c.amount_cents,
         count: 1,
         oldestDue: c.due_date!,
@@ -76,7 +85,7 @@ export default async function AdminDelinquency() {
     }
   }
 
-  const rows = [...byResident.values()].sort(
+  const rows = [...byUnit.values()].sort(
     (a, b) => new Date(a.oldestDue).getTime() - new Date(b.oldestDue).getTime()
   );
 
@@ -128,15 +137,21 @@ export default async function AdminDelinquency() {
                   const suggested = Math.round(r.overdueCents * 0.05);
                   const cap = lateFeeCapCents(r.overdueCents);
                   const daysLate = daysBetween(r.oldestDue, today);
+                  const href = r.residentId
+                    ? `/admin/residents/${r.residentId}`
+                    : r.unitId
+                      ? `/admin/units/${r.unitId}`
+                      : null;
                   return (
-                    <tr key={r.residentId} className="align-top hover:bg-sand/30">
+                    <tr key={r.key} className="align-top hover:bg-sand/30">
                       <td className="px-5 py-3">
-                        <Link
-                          href={`/admin/residents/${r.residentId}`}
-                          className="font-medium text-pine hover:text-pine-dark"
-                        >
-                          {r.name}
-                        </Link>
+                        {href ? (
+                          <Link href={href} className="font-medium text-pine hover:text-pine-dark">
+                            {r.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-ink">{r.name}</span>
+                        )}
                         <div className="text-xs text-ink-faint">{r.email}</div>
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
@@ -164,6 +179,7 @@ export default async function AdminDelinquency() {
                         <LateFeeForm
                           residentId={r.residentId}
                           leaseId={r.leaseId}
+                          unitId={r.unitId}
                           overdueCents={r.overdueCents}
                           suggestedCents={suggested}
                           capCents={cap}

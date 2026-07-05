@@ -4,13 +4,25 @@ import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { RentBoard, type BoardGroup, type BoardCharge } from "@/components/rent-board";
 import { createClient } from "@/lib/supabase/server";
 
+type UnitRow = {
+  id: string;
+  label: string;
+  status: string;
+  properties: { name: string | null } | null;
+};
+type OccRow = {
+  unit_id: string;
+  tenant_name: string | null;
+  occupant_profile_id: string | null;
+  rent_cents: number | null;
+  profiles: { full_name: string | null } | null;
+};
 type ChargeRow = {
   id: string;
-  amount_cents: number;
-  due_date: string | null;
+  unit_id: string | null;
   status: string;
-  profiles: { full_name: string | null } | null;
-  leases: { units: { label: string; properties: { name: string | null } | null } | null } | null;
+  due_date: string | null;
+  amount_cents: number;
 };
 
 function currentPeriod(): string {
@@ -22,7 +34,7 @@ function periodLabel(period: string): string {
   if (!y || !m) return period;
   return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
-const statusOrder = { overdue: 0, open: 1, paid: 2 } as const;
+const statusOrder = { overdue: 0, open: 1, unbilled: 2, paid: 3, vacant: 4 } as const;
 
 export default async function RentBoardPage({
   searchParams,
@@ -36,33 +48,44 @@ export default async function RentBoardPage({
   const db = supabase as unknown as SupabaseClient;
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const { data: charges } = await db
-    .from("charges")
-    .select(
-      "id, amount_cents, due_date, status, profiles:resident_id(full_name), leases(units(label, properties(name)))"
-    )
-    .eq("period", period)
-    .neq("status", "void")
-    .returns<ChargeRow[]>();
+  const [{ data: units }, { data: occ }, { data: charges }] = await Promise.all([
+    db.from("units").select("id, label, status, properties(name)").returns<UnitRow[]>(),
+    db
+      .from("unit_occupancy")
+      .select("unit_id, tenant_name, occupant_profile_id, rent_cents, profiles:occupant_profile_id(full_name)")
+      .returns<OccRow[]>(),
+    db
+      .from("charges")
+      .select("id, unit_id, status, due_date, amount_cents")
+      .eq("period", period)
+      .neq("status", "void")
+      .returns<ChargeRow[]>(),
+  ]);
 
-  const all = charges ?? [];
+  const occByUnit = new Map<string, OccRow>();
+  for (const o of occ ?? []) occByUnit.set(o.unit_id, o);
+  const chargeByUnit = new Map<string, ChargeRow>();
+  for (const c of charges ?? []) if (c.unit_id) chargeByUnit.set(c.unit_id, c);
 
-  // Group by community.
   const byProp = new Map<string, BoardCharge[]>();
-  for (const c of all) {
-    const property = c.leases?.units?.properties?.name ?? "Unassigned";
-    const status: BoardCharge["status"] =
-      c.status === "paid"
-        ? "paid"
-        : c.due_date && c.due_date < todayIso
-          ? "overdue"
-          : "open";
+  for (const u of units ?? []) {
+    const property = u.properties?.name ?? "Unassigned";
+    const o = occByUnit.get(u.id);
+    const occupied = !!o && !!(o.tenant_name || o.occupant_profile_id);
+    const charge = chargeByUnit.get(u.id);
+
+    let status: BoardCharge["status"];
+    if (!occupied) status = "vacant";
+    else if (charge)
+      status = charge.status === "paid" ? "paid" : charge.due_date && charge.due_date < todayIso ? "overdue" : "open";
+    else status = "unbilled";
+
     const arr = byProp.get(property) ?? [];
     arr.push({
-      id: c.id,
-      name: c.profiles?.full_name ?? "—",
-      unit: c.leases?.units?.label ?? "—",
-      amountCents: c.amount_cents,
+      id: charge?.id ?? null,
+      name: occupied ? o?.profiles?.full_name ?? o?.tenant_name ?? "—" : "Vacant",
+      unit: u.label,
+      amountCents: charge?.amount_cents ?? o?.rent_cents ?? 0,
       status,
     });
     byProp.set(property, arr);
@@ -71,20 +94,27 @@ export default async function RentBoardPage({
   const groups: BoardGroup[] = [...byProp.entries()]
     .map(([property, list]) => {
       list.sort(
-        (a, b) => statusOrder[a.status] - statusOrder[b.status] || a.unit.localeCompare(b.unit, undefined, { numeric: true })
+        (a, b) =>
+          statusOrder[a.status] - statusOrder[b.status] ||
+          a.unit.localeCompare(b.unit, undefined, { numeric: true })
       );
-      const paid = list.filter((c) => c.status === "paid").length;
-      const collectedCents = list.filter((c) => c.status === "paid").reduce((s, c) => s + c.amountCents, 0);
-      const outstandingCents = list.filter((c) => c.status !== "paid").reduce((s, c) => s + c.amountCents, 0);
-      return { property, charges: list, paid, total: list.length, collectedCents, outstandingCents };
+      const occupiedRows = list.filter((c) => c.status !== "vacant");
+      const paid = occupiedRows.filter((c) => c.status === "paid").length;
+      const collectedCents = occupiedRows.filter((c) => c.status === "paid").reduce((s, c) => s + c.amountCents, 0);
+      const outstandingCents = occupiedRows
+        .filter((c) => c.status === "open" || c.status === "overdue" || c.status === "unbilled")
+        .reduce((s, c) => s + c.amountCents, 0);
+      return { property, charges: list, paid, total: occupiedRows.length, collectedCents, outstandingCents };
     })
     .sort((a, b) => a.property.localeCompare(b.property));
+
+  const hasUnits = (units ?? []).length > 0;
 
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader
         title="Rent board"
-        subtitle="Who's paid and who's not — by community, at a glance."
+        subtitle="Every unit by community — paid, due, overdue, or vacant."
         action={
           <div className="flex items-center gap-3 print:hidden">
             <form method="get">
@@ -102,25 +132,16 @@ export default async function RentBoardPage({
         }
       />
 
-      {/* Printed title */}
       <div className="mb-4 hidden print:block">
         <div className="font-display text-xl font-semibold text-ink">
           38th Ave Properties — Rent board · {periodLabel(period)}
         </div>
       </div>
 
-      {all.length > 0 ? (
+      {hasUnits ? (
         <RentBoard groups={groups} periodLabel={periodLabel(period)} />
       ) : (
-        <EmptyState
-          title={`No charges for ${periodLabel(period)}`}
-          body="Generate this month's rent on the Payments page first, then this board fills in."
-          action={
-            <Link href="/admin/payments" className="text-sm font-medium text-pine hover:underline">
-              Go to Payments →
-            </Link>
-          }
-        />
+        <EmptyState title="No units yet" body="Add properties and units to see the rent board." />
       )}
     </div>
   );

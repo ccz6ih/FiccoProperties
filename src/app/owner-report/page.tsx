@@ -15,11 +15,13 @@ type ReportChargeRow = {
   due_date: string | null;
   status: string;
   description: string | null;
-  resident_id: string;
-  lease_id: string;
+  resident_id: string | null;
+  lease_id: string | null;
   profiles: { full_name: string | null; email: string | null } | null;
-  leases: {
-    units: { label: string; properties: { name: string | null } | null } | null;
+  units: {
+    label: string;
+    properties: { name: string | null } | null;
+    unit_occupancy: { tenant_name: string | null }[] | null;
   } | null;
 };
 
@@ -65,7 +67,7 @@ export default async function OwnerReport({
   const { data: charges } = await supabase
     .from("charges")
     .select(
-      "id, amount_cents, due_date, status, description, resident_id, lease_id, profiles:resident_id(full_name, email), leases(units(label, properties(name)))"
+      "id, amount_cents, due_date, status, description, resident_id, lease_id, profiles:resident_id(full_name, email), units:unit_id(label, properties(name), unit_occupancy(tenant_name))"
     )
     .eq("period", period)
     .returns<ReportChargeRow[]>();
@@ -111,9 +113,13 @@ export default async function OwnerReport({
     const isLate =
       !isPaid && c.due_date != null && c.due_date < todayIso;
     return {
-      property: c.leases?.units?.properties?.name ?? "—",
-      unit: c.leases?.units?.label ?? "—",
-      tenant: c.profiles?.full_name ?? c.profiles?.email ?? "—",
+      property: c.units?.properties?.name ?? "—",
+      unit: c.units?.label ?? "—",
+      tenant:
+        c.profiles?.full_name ??
+        c.units?.unit_occupancy?.[0]?.tenant_name ??
+        c.profiles?.email ??
+        "—",
       item: c.description ?? "Rent",
       amountCents: c.amount_cents,
       status: isPaid ? "paid" : isLate ? "late" : "open",

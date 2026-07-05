@@ -12,11 +12,11 @@ import {
 const initial: AdminPaymentsState = { ok: false };
 
 export type BoardCharge = {
-  id: string;
+  id: string | null;
   name: string;
   unit: string;
   amountCents: number;
-  status: "paid" | "open" | "overdue";
+  status: "paid" | "open" | "overdue" | "unbilled" | "vacant";
 };
 export type BoardGroup = {
   property: string;
@@ -31,7 +31,11 @@ const STATUS: Record<BoardCharge["status"], { dot: string; row: string; label: s
   paid: { dot: "bg-pine", row: "border-l-pine bg-pine/5", label: "Paid", text: "text-pine" },
   open: { dot: "bg-gold", row: "border-l-gold bg-gold/10", label: "Due", text: "text-ink-soft" },
   overdue: { dot: "bg-terracotta", row: "border-l-terracotta bg-terracotta-soft/40", label: "Overdue", text: "text-terracotta-dark" },
+  unbilled: { dot: "bg-clay-deep", row: "border-l-clay-deep bg-sand/40", label: "Not billed", text: "text-ink-soft" },
+  vacant: { dot: "bg-clay", row: "border-l-clay bg-cream", label: "Vacant", text: "text-ink-faint" },
 };
+
+const isMarkable = (c: BoardCharge) => !!c.id && (c.status === "open" || c.status === "overdue");
 
 export function RentBoard({
   groups,
@@ -43,8 +47,8 @@ export function RentBoard({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(recordOfflinePayments, initial);
 
-  const unpaid = groups.flatMap((g) => g.charges.filter((c) => c.status !== "paid"));
-  const selectedRows = unpaid.filter((c) => selected.has(c.id));
+  const markable = groups.flatMap((g) => g.charges.filter(isMarkable));
+  const selectedRows = markable.filter((c) => c.id && selected.has(c.id));
   const selectedCents = selectedRows.reduce((s, c) => s + c.amountCents, 0);
 
   function toggle(id: string) {
@@ -64,7 +68,7 @@ export function RentBoard({
   return (
     <form action={action}>
       {selectedRows.map((c) => (
-        <input key={c.id} type="hidden" name="charge_ids" value={c.id} />
+        <input key={c.id} type="hidden" name="charge_ids" value={c.id!} />
       ))}
 
       {/* Overall summary + legend + print */}
@@ -84,6 +88,7 @@ export function RentBoard({
             <Legend dot="bg-pine" label="Paid" />
             <Legend dot="bg-gold" label="Due" />
             <Legend dot="bg-terracotta" label="Overdue" />
+            <Legend dot="bg-clay" label="Vacant" />
           </div>
           <span className="print:hidden">
             <PrintButton label="Print" />
@@ -109,19 +114,19 @@ export function RentBoard({
                 </div>
               </div>
               <ul className="divide-y divide-clay">
-                {g.charges.map((c) => {
+                {g.charges.map((c, i) => {
                   const meta = STATUS[c.status];
                   return (
                     <li
-                      key={c.id}
+                      key={c.id ?? `${g.property}-${i}`}
                       className={`flex items-center justify-between gap-3 border-l-4 px-4 py-2.5 ${meta.row}`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        {c.status !== "paid" && (
+                        {isMarkable(c) && (
                           <input
                             type="checkbox"
-                            checked={selected.has(c.id)}
-                            onChange={() => toggle(c.id)}
+                            checked={selected.has(c.id!)}
+                            onChange={() => toggle(c.id!)}
                             className="h-4 w-4 shrink-0 rounded border-clay-deep accent-pine print:hidden"
                             aria-label={`Mark ${c.name} paid`}
                           />

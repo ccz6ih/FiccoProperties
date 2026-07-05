@@ -7,18 +7,29 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminPaymentsState = { ok: boolean; error?: string; notice?: string };
 
+type OccupancyForBilling = {
+  unit_id: string;
+  occupant_profile_id: string | null;
+  tenant_name: string | null;
+  tenant_email: string | null;
+  rent_cents: number | null;
+  units: { rent_cents: number | null } | null;
+};
+
 type ActiveLeaseRow = {
   id: string;
+  unit_id: string;
   resident_id: string;
   rent_cents: number;
 };
 
-type ExistingChargeRow = { lease_id: string };
+type ExistingChargeRow = { unit_id: string | null };
 
 type ChargeForPaymentRow = {
   id: string;
-  resident_id: string;
-  lease_id: string;
+  resident_id: string | null;
+  lease_id: string | null;
+  unit_id: string | null;
   amount_cents: number;
   status: string;
   description: string | null;
@@ -31,9 +42,11 @@ function periodToDueDate(period: string): string {
 }
 
 /**
- * Generate a rent charge for every active lease for the given period.
- * Idempotent: leases that already have a charge for `period` are skipped, so
- * re-running the action never double-bills.
+ * Generate a rent charge for every OCCUPIED unit for the given period — billing
+ * by occupancy, not just active leases, so record-only and month-to-month
+ * tenants are included. Uses the active-lease rent/resident when there is one,
+ * otherwise the tenancy's rent. Idempotent: units already charged for `period`
+ * are skipped, so re-running never double-bills.
  */
 export async function generateMonthlyCharges(
   _prev: AdminPaymentsState,
@@ -48,71 +61,96 @@ export async function generateMonthlyCharges(
   }
 
   const supabase = await createClient();
-  // `charges`/`ledger_entries` aren't in the generated types yet; use a loose
-  // handle (per CONVENTIONS.md). RLS + the staff check above still apply.
   const db = supabase as unknown as SupabaseClient;
-
-  const { data: leases } = await supabase
-    .from("leases")
-    .select("id, resident_id, rent_cents")
-    .eq("status", "active")
-    .returns<ActiveLeaseRow[]>();
-
-  if (!leases || leases.length === 0) {
-    return { ok: false, error: "No active leases to bill." };
-  }
-
-  // Skip leases that already have a charge for this period.
-  const { data: existing } = await db
-    .from("charges")
-    .select("lease_id")
-    .eq("period", period)
-    .returns<ExistingChargeRow[]>();
-
-  const billed = new Set((existing ?? []).map((c) => c.lease_id));
   const dueDate = periodToDueDate(period);
 
-  const rows = leases
-    .filter((l) => !billed.has(l.id) && l.rent_cents > 0)
-    .map((l) => ({
-      lease_id: l.id,
-      resident_id: l.resident_id,
-      amount_cents: l.rent_cents,
-      description: "Monthly rent",
-      due_date: dueDate,
-      status: "open",
-      period,
-    }));
+  // Occupied units (a tenancy with someone on it), their rent + fallback.
+  const { data: occ } = await db
+    .from("unit_occupancy")
+    .select("unit_id, occupant_profile_id, tenant_name, tenant_email, rent_cents, units(rent_cents)")
+    .returns<OccupancyForBilling[]>();
+
+  // Active leases give a resident/lease link + rent when present.
+  const { data: leases } = await db
+    .from("leases")
+    .select("id, unit_id, resident_id, rent_cents")
+    .eq("status", "active")
+    .returns<ActiveLeaseRow[]>();
+  const leaseByUnit = new Map<string, ActiveLeaseRow>();
+  for (const l of leases ?? []) if (l.unit_id) leaseByUnit.set(l.unit_id, l);
+
+  // Units already charged this period.
+  const { data: existing } = await db
+    .from("charges")
+    .select("unit_id")
+    .eq("period", period)
+    .returns<ExistingChargeRow[]>();
+  const billed = new Set((existing ?? []).map((c) => c.unit_id).filter(Boolean));
+
+  const rows = (occ ?? [])
+    .filter(
+      (o) =>
+        o.unit_id &&
+        (o.tenant_name || o.tenant_email || o.occupant_profile_id) &&
+        !billed.has(o.unit_id)
+    )
+    .map((o) => {
+      const lease = leaseByUnit.get(o.unit_id);
+      const rent = lease?.rent_cents || o.rent_cents || o.units?.rent_cents || 0;
+      return {
+        unit_id: o.unit_id,
+        lease_id: lease?.id ?? null,
+        resident_id: lease?.resident_id ?? o.occupant_profile_id ?? null,
+        amount_cents: rent,
+        description: "Monthly rent",
+        due_date: dueDate,
+        status: "open",
+        period,
+      };
+    })
+    .filter((r) => r.amount_cents > 0);
 
   if (rows.length === 0) {
-    return { ok: true, notice: `All active leases already billed for ${period}.` };
+    return {
+      ok: true,
+      notice: `Every occupied unit is already billed for ${period} (or none have a rent set).`,
+    };
   }
 
   const { data: inserted, error } = await db
     .from("charges")
     .insert(rows)
-    .select("id, lease_id, resident_id, amount_cents")
+    .select("id, unit_id, lease_id, resident_id, amount_cents")
     .returns<
-      { id: string; lease_id: string; resident_id: string; amount_cents: number }[]
+      {
+        id: string;
+        unit_id: string;
+        lease_id: string | null;
+        resident_id: string | null;
+        amount_cents: number;
+      }[]
     >();
 
   if (error || !inserted) {
     return { ok: false, error: "Could not generate charges. Please try again." };
   }
 
-  // Mirror each charge as a positive ledger entry (a debit the resident owes).
-  await db.from("ledger_entries").insert(
-    inserted.map((c) => ({
+  // Ledger entries only for account-linked charges (residents with a portal).
+  const ledgerRows = inserted
+    .filter((c) => c.resident_id)
+    .map((c) => ({
       resident_id: c.resident_id,
       lease_id: c.lease_id,
+      unit_id: c.unit_id,
       kind: "charge",
       amount_cents: c.amount_cents,
       ref_id: c.id,
       memo: `Rent — ${period}`,
-    }))
-  );
+    }));
+  if (ledgerRows.length > 0) await db.from("ledger_entries").insert(ledgerRows);
 
   revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
   return {
     ok: true,
     notice: `Generated ${inserted.length} charge${
@@ -151,7 +189,7 @@ export async function recordOfflinePayments(
 
   const { data: charges } = await db
     .from("charges")
-    .select("id, resident_id, lease_id, amount_cents, status, description, period")
+    .select("id, resident_id, lease_id, unit_id, amount_cents, status, description, period")
     .in("id", ids)
     .returns<ChargeForPaymentRow[]>();
 
@@ -166,6 +204,7 @@ export async function recordOfflinePayments(
     billable.map((c) => ({
       charge_id: c.id,
       resident_id: c.resident_id,
+      unit_id: c.unit_id,
       amount_cents: c.amount_cents,
       method_id: null,
       provider_ref: providerRef,
@@ -174,16 +213,19 @@ export async function recordOfflinePayments(
   );
   if (payErr) return { ok: false, error: "Could not record the payments." };
 
-  await db.from("ledger_entries").insert(
-    billable.map((c) => ({
+  // Ledger only for account-linked charges (residents with a portal balance).
+  const ledgerRows = billable
+    .filter((c) => c.resident_id)
+    .map((c) => ({
       resident_id: c.resident_id,
       lease_id: c.lease_id,
+      unit_id: c.unit_id,
       kind: "payment",
       amount_cents: -c.amount_cents,
       ref_id: c.id,
       memo: `Offline payment${refLabel ? ` — ${refLabel}` : ""} — ${c.description ?? c.period ?? "charge"}`,
-    }))
-  );
+    }));
+  if (ledgerRows.length > 0) await db.from("ledger_entries").insert(ledgerRows);
 
   await db
     .from("charges")
@@ -222,7 +264,7 @@ export async function recordOfflinePayment(
 
   const { data: charge } = await db
     .from("charges")
-    .select("id, resident_id, lease_id, amount_cents, status, description, period")
+    .select("id, resident_id, lease_id, unit_id, amount_cents, status, description, period")
     .eq("id", chargeId)
     .maybeSingle<ChargeForPaymentRow>();
 
@@ -233,6 +275,7 @@ export async function recordOfflinePayment(
   const { error: payErr } = await db.from("payments").insert({
     charge_id: charge.id,
     resident_id: charge.resident_id,
+    unit_id: charge.unit_id,
     amount_cents: charge.amount_cents,
     method_id: null,
     provider_ref: "offline",
@@ -240,17 +283,21 @@ export async function recordOfflinePayment(
   });
   if (payErr) return { ok: false, error: "Could not record the payment." };
 
-  await db.from("ledger_entries").insert({
-    resident_id: charge.resident_id,
-    lease_id: charge.lease_id,
-    kind: "payment",
-    amount_cents: -charge.amount_cents,
-    ref_id: charge.id,
-    memo: `Offline payment — ${charge.description ?? charge.period ?? "charge"}`,
-  });
+  if (charge.resident_id) {
+    await db.from("ledger_entries").insert({
+      resident_id: charge.resident_id,
+      lease_id: charge.lease_id,
+      unit_id: charge.unit_id,
+      kind: "payment",
+      amount_cents: -charge.amount_cents,
+      ref_id: charge.id,
+      memo: `Offline payment — ${charge.description ?? charge.period ?? "charge"}`,
+    });
+  }
 
   await db.from("charges").update({ status: "paid" }).eq("id", charge.id);
 
   revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
   return { ok: true, notice: "Offline payment recorded." };
 }

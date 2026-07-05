@@ -14,6 +14,10 @@ type ChargeRow = {
   status: string;
   period: string | null;
   profiles: { full_name: string | null; email: string | null } | null;
+  units: {
+    label: string;
+    unit_occupancy: { tenant_name: string | null; tenant_email: string | null }[] | null;
+  } | null;
 };
 
 function currentPeriod(): string {
@@ -29,7 +33,7 @@ export default async function AdminPayments() {
   const { data: charges } = await db
     .from("charges")
     .select(
-      "id, amount_cents, description, due_date, status, period, profiles:resident_id(full_name, email)"
+      "id, amount_cents, description, due_date, status, period, profiles:resident_id(full_name, email), units:unit_id(label, unit_occupancy(tenant_name, tenant_email))"
     )
     .order("due_date", { ascending: false })
     .returns<ChargeRow[]>();
@@ -41,16 +45,22 @@ export default async function AdminPayments() {
     .filter((c) => c.status === "paid")
     .reduce((s, c) => s + c.amount_cents, 0);
 
-  const rows: PaymentRow[] = all.map((c) => ({
-    id: c.id,
-    residentName: c.profiles?.full_name ?? null,
-    residentEmail: c.profiles?.email ?? null,
-    description: c.description,
-    period: c.period,
-    dueDate: c.due_date,
-    amountCents: c.amount_cents,
-    status: c.status,
-  }));
+  const rows: PaymentRow[] = all.map((c) => {
+    const occ = c.units?.unit_occupancy?.[0] ?? null;
+    return {
+      id: c.id,
+      residentName:
+        c.profiles?.full_name ??
+        occ?.tenant_name ??
+        (c.units?.label ? `${c.units.label}` : null),
+      residentEmail: c.profiles?.email ?? occ?.tenant_email ?? null,
+      description: c.description,
+      period: c.period,
+      dueDate: c.due_date,
+      amountCents: c.amount_cents,
+      status: c.status,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-6xl">

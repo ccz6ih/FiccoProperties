@@ -16,7 +16,11 @@ type PaymentLogRow = {
   charges: {
     description: string | null;
     period: string | null;
-    leases: { units: { label: string; properties: { name: string | null } | null } | null } | null;
+    units: {
+      label: string;
+      properties: { name: string | null } | null;
+      unit_occupancy: { tenant_name: string | null }[] | null;
+    } | null;
   } | null;
 };
 
@@ -47,7 +51,7 @@ export default async function PaymentsLog({
   const { data: payments } = await db
     .from("payments")
     .select(
-      "id, amount_cents, status, created_at, provider_ref, profiles:resident_id(full_name), charges:charge_id(description, period, leases(units(label, properties(name))))"
+      "id, amount_cents, status, created_at, provider_ref, profiles:resident_id(full_name), charges:charge_id(description, period, units:unit_id(label, properties(name), unit_occupancy(tenant_name)))"
     )
     .gte("created_at", from)
     .lt("created_at", toExclusive)
@@ -105,9 +109,14 @@ export default async function PaymentsLog({
               </thead>
               <tbody className="divide-y divide-clay">
                 {all.map((p) => {
-                  const home = p.charges?.leases?.units
-                    ? `${p.charges.leases.units.properties?.name ?? ""} · ${p.charges.leases.units.label}`
+                  const unit = p.charges?.units;
+                  const home = unit
+                    ? `${unit.properties?.name ?? ""} · ${unit.label}`
                     : "—";
+                  const name =
+                    p.profiles?.full_name ??
+                    unit?.unit_occupancy?.[0]?.tenant_name ??
+                    "—";
                   const ref =
                     p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : "—";
                   return (
@@ -115,9 +124,7 @@ export default async function PaymentsLog({
                       <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
                         {formatDate(p.created_at)}
                       </td>
-                      <td className="px-4 py-3 font-medium text-ink">
-                        {p.profiles?.full_name ?? "—"}
-                      </td>
+                      <td className="px-4 py-3 font-medium text-ink">{name}</td>
                       <td className="px-4 py-3 text-ink-soft">{home}</td>
                       <td className="px-4 py-3 text-ink-soft">
                         {p.charges?.description ?? "Rent"}

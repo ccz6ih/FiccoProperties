@@ -10,12 +10,14 @@ const initial: LateFeeState = { ok: false };
 export function LateFeeForm({
   residentId,
   leaseId,
+  unitId,
   overdueCents,
   suggestedCents,
   capCents,
 }: {
-  residentId: string;
+  residentId: string | null;
   leaseId: string | null;
+  unitId: string | null;
   overdueCents: number;
   suggestedCents: number;
   capCents: number;
@@ -27,8 +29,8 @@ export function LateFeeForm({
     return <span className="text-xs font-medium text-pine-dark">Late fee added ✓</span>;
   }
 
-  if (!leaseId) {
-    return <span className="text-xs text-ink-faint">No lease on file</span>;
+  if (!leaseId && !unitId) {
+    return <span className="text-xs text-ink-faint">—</span>;
   }
 
   if (!open) {
@@ -45,8 +47,9 @@ export function LateFeeForm({
 
   return (
     <form action={action} className="flex flex-col gap-1.5">
-      <input type="hidden" name="resident_id" value={residentId} />
-      <input type="hidden" name="lease_id" value={leaseId} />
+      {residentId && <input type="hidden" name="resident_id" value={residentId} />}
+      {leaseId && <input type="hidden" name="lease_id" value={leaseId} />}
+      {unitId && <input type="hidden" name="unit_id" value={unitId} />}
       <input type="hidden" name="overdue_cents" value={overdueCents} />
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-ink-faint">$</span>
