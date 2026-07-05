@@ -283,9 +283,9 @@ export async function createProratedCharge(form: FormData) {
 
   const { data: lease } = await supabase
     .from("leases")
-    .select("resident_id, rent_cents")
+    .select("resident_id, rent_cents, unit_id")
     .eq("id", id)
-    .maybeSingle();
+    .maybeSingle<{ resident_id: string; rent_cents: number; unit_id: string | null }>();
   if (!lease) return;
 
   const [y, m, d] = moveIn.split("-").map(Number);
@@ -295,11 +295,15 @@ export async function createProratedCharge(form: FormData) {
   const amount = Math.round((lease.rent_cents * daysRemaining) / daysInMonth);
   const period = `${y}-${String(m).padStart(2, "0")}`;
 
-  const { data: charge, error } = await supabase
+  // Loose handle: unit_id isn't in the generated charge/ledger types yet.
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: charge, error } = await db
     .from("charges")
     .insert({
       lease_id: id,
       resident_id: lease.resident_id,
+      unit_id: lease.unit_id,
       amount_cents: amount,
       description: `Prorated rent (${daysRemaining}/${daysInMonth} days)`,
       due_date: moveIn,
@@ -307,12 +311,13 @@ export async function createProratedCharge(form: FormData) {
       period,
     })
     .select("id")
-    .maybeSingle();
+    .maybeSingle<{ id: string }>();
   if (error || !charge) return;
 
-  await supabase.from("ledger_entries").insert({
+  await db.from("ledger_entries").insert({
     resident_id: lease.resident_id,
     lease_id: id,
+    unit_id: lease.unit_id,
     kind: "charge",
     amount_cents: amount,
     ref_id: charge.id,
