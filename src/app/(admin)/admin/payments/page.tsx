@@ -52,12 +52,39 @@ export default async function AdminPayments() {
     .filter((p): p is { id: string; name: string } => !!p.name)
     .map((p) => ({ id: p.id, name: p.name }));
 
-  const all = charges ?? [];
+  const all = (charges ?? []).filter((c) => c.status !== "void");
   const outstanding = all.filter((c) => c.status === "open" || c.status === "past_due");
   const outstandingCents = outstanding.reduce((s, c) => s + c.amount_cents, 0);
   const collectedCents = all
     .filter((c) => c.status === "paid")
     .reduce((s, c) => s + c.amount_cents, 0);
+
+  // Collection by community (all charges). Decomposes the headline numbers and
+  // fills out as more months are billed.
+  type Bucket = {
+    property: string;
+    billedCents: number;
+    collectedCents: number;
+    paidCount: number;
+    count: number;
+  };
+  const buckets = new Map<string, Bucket>();
+  for (const c of all) {
+    const name = c.units?.properties?.name ?? "Unassigned";
+    const b =
+      buckets.get(name) ??
+      { property: name, billedCents: 0, collectedCents: 0, paidCount: 0, count: 0 };
+    b.billedCents += c.amount_cents;
+    b.count += 1;
+    if (c.status === "paid") {
+      b.collectedCents += c.amount_cents;
+      b.paidCount += 1;
+    }
+    buckets.set(name, b);
+  }
+  const breakdown = [...buckets.values()].sort((a, b) =>
+    a.property.localeCompare(b.property)
+  );
 
   const rows: PaymentRow[] = all.map((c) => {
     const occ = c.units?.unit_occupancy?.[0] ?? null;
@@ -132,6 +159,101 @@ export default async function AdminPayments() {
           hint="All time"
         />
       </div>
+
+      {breakdown.length > 0 && (
+        <div className="mb-8 overflow-hidden rounded-2xl border border-clay bg-cream">
+          <div className="border-b border-clay bg-sand/50 px-5 py-3">
+            <h2 className="font-display text-base font-semibold text-ink">
+              Collection by community
+            </h2>
+            <p className="text-xs text-ink-faint">
+              Across all recorded charges — grows as you bill each month.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-clay text-left text-xs uppercase tracking-wide text-ink-faint">
+                  <th className="px-5 py-2.5 font-medium">Community</th>
+                  <th className="px-5 py-2.5 font-medium">Paid</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Billed</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Collected</th>
+                  <th className="px-5 py-2.5 text-right font-medium">Outstanding</th>
+                  <th className="px-5 py-2.5 font-medium">Collection rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-clay">
+                {breakdown.map((b) => {
+                  const outCents = b.billedCents - b.collectedCents;
+                  const pct =
+                    b.billedCents > 0
+                      ? Math.round((b.collectedCents / b.billedCents) * 100)
+                      : 0;
+                  return (
+                    <tr key={b.property} className="hover:bg-sand/30">
+                      <td className="px-5 py-3 font-medium text-ink">{b.property}</td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {b.paidCount}/{b.count}
+                      </td>
+                      <td className="px-5 py-3 text-right text-ink-soft">
+                        {formatCents(b.billedCents)}
+                      </td>
+                      <td className="px-5 py-3 text-right font-medium text-pine">
+                        {formatCents(b.collectedCents)}
+                      </td>
+                      <td
+                        className={`px-5 py-3 text-right font-medium ${
+                          outCents > 0 ? "text-terracotta-dark" : "text-ink-faint"
+                        }`}
+                      >
+                        {formatCents(outCents)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-24 overflow-hidden rounded-full bg-clay">
+                            <div
+                              className={`h-full rounded-full ${
+                                pct >= 100 ? "bg-pine" : pct >= 60 ? "bg-gold" : "bg-terracotta"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium text-ink-soft">{pct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-clay bg-sand/30 font-semibold text-ink">
+                  <td className="px-5 py-2.5">All communities</td>
+                  <td className="px-5 py-2.5 text-ink-soft">
+                    {all.filter((c) => c.status === "paid").length}/{all.length}
+                  </td>
+                  <td className="px-5 py-2.5 text-right">
+                    {formatCents(collectedCents + outstandingCents)}
+                  </td>
+                  <td className="px-5 py-2.5 text-right text-pine">
+                    {formatCents(collectedCents)}
+                  </td>
+                  <td className="px-5 py-2.5 text-right text-terracotta-dark">
+                    {formatCents(outstandingCents)}
+                  </td>
+                  <td className="px-5 py-2.5 text-xs text-ink-faint">
+                    {collectedCents + outstandingCents > 0
+                      ? Math.round(
+                          (collectedCents / (collectedCents + outstandingCents)) * 100
+                        )
+                      : 0}
+                    % overall
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="mb-8">
         <PaymentsGenerateForm defaultPeriod={currentPeriod()} properties={properties} />
