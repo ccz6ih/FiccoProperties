@@ -67,6 +67,26 @@ export default async function RentBoardPage({
   const chargeByUnit = new Map<string, ChargeRow>();
   for (const c of charges ?? []) if (c.unit_id) chargeByUnit.set(c.unit_id, c);
 
+  // Payment reference (check / money-order #) for this period's charges, so the
+  // board and its printout show how each paid unit paid.
+  const chargeIds = (charges ?? []).map((c) => c.id);
+  const refByCharge = new Map<string, string>();
+  if (chargeIds.length > 0) {
+    const { data: payments } = await db
+      .from("payments")
+      .select("charge_id, provider_ref, created_at")
+      .in("charge_id", chargeIds)
+      .eq("status", "succeeded")
+      .order("created_at", { ascending: false })
+      .returns<{ charge_id: string | null; provider_ref: string | null }[]>();
+    for (const p of payments ?? []) {
+      if (!p.charge_id || refByCharge.has(p.charge_id)) continue;
+      if (p.provider_ref && p.provider_ref !== "offline") {
+        refByCharge.set(p.charge_id, p.provider_ref);
+      }
+    }
+  }
+
   const byProp = new Map<string, BoardCharge[]>();
   for (const u of units ?? []) {
     const property = u.properties?.name ?? "Unassigned";
@@ -87,6 +107,7 @@ export default async function RentBoardPage({
       unit: u.label,
       amountCents: charge?.amount_cents ?? o?.rent_cents ?? 0,
       status,
+      paidRef: charge && status === "paid" ? refByCharge.get(charge.id) ?? null : null,
     });
     byProp.set(property, arr);
   }

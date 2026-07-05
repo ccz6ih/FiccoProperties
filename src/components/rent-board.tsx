@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { formatCents } from "@/lib/format";
@@ -17,6 +17,7 @@ export type BoardCharge = {
   unit: string;
   amountCents: number;
   status: "paid" | "open" | "overdue" | "unbilled" | "vacant";
+  paidRef?: string | null;
 };
 export type BoardGroup = {
   property: string;
@@ -46,6 +47,16 @@ export function RentBoard({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(recordOfflinePayments, initial);
+  // When set, only this property prints; null = print everything.
+  const [printOnly, setPrintOnly] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!printOnly) return;
+    const reset = () => setPrintOnly(null);
+    window.addEventListener("afterprint", reset, { once: true });
+    window.print();
+    return () => window.removeEventListener("afterprint", reset);
+  }, [printOnly]);
 
   const markable = groups.flatMap((g) => g.charges.filter(isMarkable));
   const selectedRows = markable.filter((c) => c.id && selected.has(c.id));
@@ -71,8 +82,12 @@ export function RentBoard({
         <input key={c.id} type="hidden" name="charge_ids" value={c.id!} />
       ))}
 
-      {/* Overall summary + legend + print */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-clay bg-cream p-5">
+      {/* Overall summary + legend + print (hidden in print when printing one property) */}
+      <div
+        className={`mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-clay bg-cream p-5 ${
+          printOnly ? "print:hidden" : ""
+        }`}
+      >
         <div>
           <div className="text-sm text-ink-soft">{periodLabel}</div>
           <div className="font-display text-2xl font-semibold text-ink">
@@ -91,7 +106,7 @@ export function RentBoard({
             <Legend dot="bg-clay" label="Vacant" />
           </div>
           <span className="print:hidden">
-            <PrintButton label="Print" />
+            <PrintButton label="Print all" />
           </span>
         </div>
       </div>
@@ -99,18 +114,44 @@ export function RentBoard({
       <div className="space-y-6">
         {groups.map((g) => {
           const pct = g.total > 0 ? Math.round((g.paid / g.total) * 100) : 0;
+          const expectedCents = g.collectedCents + g.outstandingCents;
           return (
-            <div key={g.property} className="break-inside-avoid overflow-hidden rounded-2xl border border-clay">
+            <div
+              key={g.property}
+              className={`break-inside-avoid overflow-hidden rounded-2xl border border-clay ${
+                printOnly && printOnly !== g.property ? "print:hidden" : ""
+              }`}
+            >
+              {/* Print-only header so a single-property printout is clearly labelled. */}
+              <div className="hidden px-4 pt-4 print:block">
+                <div className="font-display text-lg font-semibold text-ink">
+                  38th Ave Properties — {g.property}
+                </div>
+                <div className="text-sm text-ink-soft">Rent board · {periodLabel}</div>
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-clay bg-sand/50 px-4 py-3">
                 <div>
                   <div className="font-display text-base font-semibold text-ink">{g.property}</div>
-                  <div className="text-xs text-ink-faint">
-                    {g.paid}/{g.total} paid · {formatCents(g.collectedCents)} in ·{" "}
-                    {formatCents(g.outstandingCents)} out
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                    <span className="font-medium text-ink-soft">{g.paid}/{g.total} paid</span>
+                    <span className="text-pine">Collected {formatCents(g.collectedCents)}</span>
+                    <span className="text-terracotta-dark">
+                      Outstanding {formatCents(g.outstandingCents)}
+                    </span>
+                    <span className="text-ink-faint">Expected {formatCents(expectedCents)}</span>
                   </div>
                 </div>
-                <div className="h-2 w-32 overflow-hidden rounded-full bg-clay">
-                  <div className="h-full rounded-full bg-pine" style={{ width: `${pct}%` }} />
+                <div className="flex items-center gap-3">
+                  <div className="h-2 w-32 overflow-hidden rounded-full bg-clay print:hidden">
+                    <div className="h-full rounded-full bg-pine" style={{ width: `${pct}%` }} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPrintOnly(g.property)}
+                    className="whitespace-nowrap rounded-lg border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-sand print:hidden"
+                  >
+                    Print this
+                  </button>
                 </div>
               </div>
               <ul className="divide-y divide-clay">
@@ -134,6 +175,11 @@ export function RentBoard({
                         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
                         <span className="truncate text-sm font-medium text-ink">{c.name}</span>
                         <span className="shrink-0 text-xs text-ink-faint">{c.unit}</span>
+                        {c.paidRef && (
+                          <span className="shrink-0 rounded-full bg-pine/10 px-2 py-0.5 text-xs text-pine">
+                            {c.paidRef}
+                          </span>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span className={`text-xs font-medium ${meta.text}`}>{meta.label}</span>
