@@ -24,7 +24,11 @@ export type NoticeData = {
   tenantName?: string | null;
   homeLabel?: string | null; // e.g. "The Villa — Unit 7"
   fullAddress?: string | null;
-  amount?: string | number | null; // dollars
+  city?: string | null;
+  county?: string | null;
+  amount?: string | number | null; // dollars (past due)
+  monthlyRent?: string | number | null; // dollars
+  missedDates?: string | null; // e.g. "Jun 1, 2026, Jul 1, 2026"
   period?: string | null; // e.g. "July 2026"
   dueDate?: string | null; // display string
   cureBy?: string | null; // display string (e.g. 10 days out)
@@ -50,7 +54,11 @@ export function buildNotice(
   const tenant = data.tenantName?.trim() || "Resident";
   const home = data.homeLabel?.trim() || "your unit";
   const addr = data.fullAddress?.trim() || home;
+  const city = data.city?.trim() || "";
+  const county = data.county?.trim() || "";
   const amount = money(data.amount);
+  const rent = money(data.monthlyRent);
+  const missed = data.missedDates?.trim() || "";
   const period = data.period?.trim() || "the current period";
   const due = data.dueDate?.trim() || "the due date";
   const cure = data.cureBy?.trim() || "the date stated below";
@@ -75,24 +83,34 @@ Thank you,
 
     case "pay_or_quit":
       return {
-        title: "Notice to pay rent or vacate",
+        title: "Demand for Compliance — Notice to Pay Rent or Vacate (10-day)",
         body: `Date: ${today}
 
-To: ${tenant}, and all others in possession
-Premises: ${addr}
+CERTIFIED FUNDS ONLY. Personal checks will not be accepted.
 
-YOU ARE HEREBY NOTIFIED that rent in the amount of ${amount} for ${period} is past due and owing. You are in default under your lease.
+DEMAND FOR COMPLIANCE — RESIDENTIAL (C.R.S. § 13-40-104 and § 13-40-106)
 
-You are required, within TEN (10) DAYS after service of this notice, on or before ${cure}, to either:
-  (1) pay the full amount of rent due, or
-  (2) vacate and surrender possession of the premises.
+To: ${tenant}, and any other occupants
+Premises: ${addr}${city ? `, ${city}` : ""}, Colorado${county ? ` — ${county} County` : ""}
+The rent for the premises is ${rent} per month.
 
-If you neither pay nor vacate within ten (10) days, the Landlord may begin a Forcible Entry and Detainer (eviction) action under Colorado law (C.R.S. § 13-40-101 et seq.) to recover possession, rent, and costs.
+GROUNDS: You are in default for non-payment of rent. Past rent due: ${amount}${missed ? `, for payment(s) due on: ${missed}` : ` for ${period}`}.
 
-You may pay or contact the office at (720) 527-2596.
+TIME TO COMPLY: Within TEN (10) DAYS after this notice is served on you — on or before ${cure} — you must either:
+  (1) pay the full past-due amount stated above in certified funds, OR
+  (2) move out and return possession of the premises to the Landlord.
+
+If you do not pay or move out within ten (10) days, the Landlord may begin a court eviction case (Forcible Entry and Detainer, C.R.S. § 13-40-101 et seq.) to recover possession of the premises, the amounts owed, and court costs.
+
+YOUR RIGHTS (C.R.S. § 13-40-106):
+  • Mandatory mediation: If you receive Supplemental Security Income (SSI), Social Security Disability Insurance (SSDI), or Cash Assistance through the Colorado Works Program, you may be entitled to mandatory mediation at no cost before an eviction case is filed. Tell the Landlord in writing right away if you are enrolled in one of these programs.
+  • Repayment plan: If you missed a rent payment because you are the victim-survivor of unlawful sexual behavior, stalking, or domestic violence or abuse, you may be entitled to a repayment plan of up to nine (9) months. Provide the Landlord with written documentation.
+
+To pay or ask questions, contact the office at (720) 527-2596.
 
 38th Ave Properties, Landlord
-By: ____________________________`,
+By: ____________________________
+Date served: ____________   Method of service: ____________`,
       };
 
     case "lease_violation":

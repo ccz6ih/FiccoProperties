@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { LateFeeForm } from "@/components/late-fee-form";
+import { createDemandForUnit } from "@/app/(admin)/admin/delinquency/actions";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -186,12 +187,25 @@ export default async function AdminDelinquency() {
                         />
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <Link
-                          href="/admin/payments"
-                          className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
-                        >
-                          Record payment →
-                        </Link>
+                        <div className="flex items-center justify-end gap-3">
+                          {r.unitId && (
+                            <form action={createDemandForUnit}>
+                              <input type="hidden" name="unit_id" value={r.unitId} />
+                              <button
+                                type="submit"
+                                className="whitespace-nowrap text-xs font-medium text-terracotta-dark hover:underline"
+                              >
+                                Create demand →
+                              </button>
+                            </form>
+                          )}
+                          <Link
+                            href="/admin/payments"
+                            className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                          >
+                            Record payment →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );

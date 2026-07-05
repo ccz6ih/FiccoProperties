@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { sendNotification, esc } from "@/lib/email";
 
 const NOTICE_TYPES = [
   "late_rent",
@@ -91,6 +93,44 @@ export async function setNoticeServed(form: FormData) {
     .from("notices")
     .update({ served_at, served_method, status: "served" })
     .eq("id", id);
+
+  // Email a copy to the resident (or the tenancy email on the unit) if we have one.
+  try {
+    const admin = createAdminClient() as unknown as SupabaseClient;
+    const { data: n } = await admin
+      .from("notices")
+      .select("title, body, resident_id, unit_id")
+      .eq("id", id)
+      .maybeSingle<{ title: string; body: string; resident_id: string | null; unit_id: string | null }>();
+
+    let email: string | null = null;
+    if (n?.resident_id) {
+      const { data: p } = await admin
+        .from("profiles")
+        .select("email")
+        .eq("id", n.resident_id)
+        .maybeSingle<{ email: string | null }>();
+      email = p?.email ?? null;
+    }
+    if (!email && n?.unit_id) {
+      const { data: o } = await admin
+        .from("unit_occupancy")
+        .select("tenant_email")
+        .eq("unit_id", n.unit_id)
+        .maybeSingle<{ tenant_email: string | null }>();
+      email = o?.tenant_email ?? null;
+    }
+    if (email && n) {
+      await sendNotification({
+        to: email,
+        replyTo: "hello@38thaveproperties.com",
+        subject: n.title,
+        html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:18px;color:#2f5d50;margin-bottom:6px">38th Ave Properties</div><pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#2c2622;background:#faf7f1;border:1px solid #e6dcc8;border-radius:8px;padding:14px">${esc(n.body)}</pre><p style="font-size:12px;color:#9b9286;margin-top:12px">This notice is also available in your resident portal.</p></div>`,
+      });
+    }
+  } catch {
+    // emailing is best-effort; serving still succeeds
+  }
 
   revalidatePath("/admin/notices");
   revalidatePath(`/admin/notices/${id}`);
