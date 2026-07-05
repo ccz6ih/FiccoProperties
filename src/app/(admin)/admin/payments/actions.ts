@@ -3,9 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { formatCents } from "@/lib/format";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminPaymentsState = { ok: boolean; error?: string; notice?: string };
+
+/** Sum of succeeded payments already recorded against each of the given charges. */
+async function paidByCharge(
+  db: SupabaseClient,
+  chargeIds: string[]
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (chargeIds.length === 0) return map;
+  const { data } = await db
+    .from("payments")
+    .select("charge_id, amount_cents")
+    .in("charge_id", chargeIds)
+    .eq("status", "succeeded")
+    .returns<{ charge_id: string | null; amount_cents: number }[]>();
+  for (const p of data ?? []) {
+    if (!p.charge_id) continue;
+    map.set(p.charge_id, (map.get(p.charge_id) ?? 0) + p.amount_cents);
+  }
+  return map;
+}
 
 type OccupancyForBilling = {
   unit_id: string;
@@ -212,12 +233,21 @@ export async function recordOfflinePayments(
     return { ok: false, error: "Those charges are already settled." };
   }
 
+  // Pay the remaining balance (handles charges that were already part-paid).
+  const priorPaid = await paidByCharge(db, billable.map((c) => c.id));
+  const toSettle = billable
+    .map((c) => ({ c, remaining: c.amount_cents - (priorPaid.get(c.id) ?? 0) }))
+    .filter((x) => x.remaining > 0);
+  if (toSettle.length === 0) {
+    return { ok: false, error: "Those charges are already settled." };
+  }
+
   const { error: payErr } = await db.from("payments").insert(
-    billable.map((c) => ({
+    toSettle.map(({ c, remaining }) => ({
       charge_id: c.id,
       resident_id: c.resident_id,
       unit_id: c.unit_id,
-      amount_cents: c.amount_cents,
+      amount_cents: remaining,
       method_id: null,
       provider_ref: providerRef,
       status: "succeeded",
@@ -226,14 +256,14 @@ export async function recordOfflinePayments(
   if (payErr) return { ok: false, error: "Could not record the payments." };
 
   // Ledger only for account-linked charges (residents with a portal balance).
-  const ledgerRows = billable
-    .filter((c) => c.resident_id)
-    .map((c) => ({
+  const ledgerRows = toSettle
+    .filter(({ c }) => c.resident_id)
+    .map(({ c, remaining }) => ({
       resident_id: c.resident_id,
       lease_id: c.lease_id,
       unit_id: c.unit_id,
       kind: "payment",
-      amount_cents: -c.amount_cents,
+      amount_cents: -remaining,
       ref_id: c.id,
       memo: `Offline payment${refLabel ? ` — ${refLabel}` : ""} — ${c.description ?? c.period ?? "charge"}`,
     }));
@@ -312,4 +342,83 @@ export async function recordOfflinePayment(
   revalidatePath("/admin/payments");
   revalidatePath("/admin/rent-board");
   return { ok: true, notice: "Offline payment recorded." };
+}
+
+/**
+ * Record a payment of a SPECIFIC amount against one charge — for short/partial
+ * payments and overpayments. The charge is only marked paid once total recorded
+ * payments cover it; an overpayment leaves a credit on the resident's ledger.
+ */
+export async function recordManualPayment(
+  _prev: AdminPaymentsState,
+  form: FormData
+): Promise<AdminPaymentsState> {
+  const { profile } = await requireProfile("/admin/payments");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const chargeId = (form.get("charge_id") as string)?.trim();
+  const amountDollars = Number(form.get("amount_dollars"));
+  if (!chargeId) return { ok: false, error: "Missing charge." };
+  if (!Number.isFinite(amountDollars) || amountDollars <= 0) {
+    return { ok: false, error: "Enter a valid amount." };
+  }
+  const amountCents = Math.round(amountDollars * 100);
+
+  const method = (form.get("method") as string)?.trim() || null;
+  const reference = (form.get("reference") as string)?.trim() || null;
+  const refLabel = [method, reference].filter(Boolean).join(" ");
+  const providerRef = refLabel || "offline";
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: charge } = await db
+    .from("charges")
+    .select("id, resident_id, lease_id, unit_id, amount_cents, status, description, period")
+    .eq("id", chargeId)
+    .maybeSingle<ChargeForPaymentRow>();
+  if (!charge) return { ok: false, error: "Charge not found." };
+  if (charge.status === "void") return { ok: false, error: "Charge has been voided." };
+
+  const prior = (await paidByCharge(db, [charge.id])).get(charge.id) ?? 0;
+
+  const { error: payErr } = await db.from("payments").insert({
+    charge_id: charge.id,
+    resident_id: charge.resident_id,
+    unit_id: charge.unit_id,
+    amount_cents: amountCents,
+    method_id: null,
+    provider_ref: providerRef,
+    status: "succeeded",
+  });
+  if (payErr) return { ok: false, error: "Could not record the payment." };
+
+  if (charge.resident_id) {
+    await db.from("ledger_entries").insert({
+      resident_id: charge.resident_id,
+      lease_id: charge.lease_id,
+      unit_id: charge.unit_id,
+      kind: "payment",
+      amount_cents: -amountCents,
+      ref_id: charge.id,
+      memo: `Offline payment${refLabel ? ` — ${refLabel}` : ""} — ${charge.description ?? charge.period ?? "charge"}`,
+    });
+  }
+
+  const totalPaid = prior + amountCents;
+  if (totalPaid >= charge.amount_cents) {
+    await db.from("charges").update({ status: "paid" }).eq("id", charge.id);
+  }
+
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
+
+  const remaining = charge.amount_cents - totalPaid;
+  const notice =
+    remaining > 0
+      ? `Recorded ${formatCents(amountCents)} — ${formatCents(remaining)} still due.`
+      : remaining < 0
+        ? `Recorded ${formatCents(amountCents)} — paid in full with a ${formatCents(-remaining)} credit.`
+        : `Recorded ${formatCents(amountCents)} — paid in full.`;
+  return { ok: true, notice };
 }
