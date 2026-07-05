@@ -13,7 +13,7 @@ type OccupancyForBilling = {
   tenant_name: string | null;
   tenant_email: string | null;
   rent_cents: number | null;
-  units: { rent_cents: number | null } | null;
+  units: { rent_cents: number | null; property_id: string | null } | null;
 };
 
 type ActiveLeaseRow = {
@@ -60,15 +60,27 @@ export async function generateMonthlyCharges(
     return { ok: false, error: "Pick a valid month (YYYY-MM)." };
   }
 
+  // Optional: restrict billing to selected properties (e.g. just the townhomes).
+  const propertyIds = form
+    .getAll("property_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const propertyFilter = propertyIds.length > 0 ? new Set(propertyIds) : null;
+
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
   const dueDate = periodToDueDate(period);
 
   // Occupied units (a tenancy with someone on it), their rent + fallback.
-  const { data: occ } = await db
+  const { data: occAll } = await db
     .from("unit_occupancy")
-    .select("unit_id, occupant_profile_id, tenant_name, tenant_email, rent_cents, units(rent_cents)")
+    .select("unit_id, occupant_profile_id, tenant_name, tenant_email, rent_cents, units(rent_cents, property_id)")
     .returns<OccupancyForBilling[]>();
+  const occ = propertyFilter
+    ? (occAll ?? []).filter(
+        (o) => o.units?.property_id && propertyFilter.has(o.units.property_id)
+      )
+    : occAll;
 
   // Active leases give a resident/lease link + rent when present.
   const { data: leases } = await db

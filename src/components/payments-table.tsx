@@ -13,6 +13,7 @@ export type PaymentRow = {
   id: string;
   residentName: string | null;
   residentEmail: string | null;
+  property: string | null;
   description: string | null;
   period: string | null;
   dueDate: string | null;
@@ -30,7 +31,27 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, action, pending] = useActionState(recordOfflinePayments, initial);
 
-  const openRows = charges.filter((c) => isOpen(c.status));
+  // Property filter (single or multi-select); empty set = show all.
+  const propertyNames = [...new Set(charges.map((c) => c.property).filter(Boolean))] as string[];
+  propertyNames.sort();
+  const [activeProps, setActiveProps] = useState<Set<string>>(new Set());
+
+  function toggleProp(name: string) {
+    setSelected(new Set()); // clear row selection when the view changes
+    setActiveProps((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  const visible =
+    activeProps.size === 0
+      ? charges
+      : charges.filter((c) => c.property && activeProps.has(c.property));
+
+  const openRows = visible.filter((c) => isOpen(c.status));
 
   // Clear the selection once a batch is recorded (the paid rows fall away).
   useEffect(() => {
@@ -65,6 +86,47 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
         <input key={c.id} type="hidden" name="charge_ids" value={c.id} />
       ))}
 
+      {propertyNames.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+            Community
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(new Set());
+              setActiveProps(new Set());
+            }}
+            aria-pressed={activeProps.size === 0}
+            className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+              activeProps.size === 0
+                ? "border-pine bg-pine text-cream"
+                : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
+            }`}
+          >
+            All
+          </button>
+          {propertyNames.map((name) => {
+            const on = activeProps.has(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => toggleProp(name)}
+                aria-pressed={on}
+                className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+                  on
+                    ? "border-pine bg-pine text-cream"
+                    : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
+                }`}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-clay bg-cream">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -81,6 +143,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                   />
                 </th>
                 <th className="px-5 py-3 font-medium">Resident</th>
+                <th className="px-5 py-3 font-medium">Community</th>
                 <th className="px-5 py-3 font-medium">Charge</th>
                 <th className="px-5 py-3 font-medium">Period</th>
                 <th className="px-5 py-3 font-medium">Due</th>
@@ -89,7 +152,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-clay">
-              {charges.map((c) => {
+              {visible.map((c) => {
                 const open = isOpen(c.status);
                 const checked = selected.has(c.id);
                 return (
@@ -116,6 +179,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                         {c.residentEmail ?? ""}
                       </div>
                     </td>
+                    <td className="px-5 py-3 text-ink-soft">{c.property ?? "—"}</td>
                     <td className="px-5 py-3 text-ink-soft">
                       {c.description ?? "Rent"}
                     </td>
@@ -132,6 +196,13 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                   </tr>
                 );
               })}
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-6 text-center text-sm text-ink-faint">
+                    No charges for the selected community.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -16,9 +16,12 @@ type ChargeRow = {
   profiles: { full_name: string | null; email: string | null } | null;
   units: {
     label: string;
+    properties: { name: string | null } | null;
     unit_occupancy: { tenant_name: string | null; tenant_email: string | null }[] | null;
   } | null;
 };
+
+type PropertyRow = { id: string; name: string | null };
 
 function currentPeriod(): string {
   const now = new Date();
@@ -30,13 +33,24 @@ export default async function AdminPayments() {
   // New tables aren't in the generated types yet; read via a loose handle.
   const db = supabase as unknown as SupabaseClient;
 
-  const { data: charges } = await db
-    .from("charges")
-    .select(
-      "id, amount_cents, description, due_date, status, period, profiles:resident_id(full_name, email), units:unit_id(label, unit_occupancy(tenant_name, tenant_email))"
-    )
-    .order("due_date", { ascending: false })
-    .returns<ChargeRow[]>();
+  const [{ data: charges }, { data: propertyList }] = await Promise.all([
+    db
+      .from("charges")
+      .select(
+        "id, amount_cents, description, due_date, status, period, profiles:resident_id(full_name, email), units:unit_id(label, properties(name), unit_occupancy(tenant_name, tenant_email))"
+      )
+      .order("due_date", { ascending: false })
+      .returns<ChargeRow[]>(),
+    db
+      .from("properties")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .returns<PropertyRow[]>(),
+  ]);
+
+  const properties = (propertyList ?? [])
+    .filter((p): p is { id: string; name: string } => !!p.name)
+    .map((p) => ({ id: p.id, name: p.name }));
 
   const all = charges ?? [];
   const outstanding = all.filter((c) => c.status === "open" || c.status === "past_due");
@@ -54,6 +68,7 @@ export default async function AdminPayments() {
         occ?.tenant_name ??
         (c.units?.label ? `${c.units.label}` : null),
       residentEmail: c.profiles?.email ?? occ?.tenant_email ?? null,
+      property: c.units?.properties?.name ?? null,
       description: c.description,
       period: c.period,
       dueDate: c.due_date,
@@ -119,7 +134,7 @@ export default async function AdminPayments() {
       </div>
 
       <div className="mb-8">
-        <PaymentsGenerateForm defaultPeriod={currentPeriod()} />
+        <PaymentsGenerateForm defaultPeriod={currentPeriod()} properties={properties} />
       </div>
 
       {all.length > 0 ? (
