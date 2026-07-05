@@ -137,7 +137,7 @@ export async function payCharge(
     description: charge.description ?? `Rent — ${charge.period ?? ""}`.trim(),
   });
 
-  if (result.status !== "succeeded") {
+  if (result.status === "failed") {
     // Record the failed attempt for the history table; charge stays open.
     await db.from("payments").insert({
       charge_id: charge.id,
@@ -149,6 +149,25 @@ export async function payCharge(
     });
     revalidatePath("/portal/payments");
     return { ok: false, error: "The payment didn't go through. Please try again." };
+  }
+
+  if (result.status === "processing") {
+    // ACH bank debit accepted but still clearing. Record a pending payment and
+    // leave the charge open; the provider webhook settles it when it clears.
+    await db.from("payments").insert({
+      charge_id: charge.id,
+      resident_id: user.id,
+      amount_cents: amountCents,
+      method_id: methodId,
+      provider_ref: result.providerRef,
+      status: "processing",
+    });
+    revalidatePath("/portal/payments");
+    return {
+      ok: true,
+      notice:
+        "Payment started — your bank transfer is clearing (usually 1–3 business days). We'll mark it paid once it settles.",
+    };
   }
 
   // Success: settle atomically via a SECURITY DEFINER function. RLS makes the

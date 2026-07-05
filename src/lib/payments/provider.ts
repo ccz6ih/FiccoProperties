@@ -38,7 +38,13 @@ export type ChargeInput = {
 export type ChargeResult = {
   /** Opaque processor id stored as payments.provider_ref. */
   providerRef: string;
-  status: "succeeded" | "failed";
+  /**
+   * "succeeded" — money settled now (cards, mock).
+   * "processing" — accepted but clearing (ACH bank debits: 1–5 business days).
+   *                Settlement is finalised later by the provider webhook.
+   * "failed" — declined up front.
+   */
+  status: "succeeded" | "processing" | "failed";
 };
 
 export interface PaymentProvider {
@@ -76,9 +82,16 @@ export const mockProvider: PaymentProvider = {
  */
 export function getProvider(): PaymentProvider {
   switch (process.env.PAYMENTS_PROVIDER) {
-    // case "stripe": return stripeProvider;
-    // case "plaid":  return plaidProvider;
+    case "stripe":
+      // Lazy so the Stripe SDK is only pulled in when actually enabled.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return (require("./stripe") as typeof import("./stripe")).stripeProvider;
     default:
       return mockProvider;
   }
+}
+
+/** True when Stripe is the active provider (used by UI/flow to branch). */
+export function isStripeActive(): boolean {
+  return process.env.PAYMENTS_PROVIDER === "stripe";
 }

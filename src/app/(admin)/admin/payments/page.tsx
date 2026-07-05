@@ -169,6 +169,12 @@ export default async function AdminPayments() {
             >
               Owner report →
             </Link>
+            <Link
+              href="/admin/payment-setup"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Online payments →
+            </Link>
           </div>
         }
       />
