@@ -142,7 +142,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                     className="h-4 w-4 rounded border-clay-deep accent-pine"
                   />
                 </th>
-                <th className="px-5 py-3 font-medium">Resident</th>
+                <th className="px-5 py-3 font-medium">Unit</th>
                 <th className="px-5 py-3 font-medium">Community</th>
                 <th className="px-5 py-3 font-medium">Charge</th>
                 <th className="px-5 py-3 font-medium">Period</th>
@@ -158,8 +158,9 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                 const checked = selected.has(c.id);
                 const remaining = remainingOf(c);
                 const partial = c.paidCents > 0 && remaining > 0;
-                const namePrimary = c.residentName ?? c.unit ?? "—";
-                const nameSub = [c.residentName ? c.unit : null, c.residentEmail]
+                // Unit first — easiest to scan; name/email underneath.
+                const namePrimary = c.unit ?? c.residentName ?? "—";
+                const nameSub = [c.unit ? c.residentName : null, c.residentEmail]
                   .filter(Boolean)
                   .join(" · ");
                 return (

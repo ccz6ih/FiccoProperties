@@ -130,6 +130,14 @@ export default async function AdminPayments() {
     };
   });
 
+  // Group by community, then unit number, then newest period — easy to scan.
+  rows.sort(
+    (a, b) =>
+      (a.property ?? "").localeCompare(b.property ?? "") ||
+      (a.unit ?? "").localeCompare(b.unit ?? "", undefined, { numeric: true }) ||
+      (b.period ?? "").localeCompare(a.period ?? "")
+  );
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
