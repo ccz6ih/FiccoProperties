@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Button, Card } from "@/components/ui";
 import {
@@ -21,8 +22,13 @@ export function PaymentsGenerateForm({ defaultPeriod }: { defaultPeriod: string 
         Generate this month&apos;s rent
       </h2>
       <p className="mb-4 text-sm text-ink-soft">
-        Creates one open charge per active lease for the chosen month. Safe to
-        re-run — leases already billed for that month are skipped.
+        Creates one open charge per occupied unit for the chosen month. Safe to
+        re-run — units already billed for that month are skipped. Units without a
+        rent are skipped —{" "}
+        <Link href="/admin/rents" className="font-medium text-pine hover:text-pine-dark">
+          set rents first
+        </Link>
+        .
       </p>
       <form action={action} className="space-y-4">
         {state.error && (

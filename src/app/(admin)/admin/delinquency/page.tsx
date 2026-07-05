@@ -2,7 +2,10 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { LateFeeForm } from "@/components/late-fee-form";
-import { createDemandForUnit } from "@/app/(admin)/admin/delinquency/actions";
+import {
+  createDemandForUnit,
+  createDemandsForAllOverdue,
+} from "@/app/(admin)/admin/delinquency/actions";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -98,12 +101,24 @@ export default async function AdminDelinquency() {
         title="Delinquency"
         subtitle="Who's behind on rent, how far, and what's owed."
         action={
-          <Link
-            href="/owner-report"
-            className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
-          >
-            Owner report →
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {rows.length > 0 && (
+              <form action={createDemandsForAllOverdue}>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-terracotta px-3 py-2 text-sm font-medium text-cream hover:bg-terracotta-dark"
+                >
+                  Create demands for all overdue
+                </button>
+              </form>
+            )}
+            <Link
+              href="/owner-report"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Owner report →
+            </Link>
+          </div>
         }
       />
 

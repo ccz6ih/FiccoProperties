@@ -70,6 +70,12 @@ export default async function AdminPayments() {
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href="/admin/rents"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Set rents →
+            </Link>
+            <Link
               href="/admin/rent-board"
               className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
             >

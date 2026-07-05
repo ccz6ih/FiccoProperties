@@ -98,20 +98,16 @@ type OccInfo = {
 };
 
 /**
- * Auto-fill a 10-day Demand for Compliance (pay-or-quit) for a unit's overdue
- * rent, then open it as a draft notice to review, print, and serve. Works for
- * record-only tenants too (the notice is unit-based).
+ * Assemble a 10-day Demand for Compliance draft-notice row for one unit's
+ * overdue rent. Returns null when the unit has no past-due charges. Shared by
+ * the single- and bulk-demand actions so both produce identical notices.
  */
-export async function createDemandForUnit(form: FormData) {
-  const { profile } = await requireProfile("/admin/delinquency");
-  if (!isStaff(profile)) return;
-
-  const unitId = (form.get("unit_id") as string)?.trim();
-  if (!unitId) return;
-
-  const supabase = await createClient();
-  const db = supabase as unknown as SupabaseClient;
-  const now = new Date();
+async function buildDemandForUnit(
+  db: SupabaseClient,
+  unitId: string,
+  createdBy: string,
+  now: Date
+) {
   const todayIso = now.toISOString().slice(0, 10);
 
   const [{ data: unit }, { data: occ }, { data: charges }] = await Promise.all([
@@ -134,6 +130,8 @@ export async function createDemandForUnit(form: FormData) {
   ]);
 
   const overdue = (charges ?? []).filter((c) => c.due_date && c.due_date < todayIso);
+  if (overdue.length === 0) return null;
+
   const pastDueCents = overdue.reduce((s, c) => s + c.amount_cents, 0);
   const missedDates = overdue
     .map((c) => (c.due_date ? formatDate(c.due_date) : null))
@@ -161,19 +159,52 @@ export async function createDemandForUnit(form: FormData) {
     today: formatDate(todayIso),
   });
 
+  return {
+    resident_id: occ?.occupant_profile_id ?? null,
+    unit_id: unitId,
+    type: "pay_or_quit",
+    title,
+    body,
+    amount_cents: pastDueCents,
+    cure_by: cureIso,
+    status: "draft",
+    created_by: createdBy,
+  };
+}
+
+/** Units that already have an open (draft/served) pay-or-quit notice, so bulk
+ *  runs don't create duplicates for the same delinquency cycle. */
+async function unitsWithActiveDemand(db: SupabaseClient): Promise<Set<string>> {
+  const { data } = await db
+    .from("notices")
+    .select("unit_id")
+    .eq("type", "pay_or_quit")
+    .in("status", ["draft", "served"])
+    .returns<{ unit_id: string | null }[]>();
+  return new Set((data ?? []).map((n) => n.unit_id).filter(Boolean) as string[]);
+}
+
+/**
+ * Auto-fill a 10-day Demand for Compliance (pay-or-quit) for a unit's overdue
+ * rent, then open it as a draft notice to review, print, and serve. Works for
+ * record-only tenants too (the notice is unit-based).
+ */
+export async function createDemandForUnit(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!unitId) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const row = await buildDemandForUnit(db, unitId, profile!.id, new Date());
+  if (!row) return;
+
   const { data: notice, error } = await db
     .from("notices")
-    .insert({
-      resident_id: occ?.occupant_profile_id ?? null,
-      unit_id: unitId,
-      type: "pay_or_quit",
-      title,
-      body,
-      amount_cents: pastDueCents,
-      cure_by: cureIso,
-      status: "draft",
-      created_by: profile!.id,
-    })
+    .insert(row)
     .select("id")
     .maybeSingle<{ id: string }>();
 
@@ -181,4 +212,47 @@ export async function createDemandForUnit(form: FormData) {
 
   revalidatePath("/admin/notices");
   redirect(`/admin/notices/${notice.id}`);
+}
+
+/**
+ * Bulk: create a demand for every overdue unit that doesn't already have an
+ * open pay-or-quit notice. One click on the 8th instead of one per tenant.
+ */
+export async function createDemandsForAllOverdue() {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+
+  // Distinct units with a past-due charge.
+  const { data: charges } = await db
+    .from("charges")
+    .select("unit_id, due_date, status")
+    .in("status", ["open", "past_due"])
+    .returns<{ unit_id: string | null; due_date: string | null; status: string }[]>();
+
+  const overdueUnits = new Set(
+    (charges ?? [])
+      .filter((c) => c.unit_id && c.due_date && c.due_date < todayIso)
+      .map((c) => c.unit_id as string)
+  );
+
+  const alreadyDemanded = await unitsWithActiveDemand(db);
+  const targets = [...overdueUnits].filter((u) => !alreadyDemanded.has(u));
+
+  const built = await Promise.all(
+    targets.map((u) => buildDemandForUnit(db, u, profile!.id, now))
+  );
+  const rows = built.filter((r): r is NonNullable<typeof r> => r !== null);
+
+  if (rows.length > 0) {
+    await db.from("notices").insert(rows);
+  }
+
+  revalidatePath("/admin/notices");
+  revalidatePath("/admin/delinquency");
+  redirect(`/admin/notices?created=${rows.length}`);
 }
