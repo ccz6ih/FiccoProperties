@@ -292,8 +292,8 @@ export default async function OwnerReport({
 
               {/* Rent roll grouped by community */}
               {groups.map((g) => (
-                <div key={g.property} className="mb-6 break-inside-avoid">
-                  <div className="mb-1 flex items-baseline justify-between border-b-2 border-clay pb-1">
+                <div key={g.property} className="mb-6">
+                  <div className="mb-1 flex items-baseline justify-between border-b-2 border-clay pb-1 print:break-after-avoid">
                     <h3 className="font-display text-sm font-semibold text-ink">{g.property}</h3>
                     <span className="text-xs text-ink-faint">
                       {formatCents(g.collected)} of {formatCents(g.billed)} collected
@@ -312,7 +312,7 @@ export default async function OwnerReport({
                     </thead>
                     <tbody>
                       {g.lines.map((l, i) => (
-                        <tr key={i} className="border-b border-clay/60">
+                        <tr key={i} className="border-b border-clay/60 break-inside-avoid">
                           <td className="py-1.5 pr-3 font-medium text-ink">{l.unit}</td>
                           <td className="py-1.5 pr-3 text-ink-soft">{l.tenant}</td>
                           <td className="py-1.5 pr-3 text-ink-soft">{l.item}</td>
