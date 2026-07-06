@@ -55,9 +55,17 @@ export default async function AdminNotices({
         title="Notices"
         subtitle="Draft, print, and serve resident notices and postings."
         action={
-          <ButtonLink href="/admin/notices/new" variant="primary">
-            New notice
-          </ButtonLink>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/notices/terminate"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Terminate tenancy →
+            </Link>
+            <ButtonLink href="/admin/notices/new" variant="primary">
+              New notice
+            </ButtonLink>
+          </div>
         }
       />
 

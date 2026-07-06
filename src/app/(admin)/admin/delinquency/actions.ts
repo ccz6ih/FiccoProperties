@@ -214,6 +214,100 @@ export async function createDemandForUnit(form: FormData) {
   redirect(`/admin/notices/${notice.id}`);
 }
 
+const TERM_TYPE: Record<string, "terminate_substantial" | "terminate_repeat" | "terminate_nonrenewal"> = {
+  substantial: "terminate_substantial",
+  repeat: "terminate_repeat",
+  nonrenewal: "terminate_nonrenewal",
+};
+const TERM_DAYS: Record<string, number> = { substantial: 3, repeat: 10, nonrenewal: 21 };
+
+/**
+ * Create a Notice to Terminate Tenancy (JDF 99B) for a unit — substantial
+ * violation (3-day), repeat lease violation (10-day), or non-renewal. Opens as
+ * a draft to review, print, and serve. Move-out date defaults by ground but is
+ * set on the form; for a repeat violation the prior served demand date is
+ * pre-filled from the record when available.
+ */
+export async function createTerminationNotice(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  const ground = (form.get("ground") as string)?.trim();
+  if (!unitId || !TERM_TYPE[ground]) return;
+
+  const reason = (form.get("reason") as string)?.trim() || null;
+  const moveOutForm = (form.get("move_out_date") as string)?.trim() || null;
+  const priorDemandForm = (form.get("prior_demand_date") as string)?.trim() || null;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+
+  const [{ data: unit }, { data: occ }] = await Promise.all([
+    db.from("units").select("label, properties(name, address_line1, city, postal_code)").eq("id", unitId).maybeSingle<UnitInfo>(),
+    db.from("unit_occupancy").select("tenant_name, occupant_profile_id, rent_cents, profiles:occupant_profile_id(full_name)").eq("unit_id", unitId).maybeSingle<OccInfo>(),
+  ]);
+
+  let moveOutIso = moveOutForm;
+  if (!moveOutIso) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + (TERM_DAYS[ground] ?? 21));
+    moveOutIso = d.toISOString().slice(0, 10);
+  }
+
+  let priorDemandDate = priorDemandForm;
+  if (ground === "repeat" && !priorDemandDate) {
+    const { data: prior } = await db
+      .from("notices")
+      .select("served_at")
+      .eq("unit_id", unitId)
+      .eq("type", "lease_violation")
+      .not("served_at", "is", null)
+      .order("served_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ served_at: string | null }>();
+    priorDemandDate = prior?.served_at ?? null;
+  }
+
+  const p = unit?.properties ?? null;
+  const homeLabel = [p?.name, unit?.label].filter(Boolean).join(" — ");
+  const fullAddress = [p?.address_line1, unit?.label].filter(Boolean).join(", ") || homeLabel;
+
+  const { title, body } = buildNotice(TERM_TYPE[ground], {
+    tenantName: occ?.tenant_name ?? occ?.profiles?.full_name ?? "Resident",
+    homeLabel,
+    fullAddress,
+    city: p?.city,
+    county: "Jefferson",
+    reason,
+    moveOutDate: formatDate(moveOutIso),
+    priorDemandDate: priorDemandDate ? formatDate(priorDemandDate) : null,
+    today: formatDate(todayIso),
+  });
+
+  const { data: notice, error } = await db
+    .from("notices")
+    .insert({
+      resident_id: occ?.occupant_profile_id ?? null,
+      unit_id: unitId,
+      type: TERM_TYPE[ground],
+      title,
+      body,
+      cure_by: moveOutIso,
+      status: "draft",
+      created_by: profile!.id,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error || !notice) return;
+
+  revalidatePath("/admin/notices");
+  redirect(`/admin/notices/${notice.id}`);
+}
+
 /**
  * Bulk: create a demand for every overdue unit that doesn't already have an
  * open pay-or-quit notice. One click on the 8th instead of one per tenant.
