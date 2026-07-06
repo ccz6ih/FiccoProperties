@@ -32,6 +32,10 @@ export type OccupancyValues = {
   lease_signed_date: string | null;
   lease_end_date: string | null;
   move_in_date: string | null;
+  assistance_programs: string[] | null;
+  assistance_disclosed_at: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   notes: string | null;
 };
 
@@ -307,6 +311,66 @@ export function UnitEditForm({
               className={inputClass}
             />
           </label>
+        </div>
+
+        {/* Mediation eligibility (voluntary) + best contact */}
+        <div className="rounded-xl border border-clay bg-sand/30 p-4">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+            Mediation &amp; emergency contact
+          </div>
+          <p className="mb-3 text-xs text-ink-faint">
+            Voluntary. If the tenant discloses (in writing) that they receive one of these, mandatory
+            mediation may be required before an eviction can be filed — good to know up front.
+          </p>
+          <div className="mb-3 flex flex-wrap gap-4">
+            {[
+              { v: "ssi", l: "SSI" },
+              { v: "ssdi", l: "SSDI" },
+              { v: "colorado_works", l: "Colorado Works" },
+            ].map((o) => (
+              <label key={o.v} className="flex items-center gap-1.5 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  name="assistance_programs"
+                  value={o.v}
+                  defaultChecked={occupancy?.assistance_programs?.includes(o.v) ?? false}
+                  className="h-4 w-4 rounded border-clay-deep accent-pine"
+                />
+                {o.l}
+              </label>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-ink-soft">Disclosed on</span>
+              <input
+                name="assistance_disclosed_at"
+                type="date"
+                defaultValue={occupancy?.assistance_disclosed_at ?? ""}
+                className={inputClass}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-ink-soft">Emergency contact</span>
+              <input
+                name="emergency_contact_name"
+                type="text"
+                defaultValue={occupancy?.emergency_contact_name ?? ""}
+                className={inputClass}
+                placeholder="Name"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-ink-soft">Contact phone</span>
+              <input
+                name="emergency_contact_phone"
+                type="tel"
+                defaultValue={occupancy?.emergency_contact_phone ?? ""}
+                className={inputClass}
+                placeholder="(xxx) xxx-xxxx"
+              />
+            </label>
+          </div>
         </div>
 
         <label className="block space-y-1.5">

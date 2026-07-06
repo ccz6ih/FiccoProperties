@@ -114,7 +114,7 @@ export default async function UnitDetail({
     supabase
       .from("unit_occupancy")
       .select(
-        "occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, notes"
+        "occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, assistance_programs, assistance_disclosed_at, emergency_contact_name, emergency_contact_phone, notes"
       )
       .eq("unit_id", id)
       .maybeSingle<OccupancyValues>(),

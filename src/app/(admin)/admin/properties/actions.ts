@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
@@ -136,7 +137,14 @@ export async function saveUnit(form: FormData) {
     if (match) occupantId = match.id;
   }
 
-  await supabase.from("unit_occupancy").upsert(
+  // Voluntary assistance-program disclosure (mediation eligibility) + contact.
+  const programs = form
+    .getAll("assistance_programs")
+    .map((v) => String(v).trim())
+    .filter((v) => ["ssi", "ssdi", "colorado_works"].includes(v));
+
+  // Loose handle: new tenancy columns aren't in the generated types yet.
+  await (supabase as unknown as SupabaseClient).from("unit_occupancy").upsert(
     {
       unit_id: id,
       occupant_profile_id: occupantId,
@@ -148,6 +156,10 @@ export async function saveUnit(form: FormData) {
       lease_signed_date: str(form.get("lease_signed_date")),
       lease_end_date: str(form.get("lease_end_date")),
       move_in_date: str(form.get("move_in_date")),
+      assistance_programs: programs,
+      assistance_disclosed_at: str(form.get("assistance_disclosed_at")),
+      emergency_contact_name: str(form.get("emergency_contact_name")),
+      emergency_contact_phone: str(form.get("emergency_contact_phone")),
       notes: str(form.get("tenancy_notes")),
     },
     { onConflict: "unit_id" }

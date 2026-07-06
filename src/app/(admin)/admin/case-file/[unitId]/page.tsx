@@ -30,6 +30,16 @@ type OccRow = {
   occupant_profile_id: string | null;
   rent_cents: number | null;
   move_in_date: string | null;
+  assistance_programs: string[] | null;
+  assistance_disclosed_at: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+};
+
+const PROGRAM_LABEL: Record<string, string> = {
+  ssi: "SSI",
+  ssdi: "SSDI",
+  colorado_works: "Colorado Works",
 };
 type LeaseRow = {
   rent_cents: number | null;
@@ -91,7 +101,7 @@ export default async function CaseFile({
   const [{ data: unit }, { data: occ }, { data: lease }, { data: charges }, { data: notices }, { data: docRows }] =
     await Promise.all([
       db.from("units").select("id, label, status, properties(name, address_line1, city, state, postal_code)").eq("id", unitId).maybeSingle<UnitRow>(),
-      db.from("unit_occupancy").select("tenant_name, tenant_email, occupant_profile_id, rent_cents, move_in_date").eq("unit_id", unitId).maybeSingle<OccRow>(),
+      db.from("unit_occupancy").select("tenant_name, tenant_email, occupant_profile_id, rent_cents, move_in_date, assistance_programs, assistance_disclosed_at, emergency_contact_name, emergency_contact_phone").eq("unit_id", unitId).maybeSingle<OccRow>(),
       db.from("leases").select("rent_cents, deposit_cents, start_date, end_date, status, signed_at").eq("unit_id", unitId).eq("status", "active").maybeSingle<LeaseRow>(),
       db.from("charges").select("id, amount_cents, description, due_date, status, period").eq("unit_id", unitId).neq("status", "void").order("due_date", { ascending: true }).returns<ChargeRow[]>(),
       db.from("notices").select("type, title, status, served_at, served_method, cure_by, created_at").eq("unit_id", unitId).order("created_at", { ascending: true }).returns<NoticeRow[]>(),
@@ -190,6 +200,34 @@ export default async function CaseFile({
               value={lease ? "Written lease (active)" : occ?.tenant_name ? "Record-only / month-to-month" : "—"}
             />
           </div>
+
+          {/* Mediation eligibility + contact */}
+          {(() => {
+            const programs = (occ?.assistance_programs ?? []).filter((x) => x);
+            const contact = [occ?.emergency_contact_name, occ?.emergency_contact_phone].filter(Boolean).join(" · ");
+            if (programs.length === 0 && !contact) return null;
+            return (
+              <div className="mb-6 break-inside-avoid rounded-xl border border-clay bg-sand/40 px-5 py-4">
+                <h3 className="mb-2 font-display text-sm font-semibold text-ink">Mediation &amp; contact</h3>
+                {programs.length > 0 ? (
+                  <p className="mb-1 text-sm">
+                    <span className="font-semibold text-terracotta-dark">⚠ Mandatory mediation likely required before filing</span>{" "}
+                    <span className="text-ink-soft">
+                      — tenant discloses {programs.map((p) => PROGRAM_LABEL[p] ?? p).join(", ")}
+                      {occ?.assistance_disclosed_at ? ` (disclosed ${formatDate(occ.assistance_disclosed_at)})` : ""}. Schedule at www.ColoradoODR.org before filing (C.R.S. § 13-40-106(2)).
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mb-1 text-sm text-ink-soft">No assistance program disclosed.</p>
+                )}
+                {contact && (
+                  <p className="text-sm text-ink-soft">
+                    <span className="font-medium text-ink">Best / emergency contact:</span> {contact}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Amounts — maps to JDF 101 Complaint fields */}
           <h2 className="mb-2 font-display text-base font-semibold text-ink">Amounts owed (as of {reportDate})</h2>

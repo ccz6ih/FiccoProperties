@@ -47,6 +47,10 @@ type OccupancyRow = {
   lease_signed_date: string | null;
   lease_end_date: string | null;
   move_in_date: string | null;
+  assistance_programs: string[] | null;
+  assistance_disclosed_at: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
   notes: string | null;
   profiles: { id: string; full_name: string | null; email: string | null } | null;
 };
@@ -97,7 +101,7 @@ export default async function PropertyDetail({
       supabase
         .from("unit_occupancy")
         .select(
-          "unit_id, occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, notes, profiles(id, full_name, email)"
+          "unit_id, occupant_profile_id, tenant_name, tenant_email, tenant_phone, rent_cents, lease_start_date, lease_signed_date, lease_end_date, move_in_date, assistance_programs, assistance_disclosed_at, emergency_contact_name, emergency_contact_phone, notes, profiles(id, full_name, email)"
         )
         .returns<OccupancyRow[]>(),
       supabase
@@ -366,6 +370,10 @@ export default async function PropertyDetail({
                                   lease_signed_date: occ.lease_signed_date,
                                   lease_end_date: occ.lease_end_date,
                                   move_in_date: occ.move_in_date,
+                                  assistance_programs: occ.assistance_programs,
+                                  assistance_disclosed_at: occ.assistance_disclosed_at,
+                                  emergency_contact_name: occ.emergency_contact_name,
+                                  emergency_contact_phone: occ.emergency_contact_phone,
                                   notes: occ.notes,
                                 } satisfies OccupancyValues)
                               : null
