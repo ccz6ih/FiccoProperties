@@ -65,9 +65,10 @@ export async function discloseAssistance(
   };
 }
 
-/** Resident uploads a move-in condition photo (private bucket, via service role). */
-export async function uploadMoveInPhoto(
-  _prev: CheckInState,
+/** Shared: resident uploads a condition photo (private bucket, service role). */
+async function uploadPhoto(
+  kind: "move_in" | "move_out",
+  redirectPath: string,
   form: FormData
 ): Promise<CheckInState> {
   const supabase = await createClient();
@@ -84,46 +85,75 @@ export async function uploadMoveInPhoto(
 
   const admin = createAdminClient();
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${unitId}/movein/${crypto.randomUUID()}.${ext}`;
+  const path = `${unitId}/${kind}/${crypto.randomUUID()}.${ext}`;
   const { error: upErr } = await admin.storage
     .from(CONDITION_BUCKET)
     .upload(path, file, { contentType: file.type, upsert: false });
   if (upErr) return { ok: false, error: "Upload failed. Please try again." };
 
-  const db = admin as unknown as SupabaseClient;
-  await db.from("unit_photos").insert({
+  await (admin as unknown as SupabaseClient).from("unit_photos").insert({
     unit_id: unitId,
-    kind: "move_in",
+    kind,
     path,
     caption,
     created_by: user.id,
   });
 
-  revalidatePath("/portal/check-in");
+  revalidatePath(redirectPath);
   return { ok: true, notice: "Photo added." };
 }
 
-/** Resident deletes one of their own move-in photos. */
-export async function deleteMoveInPhoto(form: FormData): Promise<void> {
+export async function uploadMoveInPhoto(_prev: CheckInState, form: FormData) {
+  return uploadPhoto("move_in", "/portal/check-in", form);
+}
+export async function uploadMoveOutPhoto(_prev: CheckInState, form: FormData) {
+  return uploadPhoto("move_out", "/portal/move-out", form);
+}
+
+/** Resident deletes one of their own move-in / move-out photos. */
+export async function deleteOwnPhoto(form: FormData): Promise<void> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
   const id = (form.get("id") as string)?.trim();
+  const back = (form.get("back") as string)?.trim() || "/portal/check-in";
   if (!id) return;
 
   const admin = createAdminClient();
   const db = admin as unknown as SupabaseClient;
-  // Only their own upload, and only move-in photos.
   const { data: photo } = await db
     .from("unit_photos")
     .select("path, created_by, kind")
     .eq("id", id)
     .maybeSingle<{ path: string; created_by: string | null; kind: string }>();
-  if (!photo || photo.created_by !== user.id || photo.kind !== "move_in") return;
+  if (!photo || photo.created_by !== user.id || !["move_in", "move_out"].includes(photo.kind)) return;
 
   await admin.storage.from(CONDITION_BUCKET).remove([photo.path]);
   await db.from("unit_photos").delete().eq("id", id);
 
-  revalidatePath("/portal/check-in");
+  revalidatePath(back);
+}
+
+/** Resident saves their forwarding address + planned move-out date. */
+export async function saveForwarding(
+  _prev: CheckInState,
+  form: FormData
+): Promise<CheckInState> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Your session expired. Please sign in again." };
+
+  const forwarding = (form.get("forwarding_address") as string)?.trim() || null;
+  const moveOut = (form.get("move_out_date") as string)?.trim() || null;
+
+  const admin = createAdminClient() as unknown as SupabaseClient;
+  const { error } = await admin
+    .from("unit_occupancy")
+    .update({ forwarding_address: forwarding, move_out_date: moveOut })
+    .eq("occupant_profile_id", user.id);
+
+  if (error) return { ok: false, error: "Could not save. Please try again." };
+  revalidatePath("/portal/move-out");
+  return { ok: true, notice: "Saved. Thank you." };
 }

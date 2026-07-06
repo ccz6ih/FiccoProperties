@@ -172,7 +172,15 @@ export default async function CaseFile({
           <Link href="/admin/delinquency" className="text-sm font-medium text-pine hover:text-pine-dark">
             ← Back to delinquency
           </Link>
-          <PrintButton label="Print / Save as PDF" />
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/admin/move-out/${unitId}`}
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Move-out &amp; deposit →
+            </Link>
+            <PrintButton label="Print / Save as PDF" />
+          </div>
         </div>
 
         <div className="rounded-2xl border border-clay bg-white p-8 print:rounded-none print:border-0 print:p-0">
