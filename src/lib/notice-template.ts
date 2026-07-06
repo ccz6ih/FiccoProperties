@@ -8,6 +8,7 @@
 export type NoticeType =
   | "late_rent"
   | "pay_or_quit"
+  | "no_fault_late"
   | "lease_violation"
   | "entry"
   | "general";
@@ -15,6 +16,7 @@ export type NoticeType =
 export const NOTICE_LABELS: Record<NoticeType, string> = {
   late_rent: "Late rent reminder",
   pay_or_quit: "Notice to pay rent or vacate (10-day)",
+  no_fault_late: "No-fault eviction — repeated late payment (90-day)",
   lease_violation: "Notice of lease violation",
   entry: "Notice of intent to enter",
   general: "General notice",
@@ -32,6 +34,9 @@ export type NoticeData = {
   period?: string | null; // e.g. "July 2026"
   dueDate?: string | null; // display string
   cureBy?: string | null; // display string (e.g. 10 days out)
+  moveOutDate?: string | null; // display string (90 days out) for no-fault
+  demandCount?: number | null; // # of served demands on record
+  demandDates?: string | null; // e.g. "May 9, 2026; Jun 9, 2026"
   reason?: string | null; // violation description / entry reason
   entryDate?: string | null;
   entryTime?: string | null;
@@ -62,6 +67,9 @@ export function buildNotice(
   const period = data.period?.trim() || "the current period";
   const due = data.dueDate?.trim() || "the due date";
   const cure = data.cureBy?.trim() || "the date stated below";
+  const moveOut = data.moveOutDate?.trim() || "the date stated below";
+  const demandCount = data.demandCount ?? 0;
+  const demandDates = data.demandDates?.trim() || "";
   const today = data.today?.trim() || "____________";
 
   switch (type) {
@@ -110,6 +118,36 @@ To pay or ask questions, contact the office at (720) 527-2596.
 
 38th Ave Properties, Landlord
 By: ____________________________
+Date served: ____________   Method of service: ____________`,
+      };
+
+    case "no_fault_late":
+      return {
+        title: "Notice of No-Fault Eviction — Termination for Repeated Late Payment (90-day)",
+        body: `Date: ${today}
+
+NOTICE OF NO-FAULT EVICTION — RESIDENTIAL (C.R.S. § 38-12-1303(3)(f))
+
+To: ${tenant}, and any other occupants
+Premises: ${addr}${city ? `, ${city}` : ""}, Colorado${county ? ` — ${county} County` : ""}
+
+TERMINATION OF TENANCY: The Landlord is ending your tenancy and will begin the eviction process. This is NOT a demand to pay rent — no payment will cure or stop this notice.
+
+MOVE-OUT DATE: You must move out and return possession of the premises on or before ${moveOut} (at least ninety (90) days after this notice is served on you). If you do not move out by that date, the Landlord may file a court eviction case (C.R.S. § 13-40-101 et seq.).
+
+CAUSE — HISTORY OF LATE PAYMENTS (C.R.S. § 38-12-1303(3)(f)):
+Your tenancy is being terminated because you have been late with more than two (2) rent payments. Each of those payments was made more than ten (10) days after it was due, and for each the Landlord served you a written Demand for Compliance before this notice.
+${demandCount ? `Demands for Compliance served: ${demandCount}${demandDates ? ` (on ${demandDates})` : ""}.` : "Demands for Compliance were served for each late payment; copies are on file."}
+
+YOUR RIGHTS (C.R.S. § 13-40-106(2)):
+If you receive Supplemental Security Income (SSI), Social Security Disability Insurance (SSDI), or Cash Assistance through the Colorado Works Program, you may be entitled to mandatory mediation at no cost before the Landlord can file an eviction case. Notify the Landlord in writing right away if you are enrolled in one of these programs. Mediation can be scheduled at www.ColoradoODR.org.
+
+This notice is served under C.R.S. § 38-12-1303 and § 13-40-108. Personal service was attempted; if personal service could not be completed after two attempts, this notice was posted on the premises.
+
+To ask questions, contact the office at (720) 527-2596.
+
+38th Ave Properties, Landlord
+By: ____________________________  (Landlord / Agent / Attorney)
 Date served: ____________   Method of service: ____________`,
       };
 

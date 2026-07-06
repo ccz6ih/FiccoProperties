@@ -256,3 +256,90 @@ export async function createDemandsForAllOverdue() {
   revalidatePath("/admin/delinquency");
   redirect(`/admin/notices?created=${rows.length}`);
 }
+
+/**
+ * Prepare a 90-day Notice of No-Fault Eviction for repeated late payment
+ * (C.R.S. § 38-12-1303(3)(f)) for a unit, pre-filled from the served
+ * Demands for Compliance already on record. Opens as a draft to review — staff
+ * must confirm eligibility (1+ year tenancy, each payment 10+ days late with a
+ * served demand) before serving.
+ */
+export async function createNoFaultNotice(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!unitId) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+
+  const [{ data: unit }, { data: occ }, { data: demands }] = await Promise.all([
+    db
+      .from("units")
+      .select("label, properties(name, address_line1, city, postal_code)")
+      .eq("id", unitId)
+      .maybeSingle<UnitInfo>(),
+    db
+      .from("unit_occupancy")
+      .select("tenant_name, occupant_profile_id, rent_cents, profiles:occupant_profile_id(full_name)")
+      .eq("unit_id", unitId)
+      .maybeSingle<OccInfo>(),
+    db
+      .from("notices")
+      .select("served_at")
+      .eq("unit_id", unitId)
+      .eq("type", "pay_or_quit")
+      .not("served_at", "is", null)
+      .order("served_at", { ascending: true })
+      .returns<{ served_at: string | null }[]>(),
+  ]);
+
+  const served = (demands ?? []).filter((d) => d.served_at);
+  const demandDates = served
+    .map((d) => (d.served_at ? formatDate(d.served_at) : null))
+    .filter(Boolean)
+    .join("; ");
+
+  const p = unit?.properties ?? null;
+  const homeLabel = [p?.name, unit?.label].filter(Boolean).join(" — ");
+  const fullAddress = [p?.address_line1, unit?.label].filter(Boolean).join(", ") || homeLabel;
+
+  const moveOut = new Date(now);
+  moveOut.setDate(moveOut.getDate() + 90);
+  const moveOutIso = moveOut.toISOString().slice(0, 10);
+
+  const { title, body } = buildNotice("no_fault_late", {
+    tenantName: occ?.tenant_name ?? occ?.profiles?.full_name ?? "Resident",
+    homeLabel,
+    fullAddress,
+    city: p?.city,
+    county: "Jefferson",
+    demandCount: served.length,
+    demandDates,
+    moveOutDate: formatDate(moveOutIso),
+    today: formatDate(todayIso),
+  });
+
+  const { data: notice, error } = await db
+    .from("notices")
+    .insert({
+      resident_id: occ?.occupant_profile_id ?? null,
+      unit_id: unitId,
+      type: "no_fault_late",
+      title,
+      body,
+      cure_by: moveOutIso,
+      status: "draft",
+      created_by: profile!.id,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error || !notice) return;
+
+  revalidatePath("/admin/notices");
+  redirect(`/admin/notices/${notice.id}`);
+}

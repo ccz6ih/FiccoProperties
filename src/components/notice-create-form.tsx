@@ -37,6 +37,7 @@ const FIELDS: Record<
 > = {
   late_rent: { amount: true, period: true, dueDate: true },
   pay_or_quit: { amount: true, period: true, cureBy: true },
+  no_fault_late: {},
   lease_violation: { reason: true, cureBy: true },
   entry: { entry: true, reason: true },
   general: { custom: true },

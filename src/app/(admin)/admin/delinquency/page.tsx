@@ -5,6 +5,7 @@ import { LateFeeForm } from "@/components/late-fee-form";
 import {
   createDemandForUnit,
   createDemandsForAllOverdue,
+  createNoFaultNotice,
 } from "@/app/(admin)/admin/delinquency/actions";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { formatCents, formatDate } from "@/lib/format";
@@ -57,6 +58,51 @@ export default async function AdminDelinquency() {
     )
     .in("status", ["open", "past_due"])
     .returns<DChargeRow[]>();
+
+  // Served Demands for Compliance (JDF 99A) — the basis for a no-fault eviction
+  // on repeated-late-payment grounds. Group by unit to spot repeat offenders.
+  const { data: servedDemands } = await supabase
+    .from("notices")
+    .select("unit_id, served_at, units:unit_id(label, properties(name), unit_occupancy(tenant_name))")
+    .eq("type", "pay_or_quit")
+    .not("served_at", "is", null)
+    .not("unit_id", "is", null)
+    .returns<
+      {
+        unit_id: string | null;
+        served_at: string | null;
+        units: {
+          label: string | null;
+          properties: { name: string | null } | null;
+          unit_occupancy: { tenant_name: string | null }[] | null;
+        } | null;
+      }[]
+    >();
+
+  type Repeat = { unitId: string; name: string; unit: string; property: string; count: number; last: string };
+  const repeatMap = new Map<string, Repeat>();
+  for (const d of servedDemands ?? []) {
+    if (!d.unit_id) continue;
+    const cur = repeatMap.get(d.unit_id);
+    const last = d.served_at ?? "";
+    if (cur) {
+      cur.count += 1;
+      if (last > cur.last) cur.last = last;
+    } else {
+      repeatMap.set(d.unit_id, {
+        unitId: d.unit_id,
+        name: d.units?.unit_occupancy?.[0]?.tenant_name ?? d.units?.label ?? "—",
+        unit: d.units?.label ?? "—",
+        property: d.units?.properties?.name ?? "—",
+        count: 1,
+        last,
+      });
+    }
+  }
+  // "More than two" late payments (C.R.S. § 38-12-1303(3)(f)) → 3+ served demands.
+  const repeatOffenders = [...repeatMap.values()]
+    .filter((r) => r.count >= 2)
+    .sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
 
   // Overdue = an open charge whose due date has passed.
   const overdue = (charges ?? []).filter(
@@ -236,10 +282,79 @@ export default async function AdminDelinquency() {
         />
       )}
 
+      {repeatOffenders.length > 0 && (
+        <Card className="mt-8 overflow-hidden">
+          <div className="border-b border-clay bg-sand/50 px-5 py-3">
+            <h2 className="font-display text-base font-semibold text-ink">
+              Repeat late payers
+            </h2>
+            <p className="text-xs text-ink-faint">
+              Units by number of <span className="font-medium">served</span> Demands for
+              Compliance. A no-fault eviction for repeated late payment (C.R.S. §
+              38-12-1303(3)(f)) generally needs more than two late payments, each 10+ days
+              late with a served demand.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-clay text-left text-xs uppercase tracking-wide text-ink-faint">
+                  <th className="px-5 py-2.5 font-medium">Tenant</th>
+                  <th className="px-5 py-2.5 font-medium">Home</th>
+                  <th className="px-5 py-2.5 font-medium">Served demands</th>
+                  <th className="px-5 py-2.5 font-medium">Latest</th>
+                  <th className="px-5 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-clay">
+                {repeatOffenders.map((r) => {
+                  const qualifies = r.count >= 3;
+                  return (
+                    <tr key={r.unitId} className="hover:bg-sand/30">
+                      <td className="px-5 py-3 font-medium text-ink">{r.name}</td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {r.property} · {r.unit}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            qualifies
+                              ? "bg-terracotta/15 text-terracotta-dark"
+                              : "bg-gold/15 text-gold"
+                          }`}
+                        >
+                          {r.count} {qualifies ? "· may qualify" : "· watch"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-ink-soft">
+                        {r.last ? formatDate(r.last) : "—"}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <form action={createNoFaultNotice}>
+                          <input type="hidden" name="unit_id" value={r.unitId} />
+                          <button
+                            type="submit"
+                            className="whitespace-nowrap text-xs font-medium text-terracotta-dark hover:underline"
+                          >
+                            Prepare no-fault notice →
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       <p className="mt-6 text-xs text-ink-faint">
         Colorado: a late fee can&apos;t exceed the greater of $50 or 5% of overdue
-        rent, and only after a 7-day grace period. Verify current law — this is a
-        workflow aid, not legal advice.
+        rent, and only after a 7-day grace period. A no-fault eviction is a 90-day
+        termination and has strict eligibility (1+ year tenancy, each late payment
+        10+ days late with a served demand, plus exemptions). Verify current law and
+        consult your attorney — this is a workflow aid, not legal advice.
       </p>
     </div>
   );
