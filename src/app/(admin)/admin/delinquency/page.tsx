@@ -260,6 +260,14 @@ export default async function AdminDelinquency() {
                               </button>
                             </form>
                           )}
+                          {r.unitId && (
+                            <Link
+                              href={`/admin/case-file/${r.unitId}`}
+                              className="whitespace-nowrap text-xs font-medium text-ink-soft hover:text-ink"
+                            >
+                              Case file →
+                            </Link>
+                          )}
                           <Link
                             href="/admin/payments"
                             className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
@@ -329,16 +337,24 @@ export default async function AdminDelinquency() {
                       <td className="px-5 py-3 text-ink-soft">
                         {r.last ? formatDate(r.last) : "—"}
                       </td>
-                      <td className="px-5 py-3 text-right">
-                        <form action={createNoFaultNotice}>
-                          <input type="hidden" name="unit_id" value={r.unitId} />
-                          <button
-                            type="submit"
-                            className="whitespace-nowrap text-xs font-medium text-terracotta-dark hover:underline"
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/admin/case-file/${r.unitId}`}
+                            className="whitespace-nowrap text-xs font-medium text-ink-soft hover:text-ink"
                           >
-                            Prepare no-fault notice →
-                          </button>
-                        </form>
+                            Case file →
+                          </Link>
+                          <form action={createNoFaultNotice}>
+                            <input type="hidden" name="unit_id" value={r.unitId} />
+                            <button
+                              type="submit"
+                              className="whitespace-nowrap text-xs font-medium text-terracotta-dark hover:underline"
+                            >
+                              Prepare no-fault notice →
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   );
