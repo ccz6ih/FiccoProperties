@@ -2,10 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getProvider } from "@/lib/payments/provider";
+import { getProvider, isStripeActive } from "@/lib/payments/provider";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type PaymentsState = { ok: boolean; error?: string; notice?: string };
+
+const OFFLINE_MSG =
+  "Online payments aren't available yet. Please pay by check or money order at the office.";
 
 type ChargeRow = {
   id: string;
@@ -29,6 +32,8 @@ export async function addPaymentMethod(
   _prev: PaymentsState,
   form: FormData
 ): Promise<PaymentsState> {
+  if (!isStripeActive()) return { ok: false, error: OFFLINE_MSG };
+
   const kind = (form.get("kind") as string) === "card" ? "card" : "ach";
   const last4 = (form.get("last4") as string)?.trim();
   const nickname = (form.get("nickname") as string)?.trim();
@@ -88,6 +93,8 @@ export async function payCharge(
   _prev: PaymentsState,
   form: FormData
 ): Promise<PaymentsState> {
+  if (!isStripeActive()) return { ok: false, error: OFFLINE_MSG };
+
   const chargeId = (form.get("charge_id") as string)?.trim();
   const methodId = (form.get("method_id") as string)?.trim() || null;
   if (!chargeId) return { ok: false, error: "Missing charge." };

@@ -5,6 +5,7 @@ import { PaymentsAddMethod } from "@/components/payments-add-method";
 import { PaymentsPayButton } from "@/components/payments-pay-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
+import { isStripeActive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -105,11 +106,19 @@ export default async function PortalPayments() {
   const planPaid = planItems.filter((i) => i.status === "paid").length;
   const nextDue = planItems.find((i) => i.status !== "paid");
 
+  // Online payments are OFF until a real processor is switched on — don't show
+  // the pay/bank UI (the mock would otherwise mark charges paid without money).
+  const payEnabled = isStripeActive();
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Payments"
-        subtitle="Pay rent, manage your bank accounts, and review your history."
+        subtitle={
+          payEnabled
+            ? "Pay rent, manage your bank accounts, and review your history."
+            : "Review your charges, balance, and payment history."
+        }
         action={
           <Link
             href="/statement"
@@ -133,11 +142,15 @@ export default async function PortalPayments() {
           tone="gold"
           hint={openCharges.length === 0 ? "Nothing outstanding" : "Awaiting payment"}
         />
-        <StatCard
-          label="Bank accounts"
-          value={methodOptions.length}
-          hint={methodOptions.length === 0 ? "Add one below" : "Ready to pay"}
-        />
+        {payEnabled ? (
+          <StatCard
+            label="Bank accounts"
+            value={methodOptions.length}
+            hint={methodOptions.length === 0 ? "Add one below" : "Ready to pay"}
+          />
+        ) : (
+          <StatCard label="Rent due" value="1st" hint="Of each month" />
+        )}
       </div>
 
       {plan && (
@@ -205,11 +218,13 @@ export default async function PortalPayments() {
                       <span className="font-display text-lg font-semibold text-ink">
                         {formatCents(c.amount_cents)}
                       </span>
-                      <PaymentsPayButton
-                        chargeId={c.id}
-                        methods={methodOptions}
-                        amountLabel={formatCents(c.amount_cents)}
-                      />
+                      {payEnabled && (
+                        <PaymentsPayButton
+                          chargeId={c.id}
+                          methods={methodOptions}
+                          amountLabel={formatCents(c.amount_cents)}
+                        />
+                      )}
                     </div>
                   </li>
                 ))}
@@ -257,27 +272,45 @@ export default async function PortalPayments() {
         </div>
 
         <div className="space-y-6">
-          <PaymentsAddMethod />
-
-          <Card className="p-6">
-            <Eyebrow>Your bank accounts</Eyebrow>
-            {methods && methods.length > 0 ? (
-              <ul className="mt-4 divide-y divide-clay">
-                {methods.map((m) => (
-                  <li key={m.id} className="flex items-center justify-between py-3">
-                    <div className="text-sm font-medium text-ink">
-                      {m.label ?? (m.kind === "card" ? "Card" : "Bank account")}
-                    </div>
-                    {m.is_default && <StatusPill value="active" />}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="py-6 text-center text-sm text-ink-soft">
-                No bank accounts yet — add one to start paying rent.
-              </div>
-            )}
-          </Card>
+          {payEnabled ? (
+            <>
+              <PaymentsAddMethod />
+              <Card className="p-6">
+                <Eyebrow>Your bank accounts</Eyebrow>
+                {methods && methods.length > 0 ? (
+                  <ul className="mt-4 divide-y divide-clay">
+                    {methods.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between py-3">
+                        <div className="text-sm font-medium text-ink">
+                          {m.label ?? (m.kind === "card" ? "Card" : "Bank account")}
+                        </div>
+                        {m.is_default && <StatusPill value="active" />}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="py-6 text-center text-sm text-ink-soft">
+                    No bank accounts yet — add one to start paying rent.
+                  </div>
+                )}
+              </Card>
+            </>
+          ) : (
+            <Card className="p-6">
+              <Eyebrow>How to pay</Eyebrow>
+              <p className="mt-3 text-sm text-ink-soft">
+                Please pay your rent by <span className="font-medium text-ink">check or money
+                order</span>, dropped off or mailed to the office. Include your unit number.
+              </p>
+              <p className="mt-3 text-sm text-ink-soft">
+                Questions or to make arrangements, call{" "}
+                <span className="font-medium text-ink">(720) 527-2596</span>.
+              </p>
+              <p className="mt-4 text-xs text-ink-faint">
+                Online payments aren&apos;t available yet — we&apos;ll let you know when they are.
+              </p>
+            </Card>
+          )}
         </div>
       </div>
 
