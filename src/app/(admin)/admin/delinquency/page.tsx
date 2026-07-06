@@ -159,6 +159,12 @@ export default async function AdminDelinquency() {
               </form>
             )}
             <Link
+              href="/admin/repayment-plans"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Repayment plans →
+            </Link>
+            <Link
               href="/owner-report"
               className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
             >
@@ -259,6 +265,14 @@ export default async function AdminDelinquency() {
                                 Create demand →
                               </button>
                             </form>
+                          )}
+                          {r.unitId && (
+                            <Link
+                              href={`/admin/repayment-plans/new?unit=${r.unitId}`}
+                              className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                            >
+                              Repayment plan →
+                            </Link>
                           )}
                           {r.unitId && (
                             <Link

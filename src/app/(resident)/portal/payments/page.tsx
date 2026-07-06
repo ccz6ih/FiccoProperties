@@ -84,6 +84,27 @@ export default async function PortalPayments() {
     label: m.label ?? (m.kind === "card" ? "Card" : "Bank account"),
   }));
 
+  // Active repayment plan (if any) + its schedule.
+  const { data: plan } = await db
+    .from("repayment_plans")
+    .select("id, total_cents, cadence, status")
+    .eq("resident_id", user.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .maybeSingle<{ id: string; total_cents: number; cadence: string; status: string }>();
+  let planItems: { seq: number; due_date: string; amount_cents: number; status: string }[] = [];
+  if (plan) {
+    const { data: pit } = await db
+      .from("repayment_plan_items")
+      .select("seq, due_date, amount_cents, status")
+      .eq("plan_id", plan.id)
+      .order("seq", { ascending: true })
+      .returns<{ seq: number; due_date: string; amount_cents: number; status: string }[]>();
+    planItems = pit ?? [];
+  }
+  const planPaid = planItems.filter((i) => i.status === "paid").length;
+  const nextDue = planItems.find((i) => i.status !== "paid");
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader
@@ -118,6 +139,41 @@ export default async function PortalPayments() {
           hint={methodOptions.length === 0 ? "Add one below" : "Ready to pay"}
         />
       </div>
+
+      {plan && (
+        <Card className="mb-6 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-clay bg-sand/50 px-6 py-4">
+            <div>
+              <div className="font-display text-lg font-semibold text-ink">Repayment plan</div>
+              <div className="text-sm text-ink-soft">
+                {planPaid}/{planItems.length} payments made ·{" "}
+                {nextDue ? `next ${formatCents(nextDue.amount_cents)} due ${formatDate(nextDue.due_date)}` : "all caught up"}
+              </div>
+            </div>
+            <StatusPill value="active" />
+          </div>
+          <ul className="divide-y divide-clay">
+            {planItems.map((i) => (
+              <li key={i.seq} className="flex items-center justify-between px-6 py-2.5 text-sm">
+                <span className="text-ink-soft">
+                  #{i.seq} · {formatDate(i.due_date)}
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="font-medium text-ink">{formatCents(i.amount_cents)}</span>
+                  {i.status === "paid" ? (
+                    <span className="text-xs font-medium text-pine">Paid</span>
+                  ) : (
+                    <span className="text-xs text-ink-faint">Due</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="px-6 py-3 text-xs text-ink-faint">
+            These payments are for your past-due balance. Regular monthly rent is still due as usual.
+          </p>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
