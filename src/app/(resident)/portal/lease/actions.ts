@@ -98,8 +98,13 @@ export async function signLease(
   const signature_name = (form.get("signature_name") as string)?.trim();
   const consent = form.get("consent");
 
+  const ackLabels = form.getAll("ack_label").map((s) => String(s));
+  const ackInits = form.getAll("ack_initials").map((s) => String(s).trim());
+
   if (!lease_id) return { ok: false, error: "Missing lease reference." };
   if (!signature_name) return { ok: false, error: "Please type your full legal name." };
+  if (ackLabels.length === 0 || ackInits.length !== ackLabels.length || ackInits.some((x) => !x))
+    return { ok: false, error: "Please initial each acknowledgement." };
   if (!consent) return { ok: false, error: "Please check the consent box to sign." };
 
   const supabase = await createClient();
@@ -141,12 +146,20 @@ export async function signLease(
 
   if (error) return { ok: false, error: "Could not record your signature. Please try again." };
 
-  await db.from("lease_events").insert({
-    lease_id,
-    actor_id: user.id,
-    type: "signed",
-    note: `Signed electronically by ${signature_name}`,
-  });
+  await db.from("lease_events").insert([
+    {
+      lease_id,
+      actor_id: user.id,
+      type: "signed",
+      note: `Signed electronically by ${signature_name}`,
+    },
+    ...ackLabels.map((label, i) => ({
+      lease_id,
+      actor_id: user.id,
+      type: "initial",
+      note: `Initialed (${ackInits[i]}): ${label}`,
+    })),
+  ]);
 
   // Email copies to the resident and the owners.
   await emailLeaseCopies(supabase, lease_id, user.email, signature_name);

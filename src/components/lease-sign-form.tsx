@@ -9,6 +9,13 @@ const initial: SignState = { ok: false };
 const inputClass =
   "w-full rounded-xl border border-clay-deep bg-white/80 px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30";
 
+const ACKS = [
+  "I have read and agree to the full lease terms above.",
+  "Rent is due on the 1st of each month; a late fee may apply after the grace period.",
+  "I will give proper written notice before moving out, as my lease requires.",
+  "Only the people and pets listed on my lease may live in the home.",
+];
+
 export function LeaseSignForm({
   leaseId,
   terms,
@@ -19,8 +26,14 @@ export function LeaseSignForm({
   const [state, action, pending] = useActionState(signLease, initial);
   const [name, setName] = useState("");
   const [consent, setConsent] = useState(false);
+  const [initials, setInitials] = useState<string[]>(() => ACKS.map(() => ""));
 
-  const canSign = name.trim().length > 0 && consent && !pending;
+  const allInitialed = initials.every((i) => i.trim().length > 0);
+  const canSign = name.trim().length > 0 && consent && allInitialed && !pending;
+
+  function setInitial(i: number, v: string) {
+    setInitials((prev) => prev.map((x, idx) => (idx === i ? v : x)));
+  }
 
   return (
     <div className="space-y-6">
@@ -50,6 +63,25 @@ export function LeaseSignForm({
           )}
 
           <input type="hidden" name="lease_id" value={leaseId} />
+
+          {/* Initial each acknowledgement */}
+          <div className="space-y-2 rounded-xl border border-clay bg-sand/30 p-4">
+            <div className="text-sm font-medium text-ink">Initial each item</div>
+            {ACKS.map((ack, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <input type="hidden" name="ack_label" value={ack} />
+                <input
+                  name="ack_initials"
+                  value={initials[i]}
+                  onChange={(e) => setInitial(i, e.target.value.toUpperCase().slice(0, 5))}
+                  placeholder="INT"
+                  aria-label={`Initials for: ${ack}`}
+                  className="mt-0.5 w-16 shrink-0 rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-center text-sm font-semibold uppercase text-ink focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30"
+                />
+                <span className="text-sm text-ink-soft">{ack}</span>
+              </div>
+            ))}
+          </div>
 
           <label className="block space-y-1.5">
             <span className="text-sm font-medium text-ink">

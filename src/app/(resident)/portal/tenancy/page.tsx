@@ -52,6 +52,7 @@ function nextAnniversary(startIso: string, now: Date) {
 }
 
 const tools = [
+  { href: "/portal/check-in", label: "Move-in check-in", hint: "Photos & disclosures" },
   { href: "/portal/payments", label: "Pay rent", hint: "Charges & history" },
   { href: "/statement", label: "Rent statement", hint: "Printable ledger" },
   { href: "/portal/lease", label: "Your lease", hint: "Terms & documents" },
