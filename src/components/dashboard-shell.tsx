@@ -23,7 +23,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-dvh bg-cream">
+    <div className="flex min-h-dvh bg-cream print:block print:min-h-0">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-clay bg-sand/40 lg:flex print:hidden">
         <Link href={brandHref} className="flex h-16 items-center gap-2.5 border-b border-clay px-6">
@@ -43,7 +43,7 @@ export function DashboardShell({
       </aside>
 
       {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col print:block">
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-clay bg-cream px-4 sm:px-8 print:hidden">
           <div className="flex min-w-0 items-center gap-3">
             <MobileNav nav={nav} brandLabel={brandLabel} brandHref={brandHref} />
