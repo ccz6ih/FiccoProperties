@@ -7,6 +7,7 @@ import { formatCents, formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { isStripeActive } from "@/lib/payments/provider";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type ChargeRow = {
@@ -31,6 +32,8 @@ type PaymentRow = {
   status: string;
   created_at: string;
   provider_ref: string | null;
+  receipt_note: string | null;
+  receipt_path: string | null;
   charges: { description: string | null; period: string | null } | null;
 };
 
@@ -64,7 +67,7 @@ export default async function PortalPayments() {
         .returns<MethodRow[]>(),
       db
         .from("payments")
-        .select("id, amount_cents, status, created_at, provider_ref, charges(description, period)")
+        .select("id, amount_cents, status, created_at, provider_ref, receipt_note, receipt_path, charges(description, period)")
         .eq("resident_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20)
@@ -109,6 +112,20 @@ export default async function PortalPayments() {
   // Online payments are OFF until a real processor is switched on — don't show
   // the pay/bank UI (the mock would otherwise mark charges paid without money).
   const payEnabled = isStripeActive();
+
+  // Signed URLs for any receipt images attached to this resident's payments.
+  const receiptUrls = new Map<string, string>();
+  const withReceipt = (payments ?? []).filter((p) => p.receipt_path);
+  if (withReceipt.length > 0) {
+    const admin = createAdminClient();
+    const signed = await Promise.all(
+      withReceipt.map((p) => admin.storage.from("payment-receipts").createSignedUrl(p.receipt_path!, 3600))
+    );
+    withReceipt.forEach((p, i) => {
+      const url = signed[i]?.data?.signedUrl;
+      if (url) receiptUrls.set(p.id, url);
+    });
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -249,9 +266,25 @@ export default async function PortalPayments() {
                       </div>
                       <div className="text-xs text-ink-faint">
                         {formatDate(p.created_at)}
-                        {p.provider_ref && p.provider_ref !== "offline"
-                          ? ` · ${p.provider_ref}`
-                          : ""}
+                        {(() => {
+                          const ref =
+                            p.receipt_note ??
+                            (p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : null);
+                          return ref ? ` · ${ref}` : "";
+                        })()}
+                        {receiptUrls.get(p.id) && (
+                          <>
+                            {" · "}
+                            <a
+                              href={receiptUrls.get(p.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-pine hover:underline"
+                            >
+                              Receipt
+                            </a>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

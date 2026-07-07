@@ -3,8 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { PrintButton } from "@/components/print-button";
+import { PaymentReceipt } from "@/components/payment-receipt-form";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type PaymentLogRow = {
   id: string;
@@ -12,6 +14,8 @@ type PaymentLogRow = {
   status: string;
   created_at: string;
   provider_ref: string | null;
+  receipt_note: string | null;
+  receipt_path: string | null;
   profiles: { full_name: string | null } | null;
   charges: {
     description: string | null;
@@ -51,7 +55,7 @@ export default async function PaymentsLog({
   const { data: payments } = await db
     .from("payments")
     .select(
-      "id, amount_cents, status, created_at, provider_ref, profiles:resident_id(full_name), charges:charge_id(description, period, units:unit_id(label, properties(name), unit_occupancy(tenant_name)))"
+      "id, amount_cents, status, created_at, provider_ref, receipt_note, receipt_path, profiles:resident_id(full_name), charges:charge_id(description, period, units:unit_id(label, properties(name), unit_occupancy(tenant_name)))"
     )
     .gte("created_at", from)
     .lt("created_at", toExclusive)
@@ -59,6 +63,20 @@ export default async function PaymentsLog({
     .returns<PaymentLogRow[]>();
 
   const all = payments ?? [];
+
+  // Signed URLs for any attached receipt images (private bucket).
+  const receiptUrls = new Map<string, string>();
+  const withReceipt = all.filter((p) => p.receipt_path);
+  if (withReceipt.length > 0) {
+    const admin = createAdminClient();
+    const signed = await Promise.all(
+      withReceipt.map((p) => admin.storage.from("payment-receipts").createSignedUrl(p.receipt_path!, 3600))
+    );
+    withReceipt.forEach((p, i) => {
+      const url = signed[i]?.data?.signedUrl;
+      if (url) receiptUrls.set(p.id, url);
+    });
+  }
   const succeeded = all.filter((p) => p.status === "succeeded");
   const totalCents = succeeded.reduce((s, p) => s + p.amount_cents, 0);
 
@@ -117,8 +135,9 @@ export default async function PaymentsLog({
                     p.profiles?.full_name ??
                     unit?.unit_occupancy?.[0]?.tenant_name ??
                     "—";
-                  const ref =
-                    p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : "—";
+                  const refNote =
+                    p.receipt_note ??
+                    (p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : null);
                   return (
                     <tr key={p.id} className="align-top hover:bg-sand/30">
                       <td className="whitespace-nowrap px-4 py-3 text-ink-soft">
@@ -130,7 +149,13 @@ export default async function PaymentsLog({
                         {p.charges?.description ?? "Rent"}
                         {p.charges?.period ? ` · ${p.charges.period}` : ""}
                       </td>
-                      <td className="px-4 py-3 text-ink-soft">{ref}</td>
+                      <td className="px-4 py-3 text-ink-soft">
+                        <PaymentReceipt
+                          paymentId={p.id}
+                          note={refNote}
+                          receiptUrl={receiptUrls.get(p.id) ?? null}
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-ink">
                         {formatCents(p.amount_cents)}
                         {p.status !== "succeeded" && (
