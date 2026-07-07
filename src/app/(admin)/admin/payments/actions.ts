@@ -2,11 +2,76 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { formatCents } from "@/lib/format";
+import { sendNotification } from "@/lib/email";
+import { paymentReceiptEmail } from "@/lib/payment-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminPaymentsState = { ok: boolean; error?: string; notice?: string };
+
+type ReceiptItem = {
+  resident_id: string | null;
+  unit_id: string | null;
+  period: string | null;
+  amountCents: number;
+  remainingCents: number;
+};
+
+/**
+ * Email a payment confirmation/receipt to each tenant with an email on file.
+ * Best-effort — never blocks recording the payment. Groups so one payment event
+ * = one email per recipient.
+ */
+async function emailReceipts(items: ReceiptItem[], refLabel: string | null): Promise<void> {
+  try {
+    const admin = createAdminClient() as unknown as SupabaseClient;
+    const residentIds = [...new Set(items.map((i) => i.resident_id).filter(Boolean))] as string[];
+    const unitIds = [...new Set(items.map((i) => i.unit_id).filter(Boolean))] as string[];
+
+    const profById = new Map<string, { full_name: string | null; email: string | null }>();
+    if (residentIds.length) {
+      const { data } = await admin.from("profiles").select("id, full_name, email").in("id", residentIds);
+      for (const p of (data ?? []) as { id: string; full_name: string | null; email: string | null }[]) {
+        profById.set(p.id, { full_name: p.full_name, email: p.email });
+      }
+    }
+    type OccJoin = { unit_id: string; tenant_name: string | null; tenant_email: string | null; units: { label: string; properties: { name: string | null } | null } | null };
+    const occByUnit = new Map<string, OccJoin>();
+    if (unitIds.length) {
+      const { data } = await admin
+        .from("unit_occupancy")
+        .select("unit_id, tenant_name, tenant_email, units:unit_id(label, properties(name))")
+        .in("unit_id", unitIds)
+        .returns<OccJoin[]>();
+      for (const o of data ?? []) occByUnit.set(o.unit_id, o);
+    }
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://38thaveproperties.com").replace(/\/$/, "");
+    for (const it of items) {
+      const prof = it.resident_id ? profById.get(it.resident_id) : null;
+      const occ = it.unit_id ? occByUnit.get(it.unit_id) : null;
+      const email = prof?.email ?? occ?.tenant_email ?? null;
+      if (!email) continue;
+      const name = (prof?.full_name ?? occ?.tenant_name ?? "there").split(" ")[0];
+      const home = occ ? `${occ.units?.properties?.name ?? ""} · ${occ.units?.label ?? ""}`.trim() : "your home";
+      const { subject, html } = paymentReceiptEmail({
+        name,
+        home,
+        amountCents: it.amountCents,
+        remainingCents: it.remainingCents,
+        period: it.period,
+        refLabel,
+        hasPortal: !!it.resident_id,
+        appUrl,
+      });
+      await sendNotification({ to: email, subject, html, replyTo: "hello@38thaveproperties.com" });
+    }
+  } catch {
+    // email is best-effort; recording the payment already succeeded
+  }
+}
 
 /** Sum of succeeded payments already recorded against each of the given charges. */
 async function paidByCharge(
@@ -277,6 +342,17 @@ export async function recordOfflinePayments(
       billable.map((c) => c.id)
     );
 
+  await emailReceipts(
+    toSettle.map(({ c, remaining }) => ({
+      resident_id: c.resident_id,
+      unit_id: c.unit_id,
+      period: c.period,
+      amountCents: remaining,
+      remainingCents: 0,
+    })),
+    refLabel || null
+  );
+
   revalidatePath("/admin/payments");
   return {
     ok: true,
@@ -338,6 +414,19 @@ export async function recordOfflinePayment(
   }
 
   await db.from("charges").update({ status: "paid" }).eq("id", charge.id);
+
+  await emailReceipts(
+    [
+      {
+        resident_id: charge.resident_id,
+        unit_id: charge.unit_id,
+        period: charge.period,
+        amountCents: charge.amount_cents,
+        remainingCents: 0,
+      },
+    ],
+    null
+  );
 
   revalidatePath("/admin/payments");
   revalidatePath("/admin/rent-board");
@@ -410,10 +499,23 @@ export async function recordManualPayment(
     await db.from("charges").update({ status: "paid" }).eq("id", charge.id);
   }
 
+  const remaining = charge.amount_cents - totalPaid;
+
+  await emailReceipts(
+    [
+      {
+        resident_id: charge.resident_id,
+        unit_id: charge.unit_id,
+        period: charge.period,
+        amountCents,
+        remainingCents: Math.max(0, remaining),
+      },
+    ],
+    refLabel || null
+  );
+
   revalidatePath("/admin/payments");
   revalidatePath("/admin/rent-board");
-
-  const remaining = charge.amount_cents - totalPaid;
   const notice =
     remaining > 0
       ? `Recorded ${formatCents(amountCents)} — ${formatCents(remaining)} still due.`
