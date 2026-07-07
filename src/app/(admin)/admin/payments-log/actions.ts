@@ -24,19 +24,35 @@ export async function savePaymentReceipt(
   const { profile } = await requireProfile("/admin/payments-log");
   if (!isStaff(profile)) return { ok: false, error: "Staff only." };
 
-  const paymentId = (form.get("payment_id") as string)?.trim();
-  if (!paymentId) return { ok: false, error: "Missing payment." };
   const note = (form.get("note") as string)?.trim() || null;
   const file = form.get("file");
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
+
+  // Target a payment directly, or resolve the latest succeeded payment for a charge.
+  let paymentId = (form.get("payment_id") as string)?.trim() || null;
+  if (!paymentId) {
+    const chargeId = (form.get("charge_id") as string)?.trim();
+    if (chargeId) {
+      const { data } = await db
+        .from("payments")
+        .select("id")
+        .eq("charge_id", chargeId)
+        .eq("status", "succeeded")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ id: string }>();
+      paymentId = data?.id ?? null;
+    }
+  }
+  if (!paymentId) return { ok: false, error: "No recorded payment to attach a receipt to." };
+
   const update: Record<string, string | null> = { receipt_note: note };
 
   if (file instanceof File && file.size > 0) {
     if (!TYPES.has(file.type)) return { ok: false, error: "Upload a PDF or image." };
     const admin = createAdminClient();
-    // Replace any existing receipt file.
     const { data: existing } = await db
       .from("payments")
       .select("receipt_path")
@@ -56,5 +72,7 @@ export async function savePaymentReceipt(
 
   await db.from("payments").update(update).eq("id", paymentId);
   revalidatePath("/admin/payments-log");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
   return { ok: true, notice: "Receipt saved." };
 }

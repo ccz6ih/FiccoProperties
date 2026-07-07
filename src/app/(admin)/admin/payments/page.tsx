@@ -22,7 +22,13 @@ type ChargeRow = {
 };
 
 type OccRow = { unit_id: string; tenant_name: string | null; tenant_email: string | null };
-type PaySumRow = { charge_id: string | null; amount_cents: number };
+type PaySumRow = {
+  charge_id: string | null;
+  amount_cents: number;
+  provider_ref: string | null;
+  receipt_note: string | null;
+  created_at: string;
+};
 type PropertyRow = { id: string; name: string | null };
 
 function currentPeriod(): string {
@@ -65,19 +71,26 @@ export default async function AdminPayments() {
 
   const all = (charges ?? []).filter((c) => c.status !== "void");
 
-  // How much has actually been paid against each charge (supports partials).
+  // How much has actually been paid against each charge (supports partials),
+  // plus the latest receipt note / reference to show + edit.
   const chargeIds = all.map((c) => c.id);
   const paidByCharge = new Map<string, number>();
+  const refByCharge = new Map<string, string>();
   if (chargeIds.length > 0) {
     const { data: paySums } = await db
       .from("payments")
-      .select("charge_id, amount_cents")
+      .select("charge_id, amount_cents, provider_ref, receipt_note, created_at")
       .in("charge_id", chargeIds)
       .eq("status", "succeeded")
+      .order("created_at", { ascending: false })
       .returns<PaySumRow[]>();
     for (const p of paySums ?? []) {
       if (!p.charge_id) continue;
       paidByCharge.set(p.charge_id, (paidByCharge.get(p.charge_id) ?? 0) + p.amount_cents);
+      if (!refByCharge.has(p.charge_id)) {
+        const ref = p.receipt_note ?? (p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : null);
+        if (ref) refByCharge.set(p.charge_id, ref);
+      }
     }
   }
   const paidFor = (c: ChargeRow) => paidByCharge.get(c.id) ?? 0;
@@ -122,6 +135,7 @@ export default async function AdminPayments() {
       unit: c.units?.label ?? null,
       property: c.units?.properties?.name ?? null,
       paidCents: paidFor(c),
+      paidRef: refByCharge.get(c.id) ?? null,
       description: c.description,
       period: c.period,
       dueDate: c.due_date,

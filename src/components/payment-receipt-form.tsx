@@ -7,12 +7,16 @@ const initial: ReceiptState = { ok: false };
 
 export function PaymentReceipt({
   paymentId,
+  chargeId,
   note,
   receiptUrl,
+  compact,
 }: {
-  paymentId: string;
+  paymentId?: string;
+  chargeId?: string;
   note: string | null;
-  receiptUrl: string | null;
+  receiptUrl?: string | null;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(savePaymentReceipt, initial);
@@ -20,7 +24,7 @@ export function PaymentReceipt({
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-ink-soft">{note || "—"}</span>
+        {!compact && <span className="text-ink-soft">{note || "—"}</span>}
         {receiptUrl && (
           <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-pine hover:underline">
             View
@@ -31,13 +35,14 @@ export function PaymentReceipt({
           onClick={() => setOpen((v) => !v)}
           className="text-xs font-medium text-ink-faint hover:text-pine print:hidden"
         >
-          {open ? "Close" : note || receiptUrl ? "Edit" : "+ Receipt"}
+          {open ? "Close" : note || receiptUrl ? "Edit receipt" : "+ Receipt"}
         </button>
       </div>
 
       {open && (
         <form action={action} className="mt-1 space-y-2 rounded-lg border border-clay bg-sand/30 p-2 print:hidden">
-          <input type="hidden" name="payment_id" value={paymentId} />
+          {paymentId && <input type="hidden" name="payment_id" value={paymentId} />}
+          {chargeId && <input type="hidden" name="charge_id" value={chargeId} />}
           <input
             name="note"
             defaultValue={note ?? ""}

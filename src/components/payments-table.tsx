@@ -3,6 +3,7 @@
 import { Fragment, useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { StatusPill } from "@/components/dashboard-ui";
+import { PaymentReceipt } from "@/components/payment-receipt-form";
 import { formatCents, formatDate } from "@/lib/format";
 import {
   recordOfflinePayments,
@@ -17,6 +18,7 @@ export type PaymentRow = {
   unit: string | null;
   property: string | null;
   paidCents: number;
+  paidRef: string | null;
   description: string | null;
   period: string | null;
   dueDate: string | null;
@@ -211,7 +213,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                         )}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        {open && (
+                        {open ? (
                           <button
                             type="button"
                             onClick={() =>
@@ -221,7 +223,11 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                           >
                             {expandedId === c.id ? "Close" : "Record…"}
                           </button>
-                        )}
+                        ) : remaining === 0 && c.status !== "void" ? (
+                          <div className="flex justify-end">
+                            <PaymentReceipt chargeId={c.id} note={c.paidRef} compact />
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                     {expandedId === c.id && (

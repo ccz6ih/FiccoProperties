@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
+import { PaymentReceipt } from "@/components/payment-receipt-form";
 import { formatCents } from "@/lib/format";
 import {
   recordOfflinePayments,
@@ -77,11 +78,7 @@ export function RentBoard({
   const outstanding = groups.reduce((s, g) => s + g.outstandingCents, 0);
 
   return (
-    <form action={action}>
-      {selectedRows.map((c) => (
-        <input key={c.id} type="hidden" name="charge_ids" value={c.id!} />
-      ))}
-
+    <div>
       {/* Overall summary + legend + print (hidden in print when printing one property) */}
       <div
         className={`mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-clay bg-cream p-5 ${
@@ -182,6 +179,11 @@ export function RentBoard({
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
+                        {c.status === "paid" && c.id && (
+                          <span className="print:hidden">
+                            <PaymentReceipt chargeId={c.id} note={c.paidRef ?? null} compact />
+                          </span>
+                        )}
                         <span className={`text-xs font-medium ${meta.text}`}>{meta.label}</span>
                         <span className="text-sm font-medium text-ink">{formatCents(c.amountCents)}</span>
                       </div>
@@ -198,7 +200,10 @@ export function RentBoard({
       </div>
 
       {selectedRows.length > 0 && (
-        <div className="sticky bottom-4 z-30 mt-4 print:hidden">
+        <form action={action} className="sticky bottom-4 z-30 mt-4 print:hidden">
+          {selectedRows.map((c) => (
+            <input key={c.id} type="hidden" name="charge_ids" value={c.id!} />
+          ))}
           <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-cream px-5 py-3 shadow-xl">
             <div className="text-sm">
               <span className="font-semibold text-ink">{selectedRows.length} selected</span>
@@ -226,9 +231,9 @@ export function RentBoard({
               </Button>
             </div>
           </div>
-        </div>
+        </form>
       )}
-    </form>
+    </div>
   );
 }
 
