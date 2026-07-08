@@ -13,7 +13,12 @@ import {
 import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
 import { UnitCostForm } from "@/components/unit-cost-form";
 import { UnitCostEdit } from "@/components/unit-cost-edit";
-import { deleteLogEntry, deleteUnitCost } from "@/app/(admin)/admin/units/actions";
+import {
+  deleteLogEntry,
+  deleteUnitCost,
+  linkResidentAccount,
+  unlinkResidentAccount,
+} from "@/app/(admin)/admin/units/actions";
 
 const LEASE_BUCKET = "lease-docs";
 import { formatCents, formatDate, humanize } from "@/lib/format";
@@ -124,6 +129,14 @@ export default async function UnitDetail({
       .order("full_name")
       .returns<ResidentOption[]>(),
   ]);
+
+  // Resident accounts linked to this unit (co-tenants who each have a login).
+  const { data: occupants } = await db
+    .from("unit_occupants")
+    .select("id, is_primary, profiles:profile_id(full_name, email)")
+    .eq("unit_id", id)
+    .order("is_primary", { ascending: false })
+    .returns<{ id: string; is_primary: boolean; profiles: { full_name: string | null; email: string | null } | null }[]>();
 
   // Lease documents (private bucket) — sign each for viewing.
   const { data: leaseDocRows } = await db
@@ -369,6 +382,62 @@ export default async function UnitDetail({
             residents={residents ?? []}
             propertySlug={unit.properties?.slug ?? ""}
           />
+
+          {/* Resident accounts (co-tenants) */}
+          <div className="border-t border-clay pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+              Resident accounts
+            </h3>
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Link more than one login to this home for co-tenants who each want their own account.
+              The account must already exist — invite them first, then link by email.
+            </p>
+            {occupants && occupants.length > 0 ? (
+              <ul className="mt-3 divide-y divide-clay">
+                {occupants.map((o) => (
+                  <li key={o.id} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-ink">
+                        {o.profiles?.full_name ?? o.profiles?.email ?? "—"}
+                        {o.is_primary && (
+                          <span className="ml-2 rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                            Primary
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate text-xs text-ink-faint">{o.profiles?.email}</div>
+                    </div>
+                    {!o.is_primary && (
+                      <form action={unlinkResidentAccount}>
+                        <input type="hidden" name="unit_id" value={unit.id} />
+                        <input type="hidden" name="link_id" value={o.id} />
+                        <button className="text-xs text-ink-faint hover:text-terracotta-dark" title="Unlink">
+                          ✕
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-ink-faint">No portal accounts linked yet.</p>
+            )}
+            <form action={linkResidentAccount} className="mt-3 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="unit_id" value={unit.id} />
+              <input
+                type="email"
+                name="email"
+                placeholder="account email to link"
+                className="min-w-0 flex-1 rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink"
+              />
+              <button
+                type="submit"
+                className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+              >
+                Link account
+              </button>
+            </form>
+          </div>
 
           <LeaseDocuments unitId={unit.id} docs={leaseDocs} />
         </Card>

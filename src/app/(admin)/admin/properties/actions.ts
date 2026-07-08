@@ -165,6 +165,13 @@ export async function saveUnit(form: FormData) {
     { onConflict: "unit_id" }
   );
 
+  // Keep the primary co-tenant link in sync with the linked occupant.
+  if (occupantId) {
+    await (supabase as unknown as SupabaseClient)
+      .from("unit_occupants")
+      .upsert({ unit_id: id, profile_id: occupantId, is_primary: true }, { onConflict: "unit_id,profile_id" });
+  }
+
   revalidatePath("/admin/properties");
   if (slug) revalidatePath(`/admin/properties/${slug}`);
   revalidatePath("/admin/properties/[slug]", "page");

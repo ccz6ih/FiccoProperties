@@ -6,6 +6,47 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
 
+/**
+ * Link an existing resident account to a unit as a co-tenant (a second login for
+ * the same home). The account must already exist — invite them first if needed.
+ */
+export async function linkResidentAccount(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  const email = (form.get("email") as string)?.trim().toLowerCase();
+  if (!unitId || !email) return;
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { data: account } = await db
+    .from("profiles")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle<{ id: string }>();
+  if (!account) return; // no account with that email — invite them first
+
+  await db
+    .from("unit_occupants")
+    .upsert({ unit_id: unitId, profile_id: account.id, is_primary: false }, { onConflict: "unit_id,profile_id" });
+
+  revalidatePath(`/admin/units/${unitId}`);
+}
+
+/** Remove a co-tenant account link from a unit. */
+export async function unlinkResidentAccount(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  const linkId = (form.get("link_id") as string)?.trim();
+  if (!unitId || !linkId) return;
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  await db.from("unit_occupants").delete().eq("id", linkId);
+  revalidatePath(`/admin/units/${unitId}`);
+}
+
 const LEASE_BUCKET = "lease-docs";
 const COST_BUCKET = "unit-cost-docs";
 const COST_DOC_TYPES = new Set([

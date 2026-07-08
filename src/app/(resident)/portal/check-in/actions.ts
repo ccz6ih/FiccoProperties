@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getResidentUnitId } from "@/lib/occupancy";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 
 export type CheckInState = { ok: boolean; error?: string; notice?: string };
@@ -13,15 +14,9 @@ const IMAGE_TYPES = new Set([
 ]);
 const PROGRAMS = ["ssi", "ssdi", "colorado_works"];
 
-/** The signed-in resident's current unit, or null. */
+/** The signed-in resident's current unit, or null (co-tenant aware). */
 async function residentUnitId(userId: string): Promise<string | null> {
-  const admin = createAdminClient() as unknown as SupabaseClient;
-  const { data } = await admin
-    .from("unit_occupancy")
-    .select("unit_id")
-    .eq("occupant_profile_id", userId)
-    .maybeSingle<{ unit_id: string | null }>();
-  return data?.unit_id ?? null;
+  return getResidentUnitId(userId);
 }
 
 /**
@@ -42,6 +37,9 @@ export async function discloseAssistance(
     .map((v) => String(v).trim())
     .filter((v) => PROGRAMS.includes(v));
 
+  const unitId = await residentUnitId(user.id);
+  if (!unitId) return { ok: false, error: "No home is on file for your account yet." };
+
   const admin = createAdminClient() as unknown as SupabaseClient;
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await admin
@@ -51,7 +49,7 @@ export async function discloseAssistance(
       // Only stamp a disclosure date when they actually report a program.
       assistance_disclosed_at: programs.length > 0 ? today : null,
     })
-    .eq("occupant_profile_id", user.id);
+    .eq("unit_id", unitId);
 
   if (error) return { ok: false, error: "Could not save. Please try again." };
 
@@ -147,11 +145,14 @@ export async function saveForwarding(
   const forwarding = (form.get("forwarding_address") as string)?.trim() || null;
   const moveOut = (form.get("move_out_date") as string)?.trim() || null;
 
+  const unitId = await residentUnitId(user.id);
+  if (!unitId) return { ok: false, error: "No home is on file for your account yet." };
+
   const admin = createAdminClient() as unknown as SupabaseClient;
   const { error } = await admin
     .from("unit_occupancy")
     .update({ forwarding_address: forwarding, move_out_date: moveOut })
-    .eq("occupant_profile_id", user.id);
+    .eq("unit_id", unitId);
 
   if (error) return { ok: false, error: "Could not save. Please try again." };
   revalidatePath("/portal/move-out");

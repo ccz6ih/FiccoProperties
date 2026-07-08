@@ -3,8 +3,8 @@ import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { PhotoUploader, ForwardingForm } from "@/components/check-in-forms";
 import { uploadMoveOutPhoto, deleteOwnPhoto } from "@/app/(resident)/portal/check-in/actions";
 import { requireProfile } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getResidentUnitId } from "@/lib/occupancy";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -20,14 +20,18 @@ type PhotoRow = { id: string; path: string; caption: string | null; created_at: 
 
 export default async function MoveOut() {
   const { user, profile } = await requireProfile("/portal/move-out");
-  const supabase = await createClient();
-  const db = supabase as unknown as SupabaseClient;
 
-  const { data: occ } = await db
-    .from("unit_occupancy")
-    .select("unit_id, forwarding_address, move_out_date, units:unit_id(label, properties(name))")
-    .eq("occupant_profile_id", user.id)
-    .maybeSingle<OccRow>();
+  const unitId = await getResidentUnitId(user.id);
+  let occ: OccRow | null = null;
+  if (unitId) {
+    const admin = createAdminClient() as unknown as SupabaseClient;
+    const { data } = await admin
+      .from("unit_occupancy")
+      .select("unit_id, forwarding_address, move_out_date, units:unit_id(label, properties(name))")
+      .eq("unit_id", unitId)
+      .maybeSingle<OccRow>();
+    occ = data;
+  }
 
   let photos: { id: string; url: string; caption: string | null }[] = [];
   if (occ?.unit_id) {
