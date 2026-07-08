@@ -226,6 +226,10 @@ export function RentBoard({
                 placeholder="Check / MO #"
                 className="w-32 rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm text-ink"
               />
+              <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <input type="checkbox" name="email_receipt" value="on" defaultChecked className="h-4 w-4 rounded border-clay-deep accent-pine" />
+                Email receipt
+              </label>
               <Button type="submit" variant="primary" size="md" disabled={pending}>
                 {pending ? "Recording…" : "Mark paid"}
               </Button>

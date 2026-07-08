@@ -279,6 +279,10 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                 placeholder="Check / MO #"
                 className={`${inputSm} w-32`}
               />
+              <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+                <input type="checkbox" name="email_receipt" value="on" defaultChecked className="h-4 w-4 rounded border-clay-deep accent-pine" />
+                Email receipt
+              </label>
               <Button type="submit" variant="primary" size="md" disabled={pending}>
                 {pending ? "Recording…" : "Mark paid in full"}
               </Button>
@@ -331,6 +335,10 @@ function RecordPaymentForm({
       <label className="space-y-1">
         <span className="block text-xs font-medium text-ink-soft">Check / MO #</span>
         <input name="reference" placeholder="Optional" className={`${inputSm} w-36`} />
+      </label>
+      <label className="flex items-center gap-1.5 pb-2 text-xs text-ink-soft">
+        <input type="checkbox" name="email_receipt" value="on" defaultChecked className="h-4 w-4 rounded border-clay-deep accent-pine" />
+        Email receipt
       </label>
       <Button type="submit" variant="primary" size="md" disabled={pending}>
         {pending ? "Recording…" : "Record payment"}

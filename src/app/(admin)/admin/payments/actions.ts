@@ -275,6 +275,7 @@ export async function recordOfflinePayments(
     .map((v) => String(v).trim())
     .filter(Boolean);
   if (ids.length === 0) return { ok: false, error: "No charges selected." };
+  const emailReceipt = form.get("email_receipt") === "on";
 
   // Optional payment method + check/money-order number for the record.
   const method = (form.get("method") as string)?.trim() || null;
@@ -342,16 +343,18 @@ export async function recordOfflinePayments(
       billable.map((c) => c.id)
     );
 
-  await emailReceipts(
-    toSettle.map(({ c, remaining }) => ({
-      resident_id: c.resident_id,
-      unit_id: c.unit_id,
-      period: c.period,
-      amountCents: remaining,
-      remainingCents: 0,
-    })),
-    refLabel || null
-  );
+  if (emailReceipt) {
+    await emailReceipts(
+      toSettle.map(({ c, remaining }) => ({
+        resident_id: c.resident_id,
+        unit_id: c.unit_id,
+        period: c.period,
+        amountCents: remaining,
+        remainingCents: 0,
+      })),
+      refLabel || null
+    );
+  }
 
   revalidatePath("/admin/payments");
   return {
@@ -457,6 +460,7 @@ export async function recordManualPayment(
   const reference = (form.get("reference") as string)?.trim() || null;
   const refLabel = [method, reference].filter(Boolean).join(" ");
   const providerRef = refLabel || "offline";
+  const emailReceipt = form.get("email_receipt") === "on";
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
@@ -501,18 +505,20 @@ export async function recordManualPayment(
 
   const remaining = charge.amount_cents - totalPaid;
 
-  await emailReceipts(
-    [
-      {
-        resident_id: charge.resident_id,
-        unit_id: charge.unit_id,
-        period: charge.period,
-        amountCents,
-        remainingCents: Math.max(0, remaining),
-      },
-    ],
-    refLabel || null
-  );
+  if (emailReceipt) {
+    await emailReceipts(
+      [
+        {
+          resident_id: charge.resident_id,
+          unit_id: charge.unit_id,
+          period: charge.period,
+          amountCents,
+          remainingCents: Math.max(0, remaining),
+        },
+      ],
+      refLabel || null
+    );
+  }
 
   revalidatePath("/admin/payments");
   revalidatePath("/admin/rent-board");
