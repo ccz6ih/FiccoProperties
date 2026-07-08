@@ -70,3 +70,31 @@
     );
   background-size: 22px 22px;
 }
+
+/* =========================================================================
+   Print — let long pages (rent board, payments, owner report) paginate
+   cleanly. Any ancestor with overflow/height clipping, or a flex/grid layout
+   that won't fragment across pages, otherwise cuts everything past page 1.
+   ========================================================================= */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  /* Nothing may clip its overflow in print — the #1 cause of cut-off sheets. */
+  *,
+  *::before,
+  *::after {
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Keep a row/section from splitting across a page break. */
+  li,
+  tr,
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+}
