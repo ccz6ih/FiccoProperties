@@ -59,6 +59,15 @@ export default async function AdminDelinquency() {
     .in("status", ["open", "past_due"])
     .returns<DChargeRow[]>();
 
+  // Occupancy fetched separately — the nested embed under units comes back empty,
+  // so record-only tenants would otherwise show no name.
+  const { data: occRows } = await supabase
+    .from("unit_occupancy")
+    .select("unit_id, tenant_name, tenant_email")
+    .returns<{ unit_id: string; tenant_name: string | null; tenant_email: string | null }[]>();
+  const occByUnit = new Map<string, { tenant_name: string | null; tenant_email: string | null }>();
+  for (const o of occRows ?? []) occByUnit.set(o.unit_id, o);
+
   // Served Demands for Compliance (JDF 99A) — the basis for a no-fault eviction
   // on repeated-late-payment grounds. Group by unit to spot repeat offenders.
   const { data: servedDemands } = await supabase
@@ -91,7 +100,7 @@ export default async function AdminDelinquency() {
     } else {
       repeatMap.set(d.unit_id, {
         unitId: d.unit_id,
-        name: d.units?.unit_occupancy?.[0]?.tenant_name ?? d.units?.label ?? "—",
+        name: occByUnit.get(d.unit_id)?.tenant_name ?? d.units?.label ?? "—",
         unit: d.units?.label ?? "—",
         property: d.units?.properties?.name ?? "—",
         count: 1,
@@ -112,7 +121,7 @@ export default async function AdminDelinquency() {
   const byUnit = new Map<string, Delinquent>();
   for (const c of overdue) {
     const key = c.unit_id ?? c.resident_id ?? c.id;
-    const occ = c.units?.unit_occupancy?.[0] ?? null;
+    const occ = c.unit_id ? occByUnit.get(c.unit_id) ?? null : null;
     const cur = byUnit.get(key);
     if (cur) {
       cur.overdueCents += c.amount_cents;
