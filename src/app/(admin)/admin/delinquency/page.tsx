@@ -6,6 +6,7 @@ import {
   createDemandForUnit,
   createDemandsForAllOverdue,
   createNoFaultNotice,
+  voidLateFee,
 } from "@/app/(admin)/admin/delinquency/actions";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { formatCents, formatDate } from "@/lib/format";
@@ -14,6 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 type DChargeRow = {
   id: string;
   amount_cents: number;
+  description: string | null;
   due_date: string | null;
   status: string;
   resident_id: string | null;
@@ -54,7 +56,7 @@ export default async function AdminDelinquency() {
   const { data: charges } = await supabase
     .from("charges")
     .select(
-      "id, amount_cents, due_date, status, resident_id, lease_id, unit_id, profiles:resident_id(full_name, email), units:unit_id(label, properties(name), unit_occupancy(tenant_name, tenant_email))"
+      "id, amount_cents, description, due_date, status, resident_id, lease_id, unit_id, profiles:resident_id(full_name, email), units:unit_id(label, properties(name), unit_occupancy(tenant_name, tenant_email))"
     )
     .in("status", ["open", "past_due"])
     .returns<DChargeRow[]>();
@@ -67,6 +69,14 @@ export default async function AdminDelinquency() {
     .returns<{ unit_id: string; tenant_name: string | null; tenant_email: string | null }[]>();
   const occByUnit = new Map<string, { tenant_name: string | null; tenant_email: string | null }>();
   for (const o of occRows ?? []) occByUnit.set(o.unit_id, o);
+
+  // Active late fees by unit, so they can be removed (e.g. the check turned up).
+  const lateFeeByUnit = new Map<string, { id: string; amountCents: number }>();
+  for (const c of charges ?? []) {
+    if (c.unit_id && (c.description ?? "").toLowerCase().includes("late fee")) {
+      lateFeeByUnit.set(c.unit_id, { id: c.id, amountCents: c.amount_cents });
+    }
+  }
 
   // Served Demands for Compliance (JDF 99A) — the basis for a no-fault eviction
   // on repeated-late-payment grounds. Group by unit to spot repeat offenders.
@@ -214,6 +224,7 @@ export default async function AdminDelinquency() {
                   const suggested = Math.round(r.overdueCents * 0.05);
                   const cap = lateFeeCapCents(r.overdueCents);
                   const daysLate = daysBetween(r.oldestDue, today);
+                  const existingLateFee = r.unitId ? lateFeeByUnit.get(r.unitId) ?? null : null;
                   const href = r.residentId
                     ? `/admin/residents/${r.residentId}`
                     : r.unitId
@@ -266,14 +277,26 @@ export default async function AdminDelinquency() {
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        <LateFeeForm
-                          residentId={r.residentId}
-                          leaseId={r.leaseId}
-                          unitId={r.unitId}
-                          overdueCents={r.overdueCents}
-                          suggestedCents={suggested}
-                          capCents={cap}
-                        />
+                        {existingLateFee ? (
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-terracotta/15 px-2 py-0.5 text-xs font-medium text-terracotta-dark">
+                              {formatCents(existingLateFee.amountCents)} fee
+                            </span>
+                            <form action={voidLateFee}>
+                              <input type="hidden" name="charge_id" value={existingLateFee.id} />
+                              <button className="text-xs font-medium text-pine hover:underline">Remove</button>
+                            </form>
+                          </div>
+                        ) : (
+                          <LateFeeForm
+                            residentId={r.residentId}
+                            leaseId={r.leaseId}
+                            unitId={r.unitId}
+                            overdueCents={r.overdueCents}
+                            suggestedCents={suggested}
+                            capCents={cap}
+                          />
+                        )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">

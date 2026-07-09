@@ -11,6 +11,37 @@ import { formatDate } from "@/lib/format";
 
 export type LateFeeState = { ok: boolean; error?: string; notice?: string };
 
+/**
+ * Void a late fee — remove it from what's owed and reverse its ledger entry
+ * (e.g. the check turned up after the fee was applied). Only late-fee charges.
+ */
+export async function voidLateFee(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const chargeId = (form.get("charge_id") as string)?.trim();
+  if (!chargeId) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: charge } = await db
+    .from("charges")
+    .select("id, description, status")
+    .eq("id", chargeId)
+    .maybeSingle<{ id: string; description: string | null; status: string }>();
+  // Safety: only void late fees, never rent.
+  if (!charge || !(charge.description ?? "").toLowerCase().includes("late fee")) return;
+  if (charge.status === "void") return;
+
+  await db.from("charges").update({ status: "void" }).eq("id", chargeId);
+  await db.from("ledger_entries").delete().eq("ref_id", chargeId);
+
+  revalidatePath("/admin/delinquency");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
+}
+
 function currentPeriod(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
