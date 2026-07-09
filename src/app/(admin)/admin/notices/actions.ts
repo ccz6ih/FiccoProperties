@@ -89,12 +89,15 @@ export async function setNoticeServed(form: FormData) {
     return;
 
   const supabase = await createClient();
-  await loose(supabase)
+  const db = loose(supabase);
+  await db
     .from("notices")
     .update({ served_at, served_method, status: "served" })
     .eq("id", id);
 
-  // Email a copy to the resident (or the tenancy email on the unit) if we have one.
+  // Email a copy to the resident (or the tenancy email on the unit) if we have
+  // one, and record the address it went to so staff can confirm delivery.
+  let emailedTo: string | null = null;
   try {
     const admin = createAdminClient() as unknown as SupabaseClient;
     const { data: n } = await admin
@@ -121,16 +124,19 @@ export async function setNoticeServed(form: FormData) {
       email = o?.tenant_email ?? null;
     }
     if (email && n) {
-      await sendNotification({
+      const { sent } = await sendNotification({
         to: email,
         replyTo: "hello@38thaveproperties.com",
         subject: n.title,
         html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:18px;color:#2f5d50;margin-bottom:6px">38th Ave Properties</div><pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#2c2622;background:#faf7f1;border:1px solid #e6dcc8;border-radius:8px;padding:14px">${esc(n.body)}</pre><p style="font-size:12px;color:#9b9286;margin-top:12px">This notice is also available in your resident portal.</p></div>`,
       });
+      if (sent) emailedTo = email;
     }
   } catch {
     // emailing is best-effort; serving still succeeds
   }
+
+  await db.from("notices").update({ served_email: emailedTo }).eq("id", id);
 
   revalidatePath("/admin/notices");
   revalidatePath(`/admin/notices/${id}`);

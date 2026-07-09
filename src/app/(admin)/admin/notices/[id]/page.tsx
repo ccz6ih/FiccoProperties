@@ -18,6 +18,7 @@ type NoticeRow = {
   cure_by: string | null;
   served_at: string | null;
   served_method: string | null;
+  served_email: string | null;
   status: string;
   created_at: string;
   profiles: { full_name: string | null; email: string | null } | null;
@@ -55,7 +56,7 @@ export default async function NoticeDetail({
   const { data: notice } = await supabase
     .from("notices")
     .select(
-      "id, type, title, body, amount_cents, cure_by, served_at, served_method, status, created_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
+      "id, type, title, body, amount_cents, cure_by, served_at, served_method, served_email, status, created_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
     )
     .eq("id", id)
     .maybeSingle()
@@ -161,15 +162,28 @@ export default async function NoticeDetail({
               Record service
             </h2>
             {notice.served_at ? (
-              <p className="text-sm text-ink-soft">
-                Served {formatDate(notice.served_at)}
-                {notice.served_method ? ` · ${notice.served_method}` : ""}. You
-                can re-record below to correct it.
-              </p>
+              <div className="space-y-1 text-sm">
+                <p className="text-ink-soft">
+                  Served {formatDate(notice.served_at)}
+                  {notice.served_method ? ` · ${notice.served_method}` : ""}. You
+                  can re-record below to correct it.
+                </p>
+                {notice.served_email ? (
+                  <p className="text-pine">
+                    ✓ Emailed a copy to {notice.served_email}
+                  </p>
+                ) : (
+                  <p className="text-ink-faint">
+                    No email on file for this tenant — it wasn&apos;t emailed
+                    (it&apos;s still posted in their portal).
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="text-sm text-ink-soft">
                 Mark when and how this notice was delivered. This sets the status
-                to “served”.
+                to “served” and emails a copy to the tenant if we have their
+                email.
               </p>
             )}
             <form action={setNoticeServed} className="grid gap-4 sm:grid-cols-3">

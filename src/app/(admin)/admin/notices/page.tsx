@@ -11,6 +11,7 @@ type NoticeRow = {
   title: string;
   status: string;
   served_at: string | null;
+  served_email: string | null;
   cure_by: string | null;
   created_at: string;
   profiles: { full_name: string | null; email: string | null } | null;
@@ -42,7 +43,7 @@ export default async function AdminNotices({
   const { data: notices } = await supabase
     .from("notices")
     .select(
-      "id, type, title, status, served_at, cure_by, created_at, profiles:resident_id(full_name, email), units:unit_id(label, unit_occupancy(tenant_name))"
+      "id, type, title, status, served_at, served_email, cure_by, created_at, profiles:resident_id(full_name, email), units:unit_id(label, unit_occupancy(tenant_name))"
     )
     .order("created_at", { ascending: false })
     .returns<NoticeRow[]>();
@@ -123,6 +124,17 @@ export default async function AdminNotices({
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
                         {n.served_at ? formatDate(n.served_at) : "—"}
+                        {n.served_at && (
+                          <div className="text-xs">
+                            {n.served_email ? (
+                              <span className="text-pine" title={`Emailed to ${n.served_email}`}>
+                                ✓ emailed
+                              </span>
+                            ) : (
+                              <span className="text-ink-faint">no email</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         {showCure ? (
