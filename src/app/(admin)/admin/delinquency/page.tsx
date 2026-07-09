@@ -229,7 +229,20 @@ export default async function AdminDelinquency() {
                         ) : (
                           <span className="font-medium text-ink">{r.name}</span>
                         )}
-                        <div className="text-xs text-ink-faint">{r.email}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          {r.email ? (
+                            <>
+                              <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                                ✉ Email on file
+                              </span>
+                              <span className="text-xs text-ink-faint">{r.email}</span>
+                            </>
+                          ) : (
+                            <span className="rounded-full bg-sand px-2 py-0.5 text-[11px] text-ink-faint">
+                              Post only — no email
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
                         {r.property} · {r.unit}
