@@ -285,6 +285,9 @@ export async function uploadLeaseDocument(
   const residentId = occ?.occupant_profile_id ?? null;
   // Only share on upload if asked AND there's a portal resident to share with.
   const share = str(form.get("share")) === "on" && !!residentId;
+  const DOC_CATEGORIES = ["lease", "esa", "insurance", "notice", "other"];
+  const categoryRaw = str(form.get("category")) || "";
+  const category = DOC_CATEGORIES.includes(categoryRaw) ? categoryRaw : "lease";
 
   await db.from("lease_documents").insert({
     unit_id: unitId,
@@ -293,6 +296,7 @@ export async function uploadLeaseDocument(
     path,
     uploaded_by: user.id,
     shared_with_resident: share,
+    category,
   });
 
   revalidatePath(`/admin/units/${unitId}`);

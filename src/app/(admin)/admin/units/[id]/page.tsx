@@ -141,7 +141,7 @@ export default async function UnitDetail({
   // Lease documents (private bucket) — sign each for viewing.
   const { data: leaseDocRows } = await db
     .from("lease_documents")
-    .select("id, label, path, created_at, resident_id, shared_with_resident")
+    .select("id, label, path, created_at, resident_id, shared_with_resident, category")
     .eq("unit_id", id)
     .order("created_at", { ascending: false })
     .returns<
@@ -152,6 +152,7 @@ export default async function UnitDetail({
         created_at: string;
         resident_id: string | null;
         shared_with_resident: boolean | null;
+        category: string | null;
       }[]
     >();
   const leaseAdmin = createAdminClient();
@@ -167,6 +168,7 @@ export default async function UnitDetail({
     created: d.created_at,
     shared: !!d.shared_with_resident,
     residentLinked: !!d.resident_id,
+    category: d.category ?? "lease",
   }));
 
   // Unit costs (contractor bills) + petty-cash expenses tagged to this unit.

@@ -19,6 +19,15 @@ export type LeaseDoc = {
   created: string;
   shared: boolean;
   residentLinked: boolean;
+  category: string;
+};
+
+export const DOC_CATEGORY_LABEL: Record<string, string> = {
+  lease: "Lease",
+  esa: "ESA letter",
+  insurance: "Insurance",
+  notice: "Notice",
+  other: "Other",
 };
 
 export function LeaseDocuments({
@@ -38,7 +47,7 @@ export function LeaseDocuments({
   return (
     <div className="border-t border-clay pt-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
-        Lease documents
+        Documents
       </h3>
 
       {docs.length > 0 ? (
@@ -55,12 +64,15 @@ export function LeaseDocuments({
                   <path d="M6 2h8l4 4v16H6z" strokeLinejoin="round" />
                   <path d="M14 2v4h4" strokeLinejoin="round" />
                 </svg>
-                <span className="truncate">{d.label || "Signed lease"}</span>
+                <span className="truncate">{d.label || DOC_CATEGORY_LABEL[d.category] || "Document"}</span>
                 <span className="shrink-0 text-xs font-normal text-ink-faint">
                   · {formatDate(d.created)}
                 </span>
               </a>
               <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full bg-clay/60 px-2 py-0.5 text-[11px] text-ink-soft">
+                  {DOC_CATEGORY_LABEL[d.category] ?? d.category}
+                </span>
                 {d.shared ? (
                   <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
                     In portal
@@ -107,15 +119,24 @@ export function LeaseDocuments({
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-sm text-ink-faint">No lease on file yet.</p>
+        <p className="mt-2 text-sm text-ink-faint">No documents on file yet.</p>
       )}
 
       <form ref={formRef} action={action} className="mt-3 flex flex-wrap items-center gap-2">
         <input type="hidden" name="unit_id" value={unitId} />
+        <select
+          name="category"
+          defaultValue="lease"
+          className="rounded-lg border border-clay-deep bg-white px-2 py-2 text-sm text-ink"
+        >
+          {Object.entries(DOC_CATEGORY_LABEL).map(([v, l]) => (
+            <option key={v} value={v}>{l}</option>
+          ))}
+        </select>
         <input
           type="text"
           name="label"
-          placeholder="Label (e.g. 2024 renewal)"
+          placeholder="Label (e.g. ESA letter — Dr. Smith)"
           className="min-w-0 flex-1 rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink"
         />
         <input

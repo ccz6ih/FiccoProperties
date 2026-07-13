@@ -9,18 +9,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const LEASE_BUCKET = "lease-docs";
 
-type SharedDoc = { id: string; label: string | null; url: string; created: string };
+type SharedDoc = { id: string; label: string | null; url: string; created: string; category: string };
 
-/** Scanned leases staff have shared to this resident (private bucket, signed). */
+const DOC_CATEGORY_LABEL: Record<string, string> = {
+  lease: "Lease",
+  esa: "ESA letter",
+  insurance: "Insurance",
+  notice: "Notice",
+  other: "Document",
+};
+
+/** Documents staff have shared to this resident (private bucket, signed URLs). */
 async function getSharedLeaseDocs(residentId: string): Promise<SharedDoc[]> {
   const admin = createAdminClient() as unknown as SupabaseClient;
   const { data: rows } = await admin
     .from("lease_documents")
-    .select("id, label, path, created_at")
+    .select("id, label, path, created_at, category")
     .eq("resident_id", residentId)
     .eq("shared_with_resident", true)
     .order("created_at", { ascending: false })
-    .returns<{ id: string; label: string | null; path: string; created_at: string }[]>();
+    .returns<{ id: string; label: string | null; path: string; created_at: string; category: string | null }[]>();
 
   const signed = await Promise.all(
     (rows ?? []).map((d) =>
@@ -32,6 +40,7 @@ async function getSharedLeaseDocs(residentId: string): Promise<SharedDoc[]> {
     label: d.label,
     url: signed[i]?.data?.signedUrl ?? "",
     created: d.created_at,
+    category: d.category ?? "lease",
   }));
 }
 
@@ -40,10 +49,8 @@ function LeaseDocsCard({ docs }: { docs: SharedDoc[] }) {
   return (
     <Card className="mt-6 overflow-hidden">
       <div className="border-b border-clay bg-sand/50 px-6 py-4">
-        <div className="font-display text-lg font-semibold text-ink">
-          Your lease document{docs.length === 1 ? "" : "s"}
-        </div>
-        <div className="text-sm text-ink-soft">A copy of your signed lease on file.</div>
+        <div className="font-display text-lg font-semibold text-ink">Your documents</div>
+        <div className="text-sm text-ink-soft">Copies of documents on file for your home.</div>
       </div>
       <ul className="divide-y divide-clay">
         {docs.map((d) => (
@@ -58,7 +65,10 @@ function LeaseDocsCard({ docs }: { docs: SharedDoc[] }) {
                 <path d="M6 2h8l4 4v16H6z" strokeLinejoin="round" />
                 <path d="M14 2v4h4" strokeLinejoin="round" />
               </svg>
-              <span className="truncate">{d.label || "Signed lease"}</span>
+              <span className="truncate">{d.label || DOC_CATEGORY_LABEL[d.category] || "Document"}</span>
+              <span className="shrink-0 rounded-full bg-clay/60 px-2 py-0.5 text-[11px] text-ink-soft">
+                {DOC_CATEGORY_LABEL[d.category] ?? d.category}
+              </span>
             </a>
             <span className="shrink-0 text-xs text-ink-faint">{formatDate(d.created)}</span>
           </li>
