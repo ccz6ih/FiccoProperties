@@ -245,6 +245,70 @@ export async function createDemandForUnit(form: FormData) {
   redirect(`/admin/notices/${notice.id}`);
 }
 
+/**
+ * Create a Notice of Lease Violation (Demand to Comply) for a unit — a custom
+ * violation description with a cure deadline. Opens as a draft to review, print,
+ * and serve; flows into the case file.
+ */
+export async function createLeaseViolationForUnit(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  const reason = (form.get("reason") as string)?.trim();
+  const cureDays = Math.max(1, Math.floor(Number(form.get("cure_days")) || 10));
+  if (!unitId || !reason) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+
+  const [{ data: unit }, { data: occ }] = await Promise.all([
+    db.from("units").select("label, properties(name, address_line1, city, postal_code)").eq("id", unitId).maybeSingle<UnitInfo>(),
+    db.from("unit_occupancy").select("tenant_name, occupant_profile_id, rent_cents, profiles:occupant_profile_id(full_name)").eq("unit_id", unitId).maybeSingle<OccInfo>(),
+  ]);
+
+  const cure = new Date(now);
+  cure.setDate(cure.getDate() + cureDays);
+  const cureIso = cure.toISOString().slice(0, 10);
+
+  const p = unit?.properties ?? null;
+  const homeLabel = [p?.name, unit?.label].filter(Boolean).join(" — ");
+  const fullAddress = [p?.address_line1, unit?.label].filter(Boolean).join(", ") || homeLabel;
+
+  const { title, body } = buildNotice("lease_violation", {
+    tenantName: occ?.tenant_name ?? occ?.profiles?.full_name ?? "Resident",
+    homeLabel,
+    fullAddress,
+    city: p?.city,
+    county: "Jefferson",
+    reason,
+    cureBy: formatDate(cureIso),
+    today: formatDate(todayIso),
+  });
+
+  const { data: notice, error } = await db
+    .from("notices")
+    .insert({
+      resident_id: occ?.occupant_profile_id ?? null,
+      unit_id: unitId,
+      type: "lease_violation",
+      title,
+      body,
+      cure_by: cureIso,
+      status: "draft",
+      created_by: profile!.id,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error || !notice) return;
+
+  revalidatePath("/admin/notices");
+  redirect(`/admin/notices/${notice.id}`);
+}
+
 const TERM_TYPE: Record<string, "terminate_substantial" | "terminate_repeat" | "terminate_nonrenewal"> = {
   substantial: "terminate_substantial",
   repeat: "terminate_repeat",

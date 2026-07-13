@@ -19,7 +19,7 @@ export async function sendNotification(opts: {
   const to = opts.to ?? process.env.NOTIFY_EMAIL;
   const from =
     process.env.EMAIL_FROM ||
-    "38th Ave Properties <notifications@38thaveproperties.com>";
+    '"Craig Carda · 38th Ave Properties" <notifications@38thaveproperties.com>';
 
   if (!key || !to) return { sent: false };
 

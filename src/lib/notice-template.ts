@@ -239,22 +239,25 @@ Date served: ____________   Method of service: ____________`,
 
     case "lease_violation":
       return {
-        title: "Notice of lease violation",
+        title: "Notice of Lease Violation — Demand to Comply",
         body: `Date: ${today}
 
-To: ${tenant}
-Premises: ${addr}
+NOTICE OF LEASE VIOLATION — DEMAND TO COMPLY
 
-This notice is to inform you of a violation of your lease and the community rules:
+To: ${tenant}, and any other occupants
+Premises: ${addr}${city ? `, ${city}` : ""}, Colorado${county ? ` — ${county} County` : ""}
 
-${data.reason?.trim() || "[Describe the violation]"}
+You are in violation of your Residential Lease Agreement and/or the Community Rules:
 
-Please correct this violation on or before ${cure}. Failure to correct it may result in further action, including termination of your tenancy as allowed by law.
+${reasonText}
 
-If you have questions, call our office at (720) 527-2596.
+REQUIRED CORRECTION: You must correct this violation on or before ${cure}. If you do not, the Landlord may pursue lease-enforcement and eviction remedies as allowed by Colorado law (C.R.S. § 13-40-104 et seq.), and may charge you, as additional rent, the cost of curing the violation and any related costs.
+
+Contact the office at (720) 527-2596 with any questions or to confirm completion.
 
 38th Ave Properties, Landlord
-By: ____________________________`,
+By: ____________________________  (Landlord / Agent)
+Date served: ____________   Method of service: ____________`,
       };
 
     case "entry":

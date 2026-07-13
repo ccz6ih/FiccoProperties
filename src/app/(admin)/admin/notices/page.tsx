@@ -58,6 +58,12 @@ export default async function AdminNotices({
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href="/admin/notices/violation"
+              className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
+            >
+              Lease violation →
+            </Link>
+            <Link
               href="/admin/notices/terminate"
               className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
             >
