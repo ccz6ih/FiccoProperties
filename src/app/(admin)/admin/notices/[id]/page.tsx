@@ -4,7 +4,9 @@ import { Container, Card } from "@/components/ui";
 import { StatusPill } from "@/components/dashboard-ui";
 import { PrintButton } from "@/components/print-button";
 import { NoticeStatusControl } from "@/components/notice-status-control";
+import { NoticeEmailButton } from "@/components/notice-email-button";
 import { setNoticeServed } from "@/app/(admin)/admin/notices/actions";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NOTICE_LABELS, type NoticeType } from "@/lib/notice-template";
 import { formatCents, formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +16,7 @@ type NoticeRow = {
   type: string;
   title: string;
   body: string;
+  unit_id: string | null;
   amount_cents: number | null;
   cure_by: string | null;
   served_at: string | null;
@@ -56,13 +59,24 @@ export default async function NoticeDetail({
   const { data: notice } = await supabase
     .from("notices")
     .select(
-      "id, type, title, body, amount_cents, cure_by, served_at, served_method, served_email, status, created_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
+      "id, type, title, body, unit_id, amount_cents, cure_by, served_at, served_method, served_email, status, created_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
     )
     .eq("id", id)
     .maybeSingle()
     .returns<NoticeRow>();
 
   if (!notice) notFound();
+
+  // Recipient email — profile first, then the tenancy email for record-only tenants.
+  let recipientEmail = notice.profiles?.email ?? null;
+  if (!recipientEmail && notice.unit_id) {
+    const { data: occ } = await (supabase as unknown as SupabaseClient)
+      .from("unit_occupancy")
+      .select("tenant_email")
+      .eq("unit_id", notice.unit_id)
+      .maybeSingle<{ tenant_email: string | null }>();
+    recipientEmail = occ?.tenant_email ?? null;
+  }
 
   const prop = notice.units?.properties;
   const homeLabel = prop?.name ? `${prop.name} · ${notice.units?.label}` : null;
@@ -157,6 +171,17 @@ export default async function NoticeDetail({
 
         {/* Service + status controls (not printed) */}
         <div className="mt-6 space-y-6 print:hidden">
+          <Card className="space-y-3 p-6">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Email to tenant
+            </h2>
+            <p className="text-sm text-ink-soft">
+              Send a copy now (replies come to your inbox). This doesn&apos;t mark it served —
+              use “Record service” below for that.
+            </p>
+            <NoticeEmailButton id={notice.id} email={recipientEmail} />
+          </Card>
+
           <Card className="space-y-4 p-6">
             <h2 className="font-display text-lg font-semibold text-ink">
               Record service
