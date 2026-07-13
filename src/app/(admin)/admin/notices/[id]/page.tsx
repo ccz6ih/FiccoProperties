@@ -78,6 +78,26 @@ export default async function NoticeDetail({
     recipientEmail = occ?.tenant_email ?? null;
   }
 
+  // Latest delivery status for this notice's email (from the Resend webhook).
+  const { data: emailStatus } = await (supabase as unknown as SupabaseClient)
+    .from("email_log")
+    .select("status, to_email, last_event_at, created_at")
+    .eq("ref_type", "notice")
+    .eq("ref_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ status: string; to_email: string | null; last_event_at: string | null; created_at: string }>();
+
+  const STATUS_UI: Record<string, { label: string; cls: string }> = {
+    sent: { label: "Sent", cls: "bg-gold/15 text-gold" },
+    delivery_delayed: { label: "Delayed…", cls: "bg-gold/15 text-gold" },
+    delivered: { label: "Delivered ✓", cls: "bg-pine/10 text-pine" },
+    opened: { label: "Opened 👁", cls: "bg-pine/10 text-pine" },
+    bounced: { label: "⚠ Bounced — bad address", cls: "bg-terracotta/15 text-terracotta-dark" },
+    complained: { label: "⚠ Marked as spam", cls: "bg-terracotta/15 text-terracotta-dark" },
+  };
+  const statusUi = emailStatus ? STATUS_UI[emailStatus.status] ?? null : null;
+
   const prop = notice.units?.properties;
   const homeLabel = prop?.name ? `${prop.name} · ${notice.units?.label}` : null;
   const address = [prop?.address_line1, prop?.city, prop?.state, prop?.postal_code]
@@ -180,6 +200,17 @@ export default async function NoticeDetail({
               use “Record service” below for that.
             </p>
             <NoticeEmailButton id={notice.id} email={recipientEmail} />
+            {statusUi && (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusUi.cls}`}>
+                  {statusUi.label}
+                </span>
+                <span className="text-ink-faint">
+                  {emailStatus?.to_email}
+                  {emailStatus?.last_event_at ? ` · ${formatDate(emailStatus.last_event_at)}` : ""}
+                </span>
+              </div>
+            )}
           </Card>
 
           <Card className="space-y-4 p-6">

@@ -14,7 +14,9 @@ export async function sendNotification(opts: {
   replyTo?: string;
   /** Override the recipient. Defaults to NOTIFY_EMAIL (staff). */
   to?: string;
-}): Promise<{ sent: boolean }> {
+  /** Optional: log this send for delivery tracking + link it to a record. */
+  meta?: { kind: string; refType?: string; refId?: string };
+}): Promise<{ sent: boolean; id?: string }> {
   const key = process.env.RESEND_API_KEY;
   const to = opts.to ?? process.env.NOTIFY_EMAIL;
   const from =
@@ -38,7 +40,36 @@ export async function sendNotification(opts: {
         reply_to: opts.replyTo,
       }),
     });
-    return { sent: res.ok };
+    if (!res.ok) return { sent: false };
+
+    let id: string | undefined;
+    try {
+      const json = (await res.json()) as { id?: string };
+      id = json?.id;
+    } catch {
+      /* body not JSON — still sent */
+    }
+
+    // Record the send for delivery tracking (best-effort).
+    if (id && opts.meta) {
+      try {
+        const { createAdminClient } = await import("@/lib/supabase/admin");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (createAdminClient() as any).from("email_log").insert({
+          message_id: id,
+          to_email: to,
+          subject: opts.subject,
+          kind: opts.meta.kind,
+          ref_type: opts.meta.refType ?? null,
+          ref_id: opts.meta.refId ?? null,
+          status: "sent",
+        });
+      } catch {
+        /* logging is best-effort */
+      }
+    }
+
+    return { sent: true, id };
   } catch {
     return { sent: false };
   }

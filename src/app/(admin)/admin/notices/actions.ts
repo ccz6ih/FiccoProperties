@@ -129,6 +129,7 @@ export async function setNoticeServed(form: FormData) {
         // Replies to a served notice go to the owner's inbox.
         replyTo: process.env.OWNER_REPLY_TO || "craigcarda2@gmail.com",
         subject: n.title,
+        meta: { kind: "notice", refType: "notice", refId: id },
         html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:18px;color:#2f5d50;margin-bottom:6px">38th Ave Properties</div><pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#2c2622;background:#faf7f1;border:1px solid #e6dcc8;border-radius:8px;padding:14px">${esc(n.body)}</pre><p style="font-size:12px;color:#9b9286;margin-top:12px">This notice is also available in your resident portal.</p></div>`,
       });
       if (sent) emailedTo = email;
@@ -189,6 +190,7 @@ export async function emailNotice(
     replyTo: process.env.OWNER_REPLY_TO || "craigcarda2@gmail.com",
     subject: n.title,
     html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:18px;color:#2f5d50;margin-bottom:6px">38th Ave Properties</div><pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#2c2622;background:#faf7f1;border:1px solid #e6dcc8;border-radius:8px;padding:14px">${esc(n.body)}</pre><p style="font-size:12px;color:#9b9286;margin-top:12px">This notice is also available in your resident portal.</p></div>`,
+    meta: { kind: "notice", refType: "notice", refId: id },
   });
   if (!sent) return { ok: false, error: "Could not send. Please try again." };
 
