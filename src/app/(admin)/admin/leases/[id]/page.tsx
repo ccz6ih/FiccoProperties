@@ -67,6 +67,15 @@ export default async function LeaseDetailPage({
     .order("created_at", { ascending: false })
     .returns<LeaseEvent[]>();
 
+  // Guardrail: the linked unit's label should appear in the lease terms.
+  const unitLabel = lease.units?.label ?? "";
+  const termsText = lease.terms ?? "";
+  const escaped = unitLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const labelInTerms =
+    !unitLabel ||
+    new RegExp(`(^|[^0-9A-Za-z])${escaped}([^0-9A-Za-z]|$)`).test(termsText);
+  const unitMismatch = !!termsText.trim() && !labelInTerms;
+
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader
@@ -78,6 +87,15 @@ export default async function LeaseDetailPage({
           </Link>
         }
       />
+
+      {unitMismatch && (
+        <div className="mb-6 rounded-xl border border-terracotta/40 bg-terracotta-soft px-4 py-3 text-sm text-terracotta-dark">
+          ⚠ <strong>Unit mismatch.</strong> This lease is linked to{" "}
+          <strong>{lease.units?.properties?.name} · {lease.units?.label}</strong>, but that unit isn&apos;t
+          named in the lease terms below. Double‑check the unit — the link and the terms should match.
+          Re‑generate the terms for this unit, or re‑link the lease to the correct unit.
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-6 md:col-span-2">

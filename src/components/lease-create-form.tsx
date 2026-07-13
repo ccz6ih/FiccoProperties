@@ -43,9 +43,17 @@ export function LeaseCreateForm({
 }) {
   const [state, action, pending] = useActionState(createLease, initial);
   const [terms, setTerms] = useState("");
+  const [unitId, setUnitId] = useState(defaults?.unit_id ?? "");
   const [includeGarage, setIncludeGarage] = useState(false);
   const [utilities, setUtilities] = useState<"standard" | "tenant" | "landlord">("standard");
   const formRef = useRef<HTMLFormElement>(null);
+
+  // Warn if the generated/edited terms don't name the selected unit.
+  const selectedUnit = units.find((u) => u.id === unitId);
+  const escaped = (selectedUnit?.label ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const unitInTerms =
+    !selectedUnit || new RegExp(`(^|[^0-9A-Za-z])${escaped}([^0-9A-Za-z]|$)`).test(terms);
+  const termsMismatch = !!terms.trim() && !!selectedUnit && !unitInTerms;
 
   function fillStandardTerms() {
     const f = formRef.current;
@@ -97,7 +105,8 @@ export function LeaseCreateForm({
             <select
               name="unit_id"
               className={inputClass}
-              defaultValue={defaults?.unit_id ?? ""}
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
             >
               <option value="" disabled>
                 Choose a unit…
@@ -232,6 +241,13 @@ export function LeaseCreateForm({
             Auto-fills tenant, unit, rent, dates &amp; deposit from the fields above plus the
             standard rules. Review/edit before sending; have your attorney review the template once.
           </span>
+          {termsMismatch && (
+            <div className="mt-1.5 rounded-lg border border-terracotta/40 bg-terracotta-soft px-3 py-2 text-xs text-terracotta-dark">
+              ⚠ The terms don&apos;t mention <strong>{selectedUnit?.label}</strong> — the unit you picked.
+              Click <span className="font-medium">“Fill standard 38th Ave terms”</span> to regenerate, or
+              check the premises address in the terms.
+            </div>
+          )}
         </label>
 
         <Button type="submit" variant="primary" disabled={pending}>
