@@ -6,6 +6,7 @@ import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashb
 import { ResidentContactEdit } from "@/components/resident-contact-edit";
 import { ActionFeedbackButton } from "@/components/action-feedback-button";
 import { ResidentDocsForm } from "@/components/resident-docs-form";
+import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
 import {
   sendPortalLogin,
   deleteResidentDocument,
@@ -241,6 +242,31 @@ export default async function ResidentDetailPage({
       if (u) docUrl.set(d.id, u);
     });
 
+  // Shared documents (unit-based; both staff + resident can see the shared ones).
+  let sharedDocs: LeaseDoc[] = [];
+  if (occupancy?.unit_id) {
+    const { data: rows } = await (adminDb as unknown as SupabaseClient)
+      .from("lease_documents")
+      .select("id, label, path, created_at, resident_id, shared_with_resident, category")
+      .eq("unit_id", occupancy.unit_id)
+      .order("created_at", { ascending: false })
+      .returns<
+        { id: string; label: string | null; path: string; created_at: string; resident_id: string | null; shared_with_resident: boolean | null; category: string | null }[]
+      >();
+    const signed = await Promise.all(
+      (rows ?? []).map((d) => adminDb.storage.from("lease-docs").createSignedUrl(d.path, 3600))
+    );
+    sharedDocs = (rows ?? []).map((d, i) => ({
+      id: d.id,
+      label: d.label,
+      url: signed[i]?.data?.signedUrl ?? "",
+      created: d.created_at,
+      shared: !!d.shared_with_resident,
+      residentLinked: !!d.resident_id,
+      category: d.category ?? "lease",
+    }));
+  }
+
   const insStatus = insuranceStatus(profile);
   let insuranceDocUrl: string | null = null;
   if (profile.insurance_doc_path) {
@@ -368,6 +394,25 @@ export default async function ResidentDetailPage({
           <p className="text-sm text-ink-faint">No files or notes yet.</p>
         )}
       </Card>
+
+      {/* Shared documents (both sides) */}
+      {occupancy?.unit_id && (
+        <Card className="mb-8 p-6">
+          <div className="mb-1 flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Documents
+              <span className="ml-2 rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                Shareable
+              </span>
+            </h2>
+          </div>
+          <p className="mb-2 text-sm text-ink-soft">
+            Leases, ESA letters, insurance, and other files. Mark any of them{" "}
+            <span className="font-medium">Share</span> to let this resident see their copy in the portal.
+          </p>
+          <LeaseDocuments unitId={occupancy.unit_id} docs={sharedDocs} />
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Person & contact */}

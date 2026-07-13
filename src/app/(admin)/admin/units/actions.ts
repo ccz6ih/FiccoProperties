@@ -300,6 +300,7 @@ export async function uploadLeaseDocument(
   });
 
   revalidatePath(`/admin/units/${unitId}`);
+  revalidatePath("/admin/residents/[id]", "page");
   return { ok: true };
 }
 
@@ -321,6 +322,7 @@ export async function setLeaseDocumentShared(form: FormData): Promise<void> {
     .eq("id", id);
 
   if (unitId) revalidatePath(`/admin/units/${unitId}`);
+  revalidatePath("/admin/residents/[id]", "page");
 }
 
 /** Delete a lease document (removes the file + row). Staff-only. */
