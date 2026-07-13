@@ -239,21 +239,29 @@ Date served: ____________   Method of service: ____________`,
 
     case "lease_violation":
       return {
-        title: "Notice of Lease Violation — Demand to Comply",
+        title: "Demand for Compliance — Lease Violation (Comply or Vacate)",
         body: `Date: ${today}
 
-NOTICE OF LEASE VIOLATION — DEMAND TO COMPLY
+DEMAND FOR COMPLIANCE — RESIDENTIAL (C.R.S. § 13-40-104(1)(e) and § 13-40-106)
 
 To: ${tenant}, and any other occupants
 Premises: ${addr}${city ? `, ${city}` : ""}, Colorado${county ? ` — ${county} County` : ""}
 
-You are in violation of your Residential Lease Agreement and/or the Community Rules:
+GROUNDS: You are in violation of your Residential Lease Agreement and/or the Community Rules:
 
 ${reasonText}
 
-REQUIRED CORRECTION: You must correct this violation on or before ${cure}. If you do not, the Landlord may pursue lease-enforcement and eviction remedies as allowed by Colorado law (C.R.S. § 13-40-104 et seq.), and may charge you, as additional rent, the cost of curing the violation and any related costs.
+TIME TO COMPLY: On or before ${cure} — the compliance deadline stated in this notice — you must EITHER:
+  (1) fully correct the violation described above and comply with the lease, OR
+  (2) move out and deliver possession of the premises to the Landlord.
 
-Contact the office at (720) 527-2596 with any questions or to confirm completion.
+If you do not do one of these by the date above, the Landlord may begin a court eviction case (Forcible Entry and Detainer, C.R.S. § 13-40-101 et seq.) to recover possession of the premises and the costs allowed by law. Any cost the Landlord incurs to cure the violation may be charged as additional rent; eviction for non-payment, however, applies only to rent, not to fees.
+
+YOUR RIGHTS (C.R.S. § 13-40-106):
+  • Mandatory mediation: If you receive Supplemental Security Income (SSI), Social Security Disability Insurance (SSDI), or Cash Assistance through the Colorado Works Program, you may be entitled to mandatory mediation at no cost before an eviction case is filed. Tell the Landlord in writing right away if you are enrolled in one of these programs.
+  • Survivor protections: If this condition or violation results from domestic violence, abuse, stalking, or unlawful sexual behavior — including a lock change made for your safety — you may have protections and defenses under Colorado law, and you cannot be penalized for it. Please notify the Landlord in writing and provide the documentation the law requires; the Landlord will work with you on a lawful arrangement (such as a lock addendum and key) rather than take adverse action.
+
+To resolve this or ask questions, contact the office at (720) 527-2596.
 
 38th Ave Properties, Landlord
 By: ____________________________  (Landlord / Agent)
