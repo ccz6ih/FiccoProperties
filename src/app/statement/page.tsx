@@ -4,6 +4,7 @@ import { Container } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
+import { RENT_DROPBOX } from "@/lib/rent-dropbox";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Rent statement" };
@@ -176,9 +177,19 @@ export default async function StatementPage() {
             </p>
           )}
 
-          <p className="mt-6 text-xs text-ink-faint">
+          <div className="mt-6 rounded-xl border border-clay bg-sand/40 px-4 py-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+              How to pay
+            </div>
+            <div className="mt-0.5 text-sm text-ink-soft">
+              By check or money order (write your unit number on it) — drop it in the rent drop box at{" "}
+              <span className="font-medium text-ink">{RENT_DROPBOX.line1}, {RENT_DROPBOX.city}</span>.
+            </div>
+          </div>
+
+          <p className="mt-4 text-xs text-ink-faint">
             This statement reflects rent charges and recorded payments as of{" "}
-            {statementDate}. Questions? Contact the on-site team.
+            {statementDate}. Questions? Call {RENT_DROPBOX.phone}.
           </p>
         </div>
       </Container>

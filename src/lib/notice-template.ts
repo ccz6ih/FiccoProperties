@@ -5,6 +5,8 @@
  * Colorado's official JDF forms and/or your attorney. Staff can edit any field
  * before printing/serving.
  */
+import { RENT_DROPBOX } from "@/lib/rent-dropbox";
+
 export type NoticeType =
   | "late_rent"
   | "pay_or_quit"
@@ -92,7 +94,9 @@ Re: ${addr}
 
 This is a friendly reminder that rent of ${amount} for ${period} was due on ${due} and our records show it remains unpaid. A late fee may apply under your lease.
 
-Please bring your balance current as soon as possible. If you have already paid, thank you — please disregard this notice. If you have questions or need to make arrangements, call our office at (720) 527-2596.
+Please bring your balance current as soon as possible. Pay by check or money order (write your unit number on it) in the rent drop box at ${RENT_DROPBOX.full}.
+
+If you have already paid, thank you — please disregard this notice. If you have questions or need to make arrangements, call our office at ${RENT_DROPBOX.phone}.
 
 Thank you,
 38th Ave Properties`,

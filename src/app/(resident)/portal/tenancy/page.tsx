@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, Eyebrow } from "@/components/ui";
 import { PageHeader, StatCard } from "@/components/dashboard-ui";
 import { formatCents, formatDate } from "@/lib/format";
+import { RENT_DROPBOX } from "@/lib/rent-dropbox";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -298,7 +299,8 @@ export default async function TenancyPage() {
           </div>
           {rentCents != null && (
             <p className="mt-4 text-xs text-ink-faint">
-              Your rent is {formatCents(rentCents)}, due on the 1st each month.
+              Your rent is {formatCents(rentCents)}, due on the 1st each month. Pay by check or money
+              order in the rent drop box at {RENT_DROPBOX.line1}, {RENT_DROPBOX.city}.
             </p>
           )}
         </Card>
