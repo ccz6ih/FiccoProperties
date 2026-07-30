@@ -51,9 +51,10 @@ export function renderReminderEmail(opts: {
   const c = COPY[opts.stage];
   const amount = formatCents(opts.amountCents);
   const subject = c.subject(opts.monthLabel);
+  const dropBox = `<div style="border:1px solid ${LINE};border-radius:10px;padding:10px 14px;margin:4px 0 8px"><div style="font-size:11px;color:${FAINT};text-transform:uppercase;letter-spacing:.04em">Rent drop box (check or money order)</div><div style="font-size:14px;font-weight:600;color:${INK}">11080 W 38th Ave, #7 · Wheat Ridge, CO 80033</div><div style="font-size:12px;color:${FAINT}">Please write your unit number on your payment.</div></div>`;
   const payLine = opts.hasPortal
-    ? `<a href="${opts.appUrl}/portal/payments" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">Pay rent in your portal</a>`
-    : `<div style="font-size:14px;color:${INK}">To pay, drop off at the office or call us and we'll help. Office: <strong>(720) 527-2596</strong>.</div>`;
+    ? `${dropBox}<a href="${opts.appUrl}/portal/payments" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">See your balance in the portal</a>`
+    : `${dropBox}<div style="font-size:13px;color:${INK}">Questions? Call <strong>(720) 527-2596</strong>.</div>`;
 
   const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:${INK}">
     <div style="font-family:Georgia,serif;font-size:20px;font-weight:600;color:${PINE};margin-bottom:4px">38th Ave Properties</div>

@@ -332,9 +332,18 @@ export default async function PortalPayments() {
             <Card className="p-6">
               <Eyebrow>How to pay</Eyebrow>
               <p className="mt-3 text-sm text-ink-soft">
-                Please pay your rent by <span className="font-medium text-ink">check or money
-                order</span>, dropped off or mailed to the office. Include your unit number.
+                Please pay by <span className="font-medium text-ink">check or money order</span> (write
+                your unit number on it).
               </p>
+              <div className="mt-3 rounded-xl border border-clay bg-sand/40 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                  Rent drop box
+                </div>
+                <div className="mt-0.5 text-sm font-medium text-ink">
+                  11080 W 38th Ave, #7
+                </div>
+                <div className="text-sm text-ink-soft">Wheat Ridge, CO 80033</div>
+              </div>
               <p className="mt-3 text-sm text-ink-soft">
                 Questions or to make arrangements, call{" "}
                 <span className="font-medium text-ink">(720) 527-2596</span>.
