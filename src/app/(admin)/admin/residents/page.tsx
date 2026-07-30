@@ -15,6 +15,7 @@ type ProfileRow = {
   role: string;
   avatar_url: string | null;
   house_rules_ack_at: string | null;
+  signup_unit: { label: string; properties: { name: string | null } | null } | null;
 };
 
 type OccRow = {
@@ -37,6 +38,7 @@ type Row = {
   role: string | null;
   isResident: boolean;
   ackAt: string | null;
+  claimedHome: string | null;
 };
 
 export default async function AdminResidents({
@@ -51,7 +53,7 @@ export default async function AdminResidents({
   const [{ data: profiles }, { data: occ }] = await Promise.all([
     db
       .from("profiles")
-      .select("id, full_name, email, phone, created_at, role, avatar_url, house_rules_ack_at")
+      .select("id, full_name, email, phone, created_at, role, avatar_url, house_rules_ack_at, signup_unit:signup_unit_id(label, properties(name))")
       .order("created_at", { ascending: false })
       .returns<ProfileRow[]>(),
     db
@@ -81,6 +83,9 @@ export default async function AdminResidents({
     role: p.role,
     isResident: p.role === "resident",
     ackAt: p.house_rules_ack_at,
+    claimedHome: p.signup_unit
+      ? `${p.signup_unit.properties?.name ?? "—"} · ${p.signup_unit.label}`
+      : null,
   }));
 
   const recordRows: Row[] = recordOnly.map((o) => ({
@@ -94,6 +99,7 @@ export default async function AdminResidents({
     role: null,
     isResident: false,
     ackAt: null,
+    claimedHome: null,
   }));
 
   const all = [...accountRows, ...recordRows].sort((a, b) =>
@@ -163,6 +169,10 @@ export default async function AdminResidents({
                     <td className="px-5 py-3 text-ink-soft">
                       {r.home ? (
                         r.home
+                      ) : r.claimedHome ? (
+                        <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-medium text-ink">
+                          Wants: {r.claimedHome}
+                        </span>
                       ) : r.isResident && r.linked ? (
                         <span className="rounded-full bg-gold/20 px-2 py-0.5 text-[11px] font-medium text-ink">
                           ⚠ No home
