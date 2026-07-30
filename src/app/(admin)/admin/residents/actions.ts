@@ -10,6 +10,64 @@ import type { EmailActionState } from "@/lib/action-state";
 export type ContactState = { ok: boolean; error?: string };
 export type DocState = { ok: boolean; error?: string };
 
+/**
+ * Match a self-signed-up resident to the unit they said they're renting: links
+ * their account to that unit's tenancy (occupancy + co-tenant membership), which
+ * syncs their address + rent, and clears the pending claim. Staff-confirmed so
+ * nobody can claim a home that isn't theirs.
+ */
+export async function matchClaimedUnit(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/residents");
+  if (!isStaff(profile)) return;
+
+  const profileId = (form.get("profile_id") as string)?.trim();
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!profileId || !unitId) return;
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { data: person } = await db
+    .from("profiles")
+    .select("full_name, email, phone, signup_unit_id")
+    .eq("id", profileId)
+    .maybeSingle<{ full_name: string | null; email: string | null; phone: string | null; signup_unit_id: string | null }>();
+  if (!person) return;
+
+  const { data: existing } = await db
+    .from("unit_occupancy")
+    .select("unit_id, tenant_name, tenant_email, tenant_phone")
+    .eq("unit_id", unitId)
+    .maybeSingle<{ unit_id: string; tenant_name: string | null; tenant_email: string | null; tenant_phone: string | null }>();
+
+  if (existing) {
+    await db
+      .from("unit_occupancy")
+      .update({
+        occupant_profile_id: profileId,
+        tenant_name: existing.tenant_name ?? person.full_name,
+        tenant_email: existing.tenant_email ?? person.email,
+        tenant_phone: existing.tenant_phone ?? person.phone,
+      })
+      .eq("unit_id", unitId);
+  } else {
+    await db.from("unit_occupancy").insert({
+      unit_id: unitId,
+      occupant_profile_id: profileId,
+      tenant_name: person.full_name,
+      tenant_email: person.email,
+      tenant_phone: person.phone,
+    });
+  }
+
+  await db
+    .from("unit_occupants")
+    .upsert({ unit_id: unitId, profile_id: profileId, is_primary: true }, { onConflict: "unit_id,profile_id" });
+  await db.from("profiles").update({ signup_unit_id: null }).eq("id", profileId);
+
+  revalidatePath(`/admin/residents/${profileId}`);
+  revalidatePath("/admin/residents");
+  revalidatePath(`/admin/units/${unitId}`);
+}
+
 const RESIDENT_DOC_BUCKET = "resident-docs";
 const DOC_TYPES = new Set([
   "application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",

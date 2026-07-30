@@ -10,6 +10,7 @@ import { LeaseDocuments, type LeaseDoc } from "@/components/lease-documents";
 import {
   sendPortalLogin,
   deleteResidentDocument,
+  matchClaimedUnit,
 } from "@/app/(admin)/admin/residents/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -267,6 +268,19 @@ export default async function ResidentDetailPage({
     }));
   }
 
+  // Pending signup claim: resident said which home they're renting — offer to match.
+  const claimedUnitId =
+    (profile as unknown as { signup_unit_id: string | null }).signup_unit_id ?? null;
+  let claimedUnit: { label: string; property: string } | null = null;
+  if (claimedUnitId) {
+    const { data: cu } = await (adminDb as unknown as SupabaseClient)
+      .from("units")
+      .select("label, properties(name)")
+      .eq("id", claimedUnitId)
+      .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+    if (cu) claimedUnit = { label: cu.label, property: cu.properties?.name ?? "—" };
+  }
+
   const insStatus = insuranceStatus(profile);
   let insuranceDocUrl: string | null = null;
   if (profile.insurance_doc_path) {
@@ -307,6 +321,25 @@ export default async function ResidentDetailPage({
           hint={balanceCents > 0 ? "Owed" : "Up to date"}
         />
       </div>
+
+      {claimedUnit && (
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-5 py-4">
+          <div className="text-sm text-ink">
+            <span className="font-semibold">Signed up requesting a home.</span> This resident said
+            they rent{" "}
+            <span className="font-medium">{claimedUnit.property} · {claimedUnit.label}</span>
+            {(profile.phone ?? occupancy?.tenant_phone) ? ` · ${profile.phone ?? occupancy?.tenant_phone}` : ""}.
+            {occupancy ? " (Already linked to a unit — verify before matching.)" : " Match to sync their address + rent."}
+          </div>
+          <form action={matchClaimedUnit}>
+            <input type="hidden" name="profile_id" value={profile.id} />
+            <input type="hidden" name="unit_id" value={claimedUnitId ?? ""} />
+            <button className="whitespace-nowrap rounded-lg bg-pine px-4 py-2 text-sm font-medium text-cream hover:bg-pine-dark">
+              Match to {claimedUnit.label} →
+            </button>
+          </form>
+        </div>
+      )}
 
       {profile.role === "resident" && (
         <Card className="mb-8 p-6">

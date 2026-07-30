@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Container } from "@/components/ui";
-import { LoginForm } from "@/components/login-form";
+import { LoginForm, type SignupUnit } from "@/components/login-form";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const metadata: Metadata = { title: "Login" };
 
@@ -20,6 +22,20 @@ export default async function LoginPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (user) redirect(target);
+
+  // Units for the "which home?" picker on signup (service role — just labels).
+  const admin = createAdminClient() as unknown as SupabaseClient;
+  const { data: unitRows } = await admin
+    .from("units")
+    .select("id, label, properties(name)")
+    .returns<{ id: string; label: string; properties: { name: string | null } | null }[]>();
+  const units: SignupUnit[] = (unitRows ?? [])
+    .map((u) => ({ id: u.id, label: u.label, property: u.properties?.name ?? "—" }))
+    .sort(
+      (a, b) =>
+        a.property.localeCompare(b.property) ||
+        a.label.localeCompare(b.label, undefined, { numeric: true })
+    );
 
   return (
     <main className="flex min-h-dvh flex-col bg-grain">
@@ -39,9 +55,13 @@ export default async function LoginPage({
 
       <div className="flex flex-1 items-center justify-center px-5 py-12">
         <div className="w-full max-w-md">
-          <LoginForm next={target} />
+          <LoginForm next={target} units={units} />
           <p className="mt-6 text-center text-sm text-ink-soft">
-            Looking for a home?{" "}
+            Already renting with us? Use <span className="font-medium text-ink">Create an account</span>{" "}
+            above to set up your portal.
+          </p>
+          <p className="mt-1 text-center text-xs text-ink-faint">
+            Not a resident yet?{" "}
             <Link href="/apply" className="font-medium text-pine hover:text-pine-dark">
               Apply online
             </Link>

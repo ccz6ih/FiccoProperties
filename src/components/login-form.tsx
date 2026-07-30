@@ -6,17 +6,27 @@ import { createClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup" | "reset";
 
+export type SignupUnit = { id: string; label: string; property: string };
+
 const inputClass =
   "w-full rounded-xl border border-clay-deep bg-white/80 px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30";
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({ next, units = [] }: { next: string; units?: SignupUnit[] }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [unitId, setUnitId] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Group units by property for the picker.
+  const grouped = units.reduce<Record<string, SignupUnit[]>>((acc, u) => {
+    (acc[u.property] ??= []).push(u);
+    return acc;
+  }, {});
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -62,7 +72,11 @@ export function LoginForm({ next }: { next: string }) {
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          phone: phone || undefined,
+          signup_unit_id: unitId || undefined,
+        },
         emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     });
@@ -113,15 +127,52 @@ export function LoginForm({ next }: { next: string }) {
 
       <form onSubmit={onSubmit} className="space-y-4">
         {mode === "signup" && (
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-ink">Full name</span>
-            <input
-              className={inputClass}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              autoComplete="name"
-            />
-          </label>
+          <>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Full name</span>
+              <input
+                className={inputClass}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                autoComplete="name"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">Phone number</span>
+              <input
+                type="tel"
+                className={inputClass}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                autoComplete="tel"
+                placeholder="(720) 555-1234"
+              />
+            </label>
+            {units.length > 0 && (
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-ink">Which home are you renting?</span>
+                <select
+                  className={inputClass}
+                  value={unitId}
+                  onChange={(e) => setUnitId(e.target.value)}
+                >
+                  <option value="">Select your home…</option>
+                  {Object.entries(grouped).map(([property, us]) => (
+                    <optgroup key={property} label={property}>
+                      {us.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {property} · {u.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <span className="block text-[11px] text-ink-faint">
+                  This helps us connect your account to your home, rent, and lease.
+                </span>
+              </label>
+            )}
+          </>
         )}
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-ink">Email</span>
