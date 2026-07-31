@@ -45,7 +45,7 @@ export function SiteFooter() {
             <li>W 38th Ave</li>
             <li>Wheat Ridge, CO 80033</li>
             <li><a href="tel:+17205272596" className="hover:text-ink">(720) 527-2596</a></li>
-            <li><a href="mailto:hello@38thaveproperties.com" className="hover:text-ink">hello@38thaveproperties.com</a></li>
+            <li><Link href="/contact" className="hover:text-ink">hello@38thaveproperties.com</Link></li>
           </ul>
         </div>
       </Container>
