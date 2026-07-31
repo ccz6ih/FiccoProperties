@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { Avatar } from "@/components/avatar";
+import { MaintenanceQuickAdd, type MaintUnitOpt } from "@/components/maintenance-quick-add";
 import { formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
@@ -20,19 +21,34 @@ const COLUMNS: { key: string; label: string }[] = [
 
 export default async function AdminMaintenance() {
   const supabase = await createClient();
-  const { data: requests } = await supabase
-    .from("maintenance_requests")
-    .select(
-      "*, units(label, properties(name)), assignee:profiles!maintenance_requests_assigned_to_fkey(full_name, avatar_url)"
-    )
-    .order("created_at", { ascending: false })
-    .returns<MaintenanceRow[]>();
+  const [{ data: requests }, { data: units }] = await Promise.all([
+    supabase
+      .from("maintenance_requests")
+      .select(
+        "*, units(label, properties(name)), assignee:profiles!maintenance_requests_assigned_to_fkey(full_name, avatar_url)"
+      )
+      .order("created_at", { ascending: false })
+      .returns<MaintenanceRow[]>(),
+    supabase
+      .from("units")
+      .select("id, label, properties(name)")
+      .returns<{ id: string; label: string; properties: { name: string | null } | null }[]>(),
+  ]);
 
   const all = requests ?? [];
+  const unitOpts: MaintUnitOpt[] = (units ?? []).map((u) => ({
+    id: u.id,
+    label: u.label,
+    property: u.properties?.name ?? "—",
+  }));
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader title="Maintenance board" subtitle="Every request across the portfolio." />
+      <PageHeader
+        title="Maintenance board"
+        subtitle="Every request across the portfolio."
+        action={<MaintenanceQuickAdd units={unitOpts} />}
+      />
 
       {all.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-4">

@@ -55,7 +55,7 @@ export async function createTask(
 
 /** Move a task to a new status (done stamps completed_at). */
 export async function setTaskStatus(form: FormData): Promise<void> {
-  const { profile } = await requireProfile("/admin/tasks");
+  const { user, profile } = await requireProfile("/admin/tasks");
   if (!isStaff(profile)) return;
 
   const id = str(form.get("id"));
@@ -64,6 +64,15 @@ export async function setTaskStatus(form: FormData): Promise<void> {
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
+
+  // Read the task first so we can (a) tell whether this is a fresh completion
+  // and (b) copy it into the unit's maintenance log when it's tied to a unit.
+  const { data: prev } = await db
+    .from("tasks")
+    .select("status, unit_id, title, details")
+    .eq("id", id)
+    .maybeSingle<{ status: string; unit_id: string | null; title: string; details: string | null }>();
+
   await db
     .from("tasks")
     .update({
@@ -71,6 +80,28 @@ export async function setTaskStatus(form: FormData): Promise<void> {
       completed_at: status === "done" ? new Date().toISOString() : null,
     })
     .eq("id", id);
+
+  // First time a unit-tagged task is completed → drop a maintenance entry into
+  // that unit's log so it keeps a permanent history.
+  if (status === "done" && prev && prev.status !== "done" && prev.unit_id) {
+    const { data: occ } = await supabase
+      .from("unit_occupancy")
+      .select("occupant_profile_id")
+      .eq("unit_id", prev.unit_id)
+      .maybeSingle<{ occupant_profile_id: string | null }>();
+
+    const body = prev.details ? `${prev.title} — ${prev.details}` : prev.title;
+    await db.from("unit_log_entries").insert({
+      unit_id: prev.unit_id,
+      resident_id: occ?.occupant_profile_id ?? null,
+      kind: "maintenance",
+      body: `Task completed: ${body}`,
+      performed_on: new Date().toISOString().slice(0, 10),
+      cost_cents: null,
+      author_id: user.id,
+    });
+    revalidatePath(`/admin/units/${prev.unit_id}`);
+  }
 
   revalidatePath("/admin/tasks");
   revalidatePath("/admin");

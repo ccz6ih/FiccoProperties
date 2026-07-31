@@ -212,6 +212,27 @@ export default async function UnitDetail({
   const unitTasks = unitTaskRows ?? [];
   const todayIso2 = new Date().toISOString().slice(0, 10);
 
+  // Completed tasks tied to this unit — folded into the maintenance history so
+  // the unit keeps one timeline of everything that was done.
+  const { data: doneTaskRows } = await db
+    .from("tasks")
+    .select("id, title, category, completed_at, created_at, assignee:assignee_id(full_name)")
+    .eq("unit_id", id)
+    .eq("status", "done")
+    .order("completed_at", { ascending: false, nullsFirst: false })
+    .limit(30)
+    .returns<
+      {
+        id: string;
+        title: string;
+        category: string;
+        completed_at: string | null;
+        created_at: string;
+        assignee: { full_name: string | null } | null;
+      }[]
+    >();
+  const doneTasks = doneTaskRows ?? [];
+
   const costSigned = await Promise.all(
     costs.filter((c) => c.doc_path).map((c) =>
       leaseAdmin.storage.from("unit-cost-docs").createSignedUrl(c.doc_path!, 3600)
@@ -292,6 +313,30 @@ export default async function UnitDetail({
     .order("created_at", { ascending: false })
     .returns<LogRow[]>();
   const logList = logEntries ?? [];
+
+  // One combined maintenance timeline: resident/staff requests + completed tasks.
+  const historyItems = [
+    ...requestList.map((r) => ({
+      key: `r-${r.id}`,
+      date: r.created_at,
+      title: r.title,
+      sub: humanize(r.category),
+      tag: "Request",
+      status: r.status,
+      priority: r.priority !== "normal" ? r.priority : null,
+      href: `/admin/maintenance/${r.id}`,
+    })),
+    ...doneTasks.map((t) => ({
+      key: `t-${t.id}`,
+      date: t.completed_at ?? t.created_at,
+      title: t.title,
+      sub: [humanize(t.category), t.assignee?.full_name].filter(Boolean).join(" · "),
+      tag: "Task",
+      status: "done",
+      priority: null as string | null,
+      href: null as string | null,
+    })),
+  ].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
   // Unit photos — staff client reads rows; URLs are resolved server-side
   // (public URL for listing, signed URL for the private condition bucket).
@@ -704,30 +749,52 @@ export default async function UnitDetail({
           <h2 className="mb-4 font-display text-lg font-semibold text-ink">
             Maintenance history
           </h2>
-          {requestList.length > 0 ? (
+          {historyItems.length > 0 ? (
             <ul className="divide-y divide-clay">
-              {requestList.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    href={`/admin/maintenance/${r.id}`}
-                    className="flex items-center justify-between gap-3 py-3 hover:bg-sand/30"
-                  >
+              {historyItems.map((h) => {
+                const inner = (
+                  <>
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-ink">{r.title}</div>
-                      <div className="text-xs text-ink-faint">
-                        {humanize(r.category)} · {formatDate(r.created_at)}
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                            h.tag === "Task" ? "bg-pine/15 text-pine" : "bg-clay text-ink-soft"
+                          }`}
+                        >
+                          {h.tag}
+                        </span>
+                        <span className="truncate text-sm font-medium text-ink">{h.title}</span>
+                      </div>
+                      <div className="mt-0.5 text-xs text-ink-faint">
+                        {h.sub}
+                        {h.sub ? " · " : ""}
+                        {formatDate(h.date)}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {r.priority !== "normal" && <StatusPill value={r.priority} />}
-                      <StatusPill value={r.status} />
+                      {h.priority && <StatusPill value={h.priority} />}
+                      <StatusPill value={h.status} />
                     </div>
-                  </Link>
-                </li>
-              ))}
+                  </>
+                );
+                return (
+                  <li key={h.key}>
+                    {h.href ? (
+                      <Link
+                        href={h.href}
+                        className="flex items-center justify-between gap-3 py-3 hover:bg-sand/30"
+                      >
+                        {inner}
+                      </Link>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 py-3">{inner}</div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
-            <p className="text-sm text-ink-faint">No maintenance requests for this unit.</p>
+            <p className="text-sm text-ink-faint">No maintenance history for this unit yet.</p>
           )}
         </Card>
 
@@ -762,7 +829,7 @@ export default async function UnitDetail({
         </Card>
       </div>
 
-      {requestList.length === 0 && turnList.length === 0 && !activeTurn && (
+      {historyItems.length === 0 && turnList.length === 0 && !activeTurn && (
         <div className="mt-6">
           <EmptyState
             title="Nothing recorded yet"
