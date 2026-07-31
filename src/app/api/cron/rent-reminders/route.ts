@@ -136,7 +136,6 @@ export async function GET(req: Request) {
       to: g.email,
       subject,
       html,
-      replyTo: "hello@38thaveproperties.com",
     });
     if (ok) sent += 1;
   }

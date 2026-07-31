@@ -170,7 +170,6 @@ export async function GET(req: Request) {
     to: recipients,
     subject,
     html,
-    replyTo: "hello@38thaveproperties.com",
   });
 
   if (sent && !force) {

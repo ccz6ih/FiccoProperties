@@ -180,7 +180,6 @@ export async function sendForSignature(
 
     await sendNotification({
       to: email,
-      replyTo: "hello@38thaveproperties.com",
       subject: `Action needed: sign your lease for ${home}`,
       html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Your lease is ready to sign, ${greeting}</div><p>Your lease for <strong>${home}</strong> is ready for your review and electronic signature.</p>${howTo}<p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
     });

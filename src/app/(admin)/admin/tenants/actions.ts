@@ -141,7 +141,6 @@ async function inviteAccount(
     : `<p>Your account is now linked to <strong>${home}</strong>. Sign in at <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> (use “Forgot password?” if you need to reset it).</p>`;
   await sendNotification({
     to: email,
-    replyTo: "hello@38thaveproperties.com",
     subject: "Your 38th Ave Properties resident portal",
     html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Welcome, ${greeting} 👋</div>${intro}<p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
   });

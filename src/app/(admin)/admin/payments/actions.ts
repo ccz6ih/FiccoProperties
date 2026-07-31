@@ -66,7 +66,7 @@ async function emailReceipts(items: ReceiptItem[], refLabel: string | null): Pro
         hasPortal: !!it.resident_id,
         appUrl,
       });
-      await sendNotification({ to: email, subject, html, replyTo: "hello@38thaveproperties.com" });
+      await sendNotification({ to: email, subject, html });
     }
   } catch {
     // email is best-effort; recording the payment already succeeded

@@ -43,7 +43,6 @@ export async function emailLoginCredentials(
   const greeting = fullName?.split(" ")[0] ?? "there";
   await sendNotification({
     to: email,
-    replyTo: "hello@38thaveproperties.com",
     subject: "Your 38th Ave Properties resident portal login",
     html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Welcome to your resident portal, ${greeting}</div><p>Your portal is where you can review and sign your lease, pay rent, request maintenance, and message our team.</p><div style="background:#faf7f1;border:1px solid #e6dcc8;border-radius:12px;padding:16px;margin:18px 0"><p style="margin:0 0 8px;font-weight:600">How to sign in:</p><ol style="margin:0;padding-left:20px"><li style="margin-bottom:6px">Go to <a href="${BASE_URL}/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a></li><li style="margin-bottom:6px">Email: <strong>${email}</strong></li><li style="margin-bottom:6px">Temporary password: <strong>${tempPassword}</strong></li></ol></div><p style="font-size:13px;color:#6f655a">Once you're in, you can set your own password from “Forgot password?” on the sign-in page, or just keep using this one. Reply to this email if you need a hand.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
   });
@@ -121,7 +120,6 @@ export async function sendResidentWelcome(opts: {
 
   await sendNotification({
     to: opts.email,
-    replyTo: "hello@38thaveproperties.com",
     subject: "Welcome to your 38th Ave Properties resident portal",
     html,
   });

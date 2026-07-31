@@ -79,7 +79,6 @@ export async function GET(req: Request) {
       to: o.profiles!.email!,
       subject,
       html,
-      replyTo: "hello@38thaveproperties.com",
     });
 
     if (ok) {

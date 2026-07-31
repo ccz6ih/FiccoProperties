@@ -7,7 +7,15 @@
  *   RESEND_API_KEY  — from the Resend dashboard
  *   NOTIFY_EMAIL    — where staff notifications go (comma-separated allowed)
  *   EMAIL_FROM      — verified sender, e.g. "38th Ave Properties <notifications@38thaveproperties.com>"
+ *   OWNER_REPLY_TO  — where resident replies go (set in Vercel). Falls back to
+ *                     hello@38thaveproperties.com if unset.
  */
+
+/** Where replies to office emails should land — one env-controlled knob. */
+export function ownerReplyTo(): string {
+  return process.env.OWNER_REPLY_TO || "hello@38thaveproperties.com";
+}
+
 export async function sendNotification(opts: {
   subject: string;
   html: string;
@@ -37,7 +45,7 @@ export async function sendNotification(opts: {
         to: to.split(",").map((s) => s.trim()).filter(Boolean),
         subject: opts.subject,
         html: opts.html,
-        reply_to: opts.replyTo,
+        reply_to: opts.replyTo ?? ownerReplyTo(),
       }),
     });
     if (!res.ok) return { sent: false };

@@ -54,7 +54,6 @@ export async function sendAnniversaryCongrats(form: FormData): Promise<void> {
     to: email,
     subject,
     html,
-    replyTo: "hello@38thaveproperties.com",
   });
 
   if (sent) {

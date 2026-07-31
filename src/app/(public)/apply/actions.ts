@@ -154,7 +154,6 @@ export async function submitApplication(
   // Confirmation to the applicant (delivers once the Resend domain is verified).
   await sendNotification({
     to: email,
-    replyTo: "hello@38thaveproperties.com",
     subject: `We received your application — ${propertyName}`,
     html: customerHtml(`Thanks for applying, ${esc(first_name)}!`, [
       `We've received your application for <strong>${esc(propertyName)}</strong> and our team reviews every one personally.`,

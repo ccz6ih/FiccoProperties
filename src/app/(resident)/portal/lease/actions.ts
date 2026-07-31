@@ -61,7 +61,6 @@ async function emailLeaseCopies(
   if (residentEmail) {
     await sendNotification({
       to: residentEmail,
-      replyTo: "hello@38thaveproperties.com",
       subject: "Your signed lease — 38th Ave Properties",
       html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:620px;color:#2c2622"><div style="font-family:Georgia,serif;font-size:20px;color:#2f5d50">Your lease is signed ✓</div><p style="font-size:14px;line-height:1.6">Thank you, ${esc(
         signatureName

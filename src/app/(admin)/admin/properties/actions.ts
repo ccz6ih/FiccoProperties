@@ -263,7 +263,6 @@ export async function inviteTenant(
   if (tempPassword) {
     await sendNotification({
       to: email,
-      replyTo: "hello@38thaveproperties.com",
       subject: "Your 38th Ave Properties resident portal",
       html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">Welcome, ${greeting} 👋</div><p>We've set up a resident portal for <strong>${home}</strong>. You can pay rent, request maintenance, view your lease and rent statement, and message our team — all in one place.</p><p style="margin:18px 0 8px;font-weight:600">How to sign in:</p><ol style="padding-left:20px;margin:0 0 18px"><li style="margin-bottom:6px">Go to <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a></li><li style="margin-bottom:6px">Email: <strong>${email}</strong></li><li style="margin-bottom:6px">Temporary password: <strong>${tempPassword}</strong></li></ol><p style="font-size:14px;color:#6f655a">We recommend setting your own password — on the sign-in page click “Forgot password?”. Reply to this email if you need any help.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
     });
@@ -272,7 +271,6 @@ export async function inviteTenant(
 
   await sendNotification({
     to: email,
-    replyTo: "hello@38thaveproperties.com",
     subject: "Your 38th Ave Properties resident portal is ready",
     html: `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;color:#2c2622;font-size:15px;line-height:1.7"><div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:#2f5d50;margin-bottom:12px">You're all set, ${greeting} 👋</div><p>Your account is now linked to <strong>${home}</strong>. Sign in at <a href="https://38thaveproperties.com/login" style="color:#2f5d50;font-weight:600">38thaveproperties.com/login</a> to pay rent, request maintenance, view your lease and statement, and message our team. Use “Forgot password?” if you need to reset it.</p><p style="margin-top:18px;color:#6f655a;font-size:14px">— The 38th Ave Properties team</p></div>`,
   });
