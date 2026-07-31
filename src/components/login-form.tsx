@@ -13,7 +13,8 @@ const inputClass =
 
 export function LoginForm({ next, units = [] }: { next: string; units?: SignupUnit[] }) {
   const [mode, setMode] = useState<Mode>("signin");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [unitId, setUnitId] = useState("");
@@ -73,7 +74,7 @@ export function LoginForm({ next, units = [] }: { next: string; units?: SignupUn
       password,
       options: {
         data: {
-          full_name: fullName,
+          full_name: `${firstName.trim()} ${lastName.trim()}`.trim(),
           phone: phone || undefined,
           signup_unit_id: unitId || undefined,
         },
@@ -128,15 +129,28 @@ export function LoginForm({ next, units = [] }: { next: string; units?: SignupUn
       <form onSubmit={onSubmit} className="space-y-4">
         {mode === "signup" && (
           <>
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-ink">Full name</span>
-              <input
-                className={inputClass}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-ink">First name</span>
+                <input
+                  required
+                  className={inputClass}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-ink">Last name</span>
+                <input
+                  required
+                  className={inputClass}
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                />
+              </label>
+            </div>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-ink">Phone number</span>
               <input
