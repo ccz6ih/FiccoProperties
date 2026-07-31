@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
-import { resetPortalPassword } from "@/lib/portal-invite";
+import { resetPortalPassword, sendResidentWelcome } from "@/lib/portal-invite";
 import type { EmailActionState } from "@/lib/action-state";
 
 export type ContactState = { ok: boolean; error?: string };
@@ -34,9 +34,12 @@ export async function matchClaimedUnit(form: FormData): Promise<void> {
 
   const { data: existing } = await db
     .from("unit_occupancy")
-    .select("unit_id, tenant_name, tenant_email, tenant_phone")
+    .select("unit_id, tenant_name, tenant_email, tenant_phone, occupant_profile_id")
     .eq("unit_id", unitId)
-    .maybeSingle<{ unit_id: string; tenant_name: string | null; tenant_email: string | null; tenant_phone: string | null }>();
+    .maybeSingle<{ unit_id: string; tenant_name: string | null; tenant_email: string | null; tenant_phone: string | null; occupant_profile_id: string | null }>();
+
+  // Only welcome them the first time this account becomes the unit's occupant.
+  const alreadyLinked = existing?.occupant_profile_id === profileId;
 
   if (existing) {
     await db
@@ -62,6 +65,23 @@ export async function matchClaimedUnit(form: FormData): Promise<void> {
     .from("unit_occupants")
     .upsert({ unit_id: unitId, profile_id: profileId, is_primary: true }, { onConflict: "unit_id,profile_id" });
   await db.from("profiles").update({ signup_unit_id: null }).eq("id", profileId);
+
+  // Welcome-to-the-community email (first link only, and only if they gave one).
+  if (!alreadyLinked && person.email) {
+    const { data: unit } = await db
+      .from("units")
+      .select("label, properties(name)")
+      .eq("id", unitId)
+      .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+    const homeLabel = unit
+      ? `${unit.properties?.name ? `${unit.properties.name} · ` : ""}${unit.label}`
+      : null;
+    await sendResidentWelcome({
+      email: person.email,
+      fullName: person.full_name,
+      homeLabel,
+    });
+  }
 
   revalidatePath(`/admin/residents/${profileId}`);
   revalidatePath("/admin/residents");

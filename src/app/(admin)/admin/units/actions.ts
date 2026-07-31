@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { sendResidentWelcome } from "@/lib/portal-invite";
 
 /**
  * Link an existing resident account to a unit as a co-tenant (a second login for
@@ -21,14 +22,38 @@ export async function linkResidentAccount(form: FormData): Promise<void> {
   const db = createAdminClient() as unknown as SupabaseClient;
   const { data: account } = await db
     .from("profiles")
-    .select("id")
+    .select("id, full_name, email")
     .ilike("email", email)
-    .maybeSingle<{ id: string }>();
+    .maybeSingle<{ id: string; full_name: string | null; email: string | null }>();
   if (!account) return; // no account with that email — invite them first
+
+  // Was this account already a co-tenant here? If so, don't re-welcome them.
+  const { data: prevLink } = await db
+    .from("unit_occupants")
+    .select("id")
+    .eq("unit_id", unitId)
+    .eq("profile_id", account.id)
+    .maybeSingle<{ id: string }>();
 
   await db
     .from("unit_occupants")
     .upsert({ unit_id: unitId, profile_id: account.id, is_primary: false }, { onConflict: "unit_id,profile_id" });
+
+  if (!prevLink && account.email) {
+    const { data: unit } = await db
+      .from("units")
+      .select("label, properties(name)")
+      .eq("id", unitId)
+      .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+    const homeLabel = unit
+      ? `${unit.properties?.name ? `${unit.properties.name} · ` : ""}${unit.label}`
+      : null;
+    await sendResidentWelcome({
+      email: account.email,
+      fullName: account.full_name,
+      homeLabel,
+    });
+  }
 
   revalidatePath(`/admin/units/${unitId}`);
 }
