@@ -95,6 +95,100 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
   const selectedCents = selectedRows.reduce((s, c) => s + remainingOf(c), 0);
   const allChecked = openRows.length > 0 && selectedCount === openRows.length;
 
+  // Group the visible rows by property so the table reads as sections instead
+  // of one long list. Order is preserved from the incoming (already sorted) rows.
+  const groups: { property: string; rows: PaymentRow[] }[] = [];
+  const groupIdx = new Map<string, number>();
+  for (const c of visible) {
+    const key = c.property ?? "—";
+    let i = groupIdx.get(key);
+    if (i === undefined) {
+      i = groups.length;
+      groupIdx.set(key, i);
+      groups.push({ property: key, rows: [] });
+    }
+    groups[i].rows.push(c);
+  }
+  const showGroupHeaders = groups.length > 1;
+
+  const renderRow = (c: PaymentRow) => {
+    const open = isOpenRow(c);
+    const checked = selected.has(c.id);
+    const remaining = remainingOf(c);
+    const partial = c.paidCents > 0 && remaining > 0;
+    // Unit first — easiest to scan; name/email underneath.
+    const namePrimary = c.unit ?? c.residentName ?? "—";
+    const nameSub = [c.unit ? c.residentName : null, c.residentEmail]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <Fragment key={c.id}>
+        <tr className={checked ? "bg-pine/5" : "hover:bg-sand/30"}>
+          <td className="px-5 py-3">
+            {open ? (
+              <input
+                type="checkbox"
+                aria-label={`Select ${namePrimary}`}
+                checked={checked}
+                onChange={() => toggle(c.id)}
+                className="h-4 w-4 rounded border-clay-deep accent-pine"
+              />
+            ) : null}
+          </td>
+          <td className="px-5 py-3">
+            <div className="font-medium text-ink">{namePrimary}</div>
+            {nameSub && <div className="text-xs text-ink-faint">{nameSub}</div>}
+          </td>
+          <td className="px-5 py-3 text-ink-soft">{c.property ?? "—"}</td>
+          <td className="px-5 py-3 text-ink-soft">{c.description ?? "Rent"}</td>
+          <td className="px-5 py-3 text-ink-soft">{c.period ?? "—"}</td>
+          <td className="px-5 py-3 text-ink-soft">{formatDate(c.dueDate)}</td>
+          <td className="px-5 py-3 font-medium text-ink">
+            {formatCents(c.amountCents)}
+            {partial && (
+              <div className="text-xs font-normal text-terracotta-dark">
+                {formatCents(c.paidCents)} paid · {formatCents(remaining)} due
+              </div>
+            )}
+          </td>
+          <td className="px-5 py-3">
+            {remaining === 0 ? (
+              <StatusPill value="paid" />
+            ) : partial ? (
+              <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-medium text-gold">
+                Partial
+              </span>
+            ) : (
+              <StatusPill value={c.status} />
+            )}
+          </td>
+          <td className="px-5 py-3 text-right">
+            {open ? (
+              <button
+                type="button"
+                onClick={() => setExpandedId((prev) => (prev === c.id ? null : c.id))}
+                className="whitespace-nowrap text-xs font-medium text-pine hover:underline"
+              >
+                {expandedId === c.id ? "Close" : "Record…"}
+              </button>
+            ) : remaining === 0 && c.status !== "void" ? (
+              <div className="flex justify-end">
+                <PaymentReceipt chargeId={c.id} note={c.paidRef} compact />
+              </div>
+            ) : null}
+          </td>
+        </tr>
+        {expandedId === c.id && (
+          <tr className="bg-sand/30">
+            <td colSpan={9} className="px-5 py-3">
+              <RecordPaymentForm charge={c} remaining={remaining} />
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
+  };
+
   return (
     <div>
       {(periods.length > 0 || propertyNames.length > 1) && (
@@ -191,88 +285,27 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-clay">
-              {visible.map((c) => {
-                const open = isOpenRow(c);
-                const checked = selected.has(c.id);
-                const remaining = remainingOf(c);
-                const partial = c.paidCents > 0 && remaining > 0;
-                // Unit first — easiest to scan; name/email underneath.
-                const namePrimary = c.unit ?? c.residentName ?? "—";
-                const nameSub = [c.unit ? c.residentName : null, c.residentEmail]
-                  .filter(Boolean)
-                  .join(" · ");
+              {groups.map((g) => {
+                const groupDue = g.rows.reduce((s, r) => s + remainingOf(r), 0);
+                const groupPaid = g.rows.filter((r) => remainingOf(r) === 0).length;
                 return (
-                  <Fragment key={c.id}>
-                    <tr className={checked ? "bg-pine/5" : "hover:bg-sand/30"}>
-                      <td className="px-5 py-3">
-                        {open ? (
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${namePrimary}`}
-                            checked={checked}
-                            onChange={() => toggle(c.id)}
-                            className="h-4 w-4 rounded border-clay-deep accent-pine"
-                          />
-                        ) : null}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="font-medium text-ink">{namePrimary}</div>
-                        {nameSub && (
-                          <div className="text-xs text-ink-faint">{nameSub}</div>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-ink-soft">{c.property ?? "—"}</td>
-                      <td className="px-5 py-3 text-ink-soft">
-                        {c.description ?? "Rent"}
-                      </td>
-                      <td className="px-5 py-3 text-ink-soft">{c.period ?? "—"}</td>
-                      <td className="px-5 py-3 text-ink-soft">
-                        {formatDate(c.dueDate)}
-                      </td>
-                      <td className="px-5 py-3 font-medium text-ink">
-                        {formatCents(c.amountCents)}
-                        {partial && (
-                          <div className="text-xs font-normal text-terracotta-dark">
-                            {formatCents(c.paidCents)} paid · {formatCents(remaining)} due
+                  <Fragment key={`grp-${g.property}`}>
+                    {showGroupHeaders && (
+                      <tr className="border-t-2 border-clay bg-sand/70">
+                        <td colSpan={9} className="px-5 py-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-display text-sm font-semibold text-ink">
+                              {g.property}
+                            </span>
+                            <span className="text-xs text-ink-faint">
+                              {groupPaid}/{g.rows.length} paid
+                              {groupDue > 0 ? ` · ${formatCents(groupDue)} due` : ""}
+                            </span>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        {remaining === 0 ? (
-                          <StatusPill value="paid" />
-                        ) : partial ? (
-                          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-medium text-gold">
-                            Partial
-                          </span>
-                        ) : (
-                          <StatusPill value={c.status} />
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        {open ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedId((prev) => (prev === c.id ? null : c.id))
-                            }
-                            className="whitespace-nowrap text-xs font-medium text-pine hover:underline"
-                          >
-                            {expandedId === c.id ? "Close" : "Record…"}
-                          </button>
-                        ) : remaining === 0 && c.status !== "void" ? (
-                          <div className="flex justify-end">
-                            <PaymentReceipt chargeId={c.id} note={c.paidRef} compact />
-                          </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                    {expandedId === c.id && (
-                      <tr className="bg-sand/30">
-                        <td colSpan={9} className="px-5 py-3">
-                          <RecordPaymentForm charge={c} remaining={remaining} />
                         </td>
                       </tr>
                     )}
+                    {g.rows.map(renderRow)}
                   </Fragment>
                 );
               })}
