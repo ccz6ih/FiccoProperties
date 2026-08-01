@@ -6,6 +6,7 @@ import { PaymentsPayButton } from "@/components/payments-pay-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { isStripeActive } from "@/lib/payments/provider";
+import { getResidentPaymentInsights } from "@/lib/payment-insights";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -83,6 +84,12 @@ export default async function PortalPayments() {
   const openCharges = (charges ?? []).filter(
     (c) => c.status === "open" || c.status === "past_due"
   );
+
+  // On-time streak / months paid → powers the "you're all paid up" celebration.
+  const insights = await getResidentPaymentInsights(db, user.id);
+  const paidUp = balanceCents <= 0 && insights.monthsPaid > 0;
+  const MILESTONES = [3, 6, 12, 24, 36];
+  const nextMilestone = MILESTONES.find((m) => m > insights.streak) ?? null;
   const methodOptions = (methods ?? []).map((m) => ({
     id: m.id,
     label: m.label ?? (m.kind === "card" ? "Card" : "Bank account"),
@@ -145,6 +152,45 @@ export default async function PortalPayments() {
           </Link>
         }
       />
+
+      {paidUp && (
+        <Card className="mb-8 overflow-hidden border-pine/30 bg-pine/5 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <div className="min-w-0">
+              <div className="text-2xl">🎉</div>
+              <h2 className="mt-1 font-display text-2xl font-semibold text-ink">
+                You&apos;re all paid up!
+              </h2>
+              <p className="mt-1 text-sm text-ink-soft">
+                {insights.streak >= 2
+                  ? `That's ${insights.streak} months in a row — thank you for being a wonderful resident.`
+                  : "Thank you for being a wonderful resident."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-3">
+              {insights.streak >= 2 && (
+                <div className="rounded-xl border border-pine/30 bg-cream px-4 py-3 text-center">
+                  <div className="font-display text-2xl font-semibold text-pine">
+                    🔥 {insights.streak}
+                  </div>
+                  <div className="text-xs text-ink-soft">month streak</div>
+                </div>
+              )}
+              {nextMilestone && (
+                <div className="rounded-xl border border-clay bg-cream px-4 py-3 text-center">
+                  <div className="text-xs text-ink-faint">Next milestone</div>
+                  <div className="font-display text-lg font-semibold text-ink">
+                    {nextMilestone} months
+                  </div>
+                  <div className="text-xs text-ink-soft">
+                    {nextMilestone - insights.streak} to go
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard

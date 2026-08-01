@@ -7,6 +7,7 @@ import { requireProfile, isStaff } from "@/lib/auth";
 import { formatCents } from "@/lib/format";
 import { sendNotification } from "@/lib/email";
 import { paymentReceiptEmail } from "@/lib/payment-email";
+import { getResidentPaymentInsights } from "@/lib/payment-insights";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type AdminPaymentsState = { ok: boolean; error?: string; notice?: string };
@@ -48,6 +49,17 @@ async function emailReceipts(items: ReceiptItem[], refLabel: string | null): Pro
       for (const o of data ?? []) occByUnit.set(o.unit_id, o);
     }
 
+    // On-time streak per portal resident, for the receipt's celebratory chip.
+    const streakByResident = new Map<string, number>();
+    for (const rid of residentIds) {
+      try {
+        const ins = await getResidentPaymentInsights(admin, rid);
+        streakByResident.set(rid, ins.streak);
+      } catch {
+        /* insights are best-effort */
+      }
+    }
+
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://38thaveproperties.com").replace(/\/$/, "");
     for (const it of items) {
       const prof = it.resident_id ? profById.get(it.resident_id) : null;
@@ -65,6 +77,7 @@ async function emailReceipts(items: ReceiptItem[], refLabel: string | null): Pro
         refLabel,
         hasPortal: !!it.resident_id,
         appUrl,
+        streak: it.resident_id ? streakByResident.get(it.resident_id) : undefined,
       });
       await sendNotification({ to: email, subject, html });
     }

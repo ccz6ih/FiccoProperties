@@ -72,6 +72,8 @@ export function paymentReceiptEmail(d: {
   refLabel: string | null;
   hasPortal: boolean;
   appUrl: string;
+  /** Consecutive fully-paid months (incl. this one) — powers the streak chip. */
+  streak?: number;
 }): { subject: string; html: string } {
   const amount = formatCents(d.amountCents);
   const isPartial = d.remainingCents > 0;
@@ -101,6 +103,16 @@ export function paymentReceiptEmail(d: {
       )}</strong> is still open on this charge — thank you for taking care of the rest when you can.</p></td></tr>`
     : "";
 
+  const streak = d.streak ?? 0;
+  const streakChip =
+    !isPartial && streak >= 2
+      ? `<tr><td style="padding:16px 32px 0"><span style="display:inline-block;background:#e7f0eb;color:${PINE};font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px">${
+          streak >= 12
+            ? "🏆 A full year of on-time rent — thank you!"
+            : `🔥 ${streak} months paid in a row`
+        }</span></td></tr>`
+      : "";
+
   const button = d.hasPortal
     ? `<tr><td style="padding:22px 32px 0"><a href="${d.appUrl}/portal/payments" style="display:inline-block;background:${PINE};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 24px;border-radius:8px">View your payment history →</a></td></tr>`
     : "";
@@ -119,6 +131,7 @@ export function paymentReceiptEmail(d: {
         <div style="font-family:Georgia,'Times New Roman',serif;font-size:23px;color:${INK};margin:16px 0 6px">${headline}</div>
         <p style="margin:0;font-size:14px;line-height:1.6;color:#6f655a">${subline}</p>
       </td></tr>
+      ${streakChip}
 
       <tr><td style="padding:22px 32px 0">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f1;border:1px solid ${LINE};border-radius:12px"><tr><td style="padding:16px 20px;text-align:center">
