@@ -57,6 +57,7 @@ const tools = [
   { href: "/portal/move-out", label: "Move-out", hint: "Photos & deposit" },
   { href: "/portal/payments", label: "Pay rent", hint: "Charges & history" },
   { href: "/statement", label: "Rent statement", hint: "Printable ledger" },
+  { href: "/portal/year", label: "Year in review", hint: "Your tenancy recap" },
   { href: "/portal/lease", label: "Your lease", hint: "Terms & documents" },
   { href: "/portal/maintenance", label: "Maintenance", hint: "Request a repair" },
   { href: "/portal/messages", label: "Message us", hint: "On-site team" },
