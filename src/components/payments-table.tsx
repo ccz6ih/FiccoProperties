@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useActionState, useEffect, useState } from "react";
+import { Fragment, useActionState, useState } from "react";
 import { Button } from "@/components/ui";
 import { StatusPill } from "@/components/dashboard-ui";
 import { PaymentReceipt } from "@/components/payment-receipt-form";
@@ -31,6 +31,16 @@ const initial: AdminPaymentsState = { ok: false };
 const remainingOf = (c: PaymentRow) => Math.max(0, c.amountCents - c.paidCents);
 const isOpenRow = (c: PaymentRow) => remainingOf(c) > 0 && c.status !== "void";
 
+/** "2026-08" → "August 2026". */
+function periodLabel(p: string): string {
+  const [y, m] = p.split("-").map(Number);
+  if (!y || !m) return p;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 const inputSm =
   "rounded-lg border border-clay-deep bg-white px-2 py-1.5 text-sm text-ink";
 
@@ -43,6 +53,12 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
   propertyNames.sort();
   const [activeProps, setActiveProps] = useState<Set<string>>(new Set());
 
+  // Month filter — newest first. Default to the latest month so the board shows
+  // one row per unit for the current period instead of every month at once.
+  const periods = [...new Set(charges.map((c) => c.period).filter(Boolean))] as string[];
+  periods.sort((a, b) => b.localeCompare(a));
+  const [activePeriod, setActivePeriod] = useState<string>(periods[0] ?? "all");
+
   function toggleProp(name: string) {
     setSelected(new Set());
     setActiveProps((prev) => {
@@ -53,16 +69,13 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
     });
   }
 
-  const visible =
-    activeProps.size === 0
-      ? charges
-      : charges.filter((c) => c.property && activeProps.has(c.property));
+  const visible = charges.filter(
+    (c) =>
+      (activePeriod === "all" || c.period === activePeriod) &&
+      (activeProps.size === 0 || (c.property != null && activeProps.has(c.property)))
+  );
 
   const openRows = visible.filter(isOpenRow);
-
-  useEffect(() => {
-    if (state.ok) setSelected(new Set());
-  }, [state]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -74,11 +87,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
   }
 
   function toggleAll() {
-    setSelected((prev) =>
-      prev.size === openRows.length && openRows.length > 0
-        ? new Set()
-        : new Set(openRows.map((c) => c.id))
-    );
+    setSelected(allChecked ? new Set() : new Set(openRows.map((c) => c.id)));
   }
 
   const selectedRows = openRows.filter((c) => selected.has(c.id));
@@ -88,44 +97,71 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
 
   return (
     <div>
-      {propertyNames.length > 1 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
-            Community
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setSelected(new Set());
-              setActiveProps(new Set());
-            }}
-            aria-pressed={activeProps.size === 0}
-            className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
-              activeProps.size === 0
-                ? "border-pine bg-pine text-cream"
-                : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
-            }`}
-          >
-            All
-          </button>
-          {propertyNames.map((name) => {
-            const on = activeProps.has(name);
-            return (
+      {(periods.length > 0 || propertyNames.length > 1) && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+          {periods.length > 0 && (
+            <label className="flex items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                Month
+              </span>
+              <select
+                value={activePeriod}
+                onChange={(e) => {
+                  setSelected(new Set());
+                  setActivePeriod(e.target.value);
+                }}
+                className={inputSm}
+              >
+                {periods.map((p) => (
+                  <option key={p} value={p}>
+                    {periodLabel(p)}
+                  </option>
+                ))}
+                <option value="all">All months</option>
+              </select>
+            </label>
+          )}
+
+          {propertyNames.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                Community
+              </span>
               <button
-                key={name}
                 type="button"
-                onClick={() => toggleProp(name)}
-                aria-pressed={on}
+                onClick={() => {
+                  setSelected(new Set());
+                  setActiveProps(new Set());
+                }}
+                aria-pressed={activeProps.size === 0}
                 className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
-                  on
+                  activeProps.size === 0
                     ? "border-pine bg-pine text-cream"
                     : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
                 }`}
               >
-                {name}
+                All
               </button>
-            );
-          })}
+              {propertyNames.map((name) => {
+                const on = activeProps.has(name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggleProp(name)}
+                    aria-pressed={on}
+                    className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+                      on
+                        ? "border-pine bg-pine text-cream"
+                        : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -243,7 +279,9 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
               {visible.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-5 py-6 text-center text-sm text-ink-faint">
-                    No charges for the selected community.
+                    No charges for{" "}
+                    {activePeriod === "all" ? "the selected community" : periodLabel(activePeriod)}
+                    .
                   </td>
                 </tr>
               )}
