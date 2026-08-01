@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { PaymentsGenerateForm } from "@/components/payments-generate-form";
+import { PaymentsMonthFilter } from "@/components/payments-month-filter";
 import { PaymentsTable, type PaymentRow } from "@/components/payments-table";
 import { formatCents } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -36,7 +37,22 @@ function currentPeriod(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export default async function AdminPayments() {
+/** "2026-08" → "August 2026". */
+function periodLabel(p: string): string {
+  const [y, m] = p.split("-").map(Number);
+  if (!y || !m) return p;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+export default async function AdminPayments({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const { period: periodParam } = await searchParams;
   const supabase = await createClient();
   // New tables aren't in the generated types yet; read via a loose handle.
   const db = supabase as unknown as SupabaseClient;
@@ -69,7 +85,24 @@ export default async function AdminPayments() {
   const occByUnit = new Map<string, OccRow>();
   for (const o of occRows ?? []) occByUnit.set(o.unit_id, o);
 
-  const all = (charges ?? []).filter((c) => c.status !== "void");
+  const allCharges = (charges ?? []).filter((c) => c.status !== "void");
+
+  // Which months exist (newest first), and which one we're viewing. Defaults to
+  // the latest month so the whole page (cards, breakdown, table) reads as one
+  // period; "all" restores the lifetime view.
+  const periods = [...new Set(allCharges.map((c) => c.period).filter(Boolean))] as string[];
+  periods.sort((a, b) => b.localeCompare(a));
+  const selectedPeriod =
+    periodParam && (periodParam === "all" || periods.includes(periodParam))
+      ? periodParam
+      : periods[0] ?? "all";
+  const viewingAll = selectedPeriod === "all";
+  const monthLabel = viewingAll ? "all months" : periodLabel(selectedPeriod);
+
+  // Everything below is scoped to the selected month (or all).
+  const all = viewingAll
+    ? allCharges
+    : allCharges.filter((c) => c.period === selectedPeriod);
 
   // How much has actually been paid against each charge (supports partials),
   // plus the latest receipt note / reference to show + edit.
@@ -193,24 +226,37 @@ export default async function AdminPayments() {
         }
       />
 
+      {periods.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <PaymentsMonthFilter periods={periods} selected={selectedPeriod} />
+          <p className="text-xs text-ink-faint">
+            {viewingAll
+              ? "Showing all months — lifetime totals."
+              : `Showing ${monthLabel}.`}
+          </p>
+        </div>
+      )}
+
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Outstanding"
           value={formatCents(outstandingCents)}
           tone="terracotta"
-          hint={`${unpaidCount} unpaid charge${unpaidCount === 1 ? "" : "s"}`}
+          hint={`${unpaidCount} unpaid charge${unpaidCount === 1 ? "" : "s"}${
+            viewingAll ? "" : ` · ${monthLabel}`
+          }`}
         />
         <StatCard
           label="Collected"
           value={formatCents(collectedCents)}
           tone="pine"
-          hint="Across all paid charges"
+          hint={viewingAll ? "Across all paid charges" : `Paid in ${monthLabel}`}
         />
         <StatCard
-          label="Total charges"
+          label={viewingAll ? "Total charges" : "Charges"}
           value={all.length}
           tone="gold"
-          hint="All time"
+          hint={viewingAll ? "All time" : monthLabel}
         />
       </div>
 
@@ -221,7 +267,9 @@ export default async function AdminPayments() {
               Collection by community
             </h2>
             <p className="text-xs text-ink-faint">
-              Across all recorded charges — grows as you bill each month.
+              {viewingAll
+                ? "Across all recorded charges — grows as you bill each month."
+                : `For ${monthLabel}.`}
             </p>
           </div>
           <div className="overflow-x-auto">
