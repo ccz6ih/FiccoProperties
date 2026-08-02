@@ -259,13 +259,13 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
       </td></tr>
 
       <tr><td style="padding:26px 28px 0">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${PINE};margin-bottom:14px">Paid this month — by community${d.paid.length ? ` (${d.paid.length} unit${d.paid.length === 1 ? "" : "s"})` : ""}</div>
-        ${paidSection}
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${lateColor};margin-bottom:14px">Still owed — by community${d.late.length ? ` (${d.late.length} unit${d.late.length === 1 ? "" : "s"})` : ""}</div>
+        ${lateSection}
       </td></tr>
 
       <tr><td style="padding:8px 28px 0">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${lateColor};margin-bottom:14px">Still owed — by community${d.late.length ? ` (${d.late.length} unit${d.late.length === 1 ? "" : "s"})` : ""}</div>
-        ${lateSection}
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${PINE};margin-bottom:14px">Paid this month — by community${d.paid.length ? ` (${d.paid.length} unit${d.paid.length === 1 ? "" : "s"})` : ""}</div>
+        ${paidSection}
       </td></tr>
 
       <tr><td style="padding:16px 28px 0">
