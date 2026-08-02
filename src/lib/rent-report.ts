@@ -46,9 +46,9 @@ const LINE = "#e6dcc8";
 const SAND = "#f6f1e6";
 
 function stat(label: string, value: string, color = INK): string {
-  return `<td style="padding:10px 14px;text-align:center;border:1px solid ${LINE};background:#fff">
-    <div style="font-size:11px;color:${FAINT};text-transform:uppercase;letter-spacing:.04em">${label}</div>
-    <div style="font-size:20px;font-weight:700;color:${color};font-family:Georgia,serif;margin-top:2px">${value}</div>
+  return `<td width="25%" style="padding:14px 8px;text-align:center;border:1px solid ${LINE};background:#faf7f1">
+    <div style="font-size:10px;color:${FAINT};text-transform:uppercase;letter-spacing:.05em">${label}</div>
+    <div style="font-size:20px;font-weight:700;color:${color};font-family:Georgia,'Times New Roman',serif;margin-top:3px">${value}</div>
   </td>`;
 }
 
@@ -82,57 +82,71 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
           </tr>`
         )
         .join("")
-    : `<tr><td colspan="4" style="padding:14px;text-align:center;color:${PINE}">Everyone's paid — nothing late. 🎉</td></tr>`;
+    : `<tr><td colspan="4" style="padding:16px;text-align:center;color:${PINE};font-weight:600">Everyone's paid — nothing late. 🎉</td></tr>`;
 
-  const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:0 auto;color:${INK}">
-    <div style="border-bottom:2px solid ${LINE};padding-bottom:12px;margin-bottom:16px">
-      <div style="font-family:Georgia,serif;font-size:22px;font-weight:600;color:${PINE}">38th Ave Properties</div>
-      <div style="font-size:13px;color:${SOFT}">Rent report · ${d.periodLabel} · as of ${d.reportDate}</div>
-    </div>
+  const lateColor = d.late.length ? TERRA : PINE;
 
-    <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:18px"><tr>
-      ${stat("Collected", formatCents(d.collectedCents), PINE)}
-      ${stat("Outstanding", formatCents(d.outstandingCents), TERRA)}
-      ${stat("Collected", `${d.pctCollected}%`)}
-      ${stat("Late", `${d.lateCount}`)}
-    </tr></table>
+  const html = `<div style="background:#f2ece0;margin:0;padding:24px 12px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr><td align="center">
+    <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="width:640px;max-width:640px;background:#ffffff;border:1px solid ${LINE};border-radius:16px;overflow:hidden">
 
-    <div style="font-size:13px;color:${SOFT};margin-bottom:6px">
-      ${d.paidUnits} of ${d.totalUnits} units paid · ${formatCents(d.billedCents)} billed
-    </div>
+      <tr><td style="background:${PINE};padding:22px 28px">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;color:#f7f3ea">38th Ave Properties</div>
+        <div style="font-size:11px;color:#bcd2c8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px">Owner rent report &middot; ${esc(d.periodLabel)}</div>
+      </td></tr>
 
-    <h3 style="font-size:14px;color:${INK};margin:18px 0 6px">By community</h3>
-    <table role="presentation" width="100%" style="border-collapse:collapse;font-size:13px">
-      <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
-        <th style="padding:6px 10px">Community</th>
-        <th style="padding:6px 10px;text-align:center">Paid</th>
-        <th style="padding:6px 10px;text-align:right">Collected</th>
-        <th style="padding:6px 10px;text-align:right">Outstanding</th>
-        <th style="padding:6px 10px;text-align:right">Rate</th>
-      </tr></thead>
-      <tbody>${propRows}</tbody>
+      <tr><td style="padding:22px 28px 0">
+        <div style="font-size:13px;color:${SOFT};margin-bottom:14px">Collection status as of ${esc(d.reportDate)}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>
+          ${stat("Collected", formatCents(d.collectedCents), PINE)}
+          ${stat("Outstanding", formatCents(d.outstandingCents), TERRA)}
+          ${stat("Rate", `${d.pctCollected}%`)}
+          ${stat("Late", `${d.lateCount}`, lateColor)}
+        </tr></table>
+        <div style="font-size:13px;color:${SOFT};margin-top:12px">${d.paidUnits} of ${d.totalUnits} units paid &middot; ${formatCents(d.billedCents)} billed</div>
+      </td></tr>
+
+      <tr><td style="padding:22px 28px 0">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;color:${INK};margin-bottom:8px">By community</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">
+          <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+            <th style="padding:6px 10px">Community</th>
+            <th style="padding:6px 10px;text-align:center">Paid</th>
+            <th style="padding:6px 10px;text-align:right">Collected</th>
+            <th style="padding:6px 10px;text-align:right">Outstanding</th>
+            <th style="padding:6px 10px;text-align:right">Rate</th>
+          </tr></thead>
+          <tbody>${propRows}</tbody>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:24px 28px 0">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;color:${lateColor};margin-bottom:8px">Late — needs follow-up${d.late.length ? ` (${d.late.length})` : ""}</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;background:${SAND};border:1px solid ${LINE};border-radius:10px;overflow:hidden">
+          <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+            <th style="padding:8px 10px">Home</th>
+            <th style="padding:8px 10px">Tenant</th>
+            <th style="padding:8px 10px;text-align:right">Due</th>
+            <th style="padding:8px 10px;text-align:right">Late</th>
+          </tr></thead>
+          <tbody>${lateRows}</tbody>
+        </table>
+      </td></tr>
+
+      <tr><td style="padding:24px 28px 0">
+        <a href="${d.appUrl}/admin/delinquency" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;margin-right:8px">Open delinquency →</a>
+        <a href="${d.appUrl}/owner-report" style="display:inline-block;border:1px solid ${LINE};color:${PINE};text-decoration:none;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px">Full owner report</a>
+      </td></tr>
+
+      <tr><td style="padding:20px 28px 26px">
+        <div style="border-top:1px solid #f0e9db;padding-top:14px">
+          <p style="margin:0;font-size:12px;color:${FAINT};line-height:1.6">Automated rent report from the 38th Ave Properties portal. &ldquo;Late&rdquo; = a charge past its due date that&apos;s still unpaid; a partial payment still shows the remaining balance.</p>
+        </div>
+      </td></tr>
+
     </table>
-
-    <h3 style="font-size:14px;color:${TERRA};margin:20px 0 6px">Late — needs follow-up (${d.late.length})</h3>
-    <table role="presentation" width="100%" style="border-collapse:collapse;font-size:13px;background:${SAND};border:1px solid ${LINE}">
-      <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
-        <th style="padding:6px 10px">Home</th>
-        <th style="padding:6px 10px">Tenant</th>
-        <th style="padding:6px 10px;text-align:right">Due</th>
-        <th style="padding:6px 10px;text-align:right">Late</th>
-      </tr></thead>
-      <tbody>${lateRows}</tbody>
-    </table>
-
-    <div style="margin:22px 0 6px">
-      <a href="${d.appUrl}/admin/delinquency" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px;margin-right:8px">Open delinquency</a>
-      <a href="${d.appUrl}/owner-report" style="display:inline-block;border:1px solid ${LINE};color:${PINE};text-decoration:none;font-size:13px;font-weight:600;padding:9px 16px;border-radius:8px">Full owner report</a>
-    </div>
-
-    <p style="margin:18px 0 0;font-size:12px;color:${FAINT}">
-      Automated rent report from the 38th Ave Properties portal. &ldquo;Late&rdquo; = a charge past its due date that&apos;s still unpaid; a partial payment still shows the remaining balance.
-    </p>
-  </div>`;
+  </td></tr></table>
+</div>`;
 
   return { subject, html };
 }

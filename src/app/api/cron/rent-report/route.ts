@@ -27,13 +27,14 @@ function periodLabel(period: string): string {
 }
 
 /**
- * Scheduled owner rent report. Sends on the 8th of the month (after the 7th
- * grace period) and every Monday thereafter until month-end. Emails collection
- * stats, per-community breakdown, and the list of late tenants to the owners.
+ * Scheduled owner rent report. Sends on the 3rd, 5th, and 8th of the month, then
+ * every Monday thereafter until month-end. Emails collection stats, per-
+ * community breakdown, and the list of late tenants to the owners.
  *
  * Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron) or `?key=`.
  * `?force=1` bypasses the date gate + dedupe for manual testing.
- * Recipients: OWNER_REPORT_EMAILS (comma-separated) — falls back to Craig.
+ * Recipients: every owner account (profiles.role = 'owner') with an email, plus
+ * any addresses in OWNER_REPORT_EMAILS — falls back to Craig if none.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -49,7 +50,8 @@ export async function GET(req: Request) {
   const today = new Date();
   const day = today.getDate();
   const dow = today.getDay(); // 0 Sun … 1 Mon
-  const shouldSend = day === 8 || (day > 8 && dow === 1);
+  // Early nudges on the 3rd & 5th, end-of-grace on the 8th, then weekly (Mon).
+  const shouldSend = day === 3 || day === 5 || day === 8 || (day > 8 && dow === 1);
   if (!force && !shouldSend) {
     return NextResponse.json({ ok: true, skipped: "not a scheduled day", day, dow });
   }
@@ -165,7 +167,21 @@ export async function GET(req: Request) {
     appUrl,
   });
 
-  const recipients = process.env.OWNER_REPORT_EMAILS || "craigcarda2@gmail.com";
+  // Recipients: every owner account with an email, plus any env overrides.
+  const { data: owners } = await db
+    .from("profiles")
+    .select("email")
+    .eq("role", "owner")
+    .not("email", "is", null)
+    .returns<{ email: string | null }[]>();
+  const ownerEmails = (owners ?? []).map((o) => o.email?.trim()).filter(Boolean) as string[];
+  const envEmails = (process.env.OWNER_REPORT_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const recipientList = [...new Set([...ownerEmails, ...envEmails])];
+  const recipients = recipientList.length ? recipientList.join(",") : "craigcarda2@gmail.com";
+
   const { sent } = await sendNotification({
     to: recipients,
     subject,
