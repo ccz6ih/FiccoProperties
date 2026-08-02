@@ -20,6 +20,7 @@ export type ReportLate = {
   tenant: string;
   dueCents: number;
   daysLate: number;
+  address?: string;
 };
 
 export type RentReportData = {
@@ -46,9 +47,9 @@ const LINE = "#e6dcc8";
 const SAND = "#f6f1e6";
 
 function stat(label: string, value: string, color = INK): string {
-  return `<td width="25%" style="padding:14px 8px;text-align:center;border:1px solid ${LINE};background:#faf7f1">
-    <div style="font-size:10px;color:${FAINT};text-transform:uppercase;letter-spacing:.05em">${label}</div>
-    <div style="font-size:20px;font-weight:700;color:${color};font-family:Georgia,'Times New Roman',serif;margin-top:3px">${value}</div>
+  return `<td width="25%" style="padding:15px 8px;text-align:center;border:1px solid ${LINE};background:#faf7f1">
+    <div style="font-size:11px;color:${FAINT};text-transform:uppercase;letter-spacing:.05em">${label}</div>
+    <div style="font-size:23px;font-weight:700;color:${color};font-family:Georgia,'Times New Roman',serif;margin-top:4px">${value}</div>
   </td>`;
 }
 
@@ -71,20 +72,56 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
     })
     .join("");
 
-  const lateRows = d.late.length
-    ? d.late
-        .map(
-          (l) => `<tr>
-            <td style="padding:7px 10px;border-bottom:1px solid ${LINE};color:${INK}">${esc(l.unit)} <span style="color:${FAINT}">· ${esc(l.property)}</span></td>
-            <td style="padding:7px 10px;border-bottom:1px solid ${LINE};color:${SOFT}">${esc(l.tenant)}</td>
-            <td style="padding:7px 10px;border-bottom:1px solid ${LINE};color:${TERRA};text-align:right;font-weight:600">${formatCents(l.dueCents)}</td>
-            <td style="padding:7px 10px;border-bottom:1px solid ${LINE};color:${SOFT};text-align:right">${l.daysLate}d</td>
-          </tr>`
-        )
-        .join("")
-    : `<tr><td colspan="4" style="padding:16px;text-align:center;color:${PINE};font-weight:600">Everyone's paid — nothing late. 🎉</td></tr>`;
-
   const lateColor = d.late.length ? TERRA : PINE;
+
+  // Group the "late" list by community so each has its own clearly-labeled
+  // header + address — larger type for easy reading.
+  const lateByProp = new Map<string, ReportLate[]>();
+  for (const l of d.late) {
+    const arr = lateByProp.get(l.property) ?? [];
+    arr.push(l);
+    lateByProp.set(l.property, arr);
+  }
+  const lateGroups = [...lateByProp.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const lateSection = d.late.length
+    ? lateGroups
+        .map(([prop, items]) => {
+          const addr = items[0]?.address ?? "";
+          const groupDue = items.reduce((s, l) => s + l.dueCents, 0);
+          const rows = items
+            .map(
+              (l) => `<tr>
+                <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${INK};font-size:16px;font-weight:600">${esc(l.unit)}</td>
+                <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${SOFT};font-size:15px">${esc(l.tenant)}</td>
+                <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${TERRA};font-size:16px;font-weight:700;text-align:right;white-space:nowrap">${formatCents(l.dueCents)}</td>
+                <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${SOFT};font-size:15px;text-align:right;white-space:nowrap">${l.daysLate} day${l.daysLate === 1 ? "" : "s"}</td>
+              </tr>`
+            )
+            .join("");
+          return `<div style="margin-bottom:20px;border:1px solid ${LINE};border-radius:10px;overflow:hidden">
+            <div style="background:${PINE};padding:13px 16px">
+              <div style="font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#f7f3ea">${esc(prop)}</div>
+              ${addr ? `<div style="font-size:14px;color:#cfe0d8;margin-top:3px">${esc(addr)}</div>` : ""}
+            </div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+              <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.05em;background:${SAND}">
+                <th style="padding:9px 16px">Home</th>
+                <th style="padding:9px 16px">Tenant</th>
+                <th style="padding:9px 16px;text-align:right">Amount due</th>
+                <th style="padding:9px 16px;text-align:right">Days late</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+              <tfoot><tr style="background:#faf7f1">
+                <td colspan="2" style="padding:12px 16px;font-size:15px;color:${INK};font-weight:600">Total still owed</td>
+                <td style="padding:12px 16px;font-size:17px;color:${TERRA};font-weight:700;text-align:right;white-space:nowrap">${formatCents(groupDue)}</td>
+                <td style="padding:12px 16px"></td>
+              </tr></tfoot>
+            </table>
+          </div>`;
+        })
+        .join("")
+    : `<div style="padding:20px;text-align:center;color:${PINE};font-size:16px;font-weight:600;background:${SAND};border:1px solid ${LINE};border-radius:10px">Everyone's paid — nothing late this month. 🎉</div>`;
 
   const html = `<div style="background:#f2ece0;margin:0;padding:24px 12px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr><td align="center">
@@ -107,8 +144,8 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
       </td></tr>
 
       <tr><td style="padding:22px 28px 0">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;color:${INK};margin-bottom:8px">By community</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${INK};margin-bottom:8px">By community</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
           <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
             <th style="padding:6px 10px">Community</th>
             <th style="padding:6px 10px;text-align:center">Paid</th>
@@ -120,17 +157,9 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
         </table>
       </td></tr>
 
-      <tr><td style="padding:24px 28px 0">
-        <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;color:${lateColor};margin-bottom:8px">Late — needs follow-up${d.late.length ? ` (${d.late.length})` : ""}</div>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;background:${SAND};border:1px solid ${LINE};border-radius:10px;overflow:hidden">
-          <thead><tr style="text-align:left;color:${FAINT};font-size:11px;text-transform:uppercase;letter-spacing:.04em">
-            <th style="padding:8px 10px">Home</th>
-            <th style="padding:8px 10px">Tenant</th>
-            <th style="padding:8px 10px;text-align:right">Due</th>
-            <th style="padding:8px 10px;text-align:right">Late</th>
-          </tr></thead>
-          <tbody>${lateRows}</tbody>
-        </table>
+      <tr><td style="padding:26px 28px 0">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:18px;color:${lateColor};margin-bottom:14px">Still owed — by community${d.late.length ? ` (${d.late.length} unit${d.late.length === 1 ? "" : "s"})` : ""}</div>
+        ${lateSection}
       </td></tr>
 
       <tr><td style="padding:24px 28px 0">

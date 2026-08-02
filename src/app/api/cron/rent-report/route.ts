@@ -20,6 +20,13 @@ type ChargeRow = {
 };
 type OccRow = { unit_id: string; tenant_name: string | null };
 type PaySum = { charge_id: string | null; amount_cents: number };
+type PropAddrRow = {
+  name: string | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+};
 
 function periodLabel(period: string): string {
   const [y, m] = period.split("-").map(Number);
@@ -72,7 +79,7 @@ export async function GET(req: Request) {
     if (prior) return NextResponse.json({ ok: true, skipped: "already sent today" });
   }
 
-  const [{ data: charges }, { data: occRows }] = await Promise.all([
+  const [{ data: charges }, { data: occRows }, { data: propRows }] = await Promise.all([
     db
       .from("charges")
       .select(
@@ -82,7 +89,19 @@ export async function GET(req: Request) {
       .neq("status", "void")
       .returns<ChargeRow[]>(),
     db.from("unit_occupancy").select("unit_id, tenant_name").returns<OccRow[]>(),
+    db
+      .from("properties")
+      .select("name, address_line1, city, state, postal_code")
+      .returns<PropAddrRow[]>(),
   ]);
+
+  // Community name → single-line address, for the grouped "late" headers.
+  const addrByProperty = new Map<string, string>();
+  for (const p of propRows ?? []) {
+    if (!p.name) continue;
+    const addr = [p.address_line1, p.city, p.state, p.postal_code].filter(Boolean).join(", ");
+    if (addr) addrByProperty.set(p.name, addr);
+  }
 
   const all = charges ?? [];
   if (all.length === 0) {
@@ -140,6 +159,7 @@ export async function GET(req: Request) {
         tenant: (c.unit_id ? occByUnit.get(c.unit_id) : null) ?? "—",
         dueCents: remaining,
         daysLate: Math.max(0, Math.floor(ms / 86_400_000)),
+        address: addrByProperty.get(propName),
       });
     }
   }
