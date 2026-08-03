@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { RentBoard, type BoardGroup, type BoardCharge } from "@/components/rent-board";
+import { RentBoardMonthNav } from "@/components/rent-board-month-nav";
 import { createClient } from "@/lib/supabase/server";
 
 type UnitRow = {
@@ -143,14 +144,7 @@ export default async function RentBoardPage({
         subtitle="Every unit by community — paid, due, overdue, or vacant."
         action={
           <div className="flex items-center gap-3 print:hidden">
-            <form method="get">
-              <input
-                type="month"
-                name="period"
-                defaultValue={period}
-                className="rounded-lg border border-clay-deep bg-white px-3 py-1.5 text-sm text-ink"
-              />
-            </form>
+            <RentBoardMonthNav period={period} />
             <Link href="/admin/payments" className="text-sm font-medium text-pine hover:text-pine-dark">
               Payments →
             </Link>
