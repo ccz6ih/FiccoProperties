@@ -71,6 +71,7 @@ export default async function RentBoardPage({
   // board and its printout show how each paid unit paid.
   const chargeIds = (charges ?? []).map((c) => c.id);
   const refByCharge = new Map<string, string>();
+  const paidDateByCharge = new Map<string, string>();
   if (chargeIds.length > 0) {
     const { data: payments } = await db
       .from("payments")
@@ -78,9 +79,12 @@ export default async function RentBoardPage({
       .in("charge_id", chargeIds)
       .eq("status", "succeeded")
       .order("created_at", { ascending: false })
-      .returns<{ charge_id: string | null; provider_ref: string | null }[]>();
+      .returns<{ charge_id: string | null; provider_ref: string | null; created_at: string }[]>();
     for (const p of payments ?? []) {
-      if (!p.charge_id || refByCharge.has(p.charge_id)) continue;
+      if (!p.charge_id) continue;
+      // Newest-first, so the first one seen is the latest payment date.
+      if (!paidDateByCharge.has(p.charge_id)) paidDateByCharge.set(p.charge_id, p.created_at);
+      if (refByCharge.has(p.charge_id)) continue;
       if (p.provider_ref && p.provider_ref !== "offline") {
         refByCharge.set(p.charge_id, p.provider_ref);
       }
@@ -108,6 +112,7 @@ export default async function RentBoardPage({
       amountCents: charge?.amount_cents ?? o?.rent_cents ?? 0,
       status,
       paidRef: charge && status === "paid" ? refByCharge.get(charge.id) ?? null : null,
+      paidDate: charge && status === "paid" ? paidDateByCharge.get(charge.id) ?? null : null,
     });
     byProp.set(property, arr);
   }

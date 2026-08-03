@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { PaymentReceipt } from "@/components/payment-receipt-form";
-import { formatCents } from "@/lib/format";
+import { formatCents, formatDate } from "@/lib/format";
 import {
   recordOfflinePayments,
   type AdminPaymentsState,
@@ -19,6 +19,7 @@ export type BoardCharge = {
   amountCents: number;
   status: "paid" | "open" | "overdue" | "unbilled" | "vacant";
   paidRef?: string | null;
+  paidDate?: string | null;
 };
 export type BoardGroup = {
   property: string;
@@ -184,7 +185,10 @@ export function RentBoard({
                             <PaymentReceipt chargeId={c.id} note={c.paidRef ?? null} compact />
                           </span>
                         )}
-                        <span className={`text-xs font-medium ${meta.text}`}>{meta.label}</span>
+                        <span className={`text-xs font-medium ${meta.text}`}>
+                          {meta.label}
+                          {c.status === "paid" && c.paidDate ? ` · ${formatDate(c.paidDate)}` : ""}
+                        </span>
                         <span className="text-sm font-medium text-ink">{formatCents(c.amountCents)}</span>
                       </div>
                     </li>
