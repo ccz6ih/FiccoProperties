@@ -19,6 +19,7 @@ export type PaymentRow = {
   property: string | null;
   paidCents: number;
   paidRef: string | null;
+  paidDate: string | null;
   description: string | null;
   period: string | null;
   dueDate: string | null;
@@ -125,7 +126,21 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
           <td className="px-5 py-3 text-ink-soft">{c.property ?? "—"}</td>
           <td className="px-5 py-3 text-ink-soft">{c.description ?? "Rent"}</td>
           <td className="px-5 py-3 text-ink-soft">{c.period ?? "—"}</td>
-          <td className="px-5 py-3 text-ink-soft">{formatDate(c.dueDate)}</td>
+          <td className="px-5 py-3 text-ink-soft">
+            {c.paidCents > 0 && c.paidDate ? (
+              <div>
+                <div className="text-ink">{formatDate(c.paidDate)}</div>
+                <div className="text-xs text-ink-faint">
+                  {remaining === 0 ? "paid" : "last payment"}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div>{formatDate(c.dueDate)}</div>
+                <div className="text-xs text-ink-faint">due</div>
+              </div>
+            )}
+          </td>
           <td className="px-5 py-3 font-medium text-ink">
             {formatCents(c.amountCents)}
             {partial && (
@@ -234,7 +249,7 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
                 <th className="px-5 py-3 font-medium">Community</th>
                 <th className="px-5 py-3 font-medium">Charge</th>
                 <th className="px-5 py-3 font-medium">Period</th>
-                <th className="px-5 py-3 font-medium">Due</th>
+                <th className="px-5 py-3 font-medium">Due / paid</th>
                 <th className="px-5 py-3 font-medium">Amount</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3" />

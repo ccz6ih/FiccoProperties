@@ -11,7 +11,15 @@ export function formatCents(cents: number | null | undefined): string {
 /** Format an ISO date string as "Jun 10, 2026". */
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-US', {
+  // Date-only values (YYYY-MM-DD) must render as their calendar day in LOCAL
+  // time. `new Date('2026-07-01')` parses as UTC midnight, which then displays
+  // as Jun 30 in US timezones — the classic off-by-one. Build a local date from
+  // the parts instead. Full timestamps (with a time/zone) parse normally.
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  const d = parts
+    ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+    : new Date(iso)
+  return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

@@ -109,6 +109,7 @@ export default async function AdminPayments({
   const chargeIds = all.map((c) => c.id);
   const paidByCharge = new Map<string, number>();
   const refByCharge = new Map<string, string>();
+  const paidDateByCharge = new Map<string, string>();
   if (chargeIds.length > 0) {
     const { data: paySums } = await db
       .from("payments")
@@ -120,6 +121,8 @@ export default async function AdminPayments({
     for (const p of paySums ?? []) {
       if (!p.charge_id) continue;
       paidByCharge.set(p.charge_id, (paidByCharge.get(p.charge_id) ?? 0) + p.amount_cents);
+      // Ordered newest-first, so the first one we see is the latest payment date.
+      if (!paidDateByCharge.has(p.charge_id)) paidDateByCharge.set(p.charge_id, p.created_at);
       if (!refByCharge.has(p.charge_id)) {
         const ref = p.receipt_note ?? (p.provider_ref && p.provider_ref !== "offline" ? p.provider_ref : null);
         if (ref) refByCharge.set(p.charge_id, ref);
@@ -169,6 +172,7 @@ export default async function AdminPayments({
       property: c.units?.properties?.name ?? null,
       paidCents: paidFor(c),
       paidRef: refByCharge.get(c.id) ?? null,
+      paidDate: paidDateByCharge.get(c.id) ?? null,
       description: c.description,
       period: c.period,
       dueDate: c.due_date,
