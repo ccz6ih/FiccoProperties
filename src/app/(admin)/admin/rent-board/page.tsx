@@ -139,18 +139,20 @@ export default async function RentBoardPage({
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title="Rent board"
-        subtitle="Every unit by community — paid, due, overdue, or vacant."
-        action={
-          <div className="flex items-center gap-3 print:hidden">
-            <RentBoardMonthNav period={period} />
-            <Link href="/admin/payments" className="text-sm font-medium text-pine hover:text-pine-dark">
-              Payments →
-            </Link>
-          </div>
-        }
-      />
+      <div className="print:hidden">
+        <PageHeader
+          title="Rent board"
+          subtitle="Every unit by community — paid, due, overdue, or vacant."
+          action={
+            <div className="flex items-center gap-3">
+              <RentBoardMonthNav period={period} />
+              <Link href="/admin/payments" className="text-sm font-medium text-pine hover:text-pine-dark">
+                Payments →
+              </Link>
+            </div>
+          }
+        />
+      </div>
 
       <div className="mb-4 hidden print:block">
         <div className="font-display text-xl font-semibold text-ink">

@@ -80,12 +80,8 @@ export function RentBoard({
 
   return (
     <div>
-      {/* Overall summary + legend + print (hidden in print when printing one property) */}
-      <div
-        className={`mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-clay bg-cream p-5 ${
-          printOnly ? "print:hidden" : ""
-        }`}
-      >
+      {/* Overall summary + legend + print controls — screen only. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-clay bg-cream p-5 print:hidden">
         <div>
           <div className="text-sm text-ink-soft">{periodLabel}</div>
           <div className="font-display text-2xl font-semibold text-ink">
@@ -120,13 +116,6 @@ export function RentBoard({
                 printOnly && printOnly !== g.property ? "print:hidden" : ""
               }`}
             >
-              {/* Print-only header so a single-property printout is clearly labelled. */}
-              <div className="hidden px-4 pt-4 print:block print:break-after-avoid">
-                <div className="font-display text-lg font-semibold text-ink">
-                  38th Ave Properties — {g.property}
-                </div>
-                <div className="text-sm text-ink-soft">Rent board · {periodLabel}</div>
-              </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-clay bg-sand/50 px-4 py-3 print:break-after-avoid">
                 <div>
                   <div className="font-display text-base font-semibold text-ink">{g.property}</div>
