@@ -6,9 +6,11 @@
 -- private bucket, viewed via signed URLs.
 -- =============================================================================
 
+-- text/html is allowed so the frozen document-of-record snapshot can be stored
+-- alongside photos in the same private bucket.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('incident-photos', 'incident-photos', false, 26214400,
-        array['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf']::text[])
+        array['image/jpeg','image/png','image/webp','image/heic','image/heif','application/pdf','text/html']::text[])
 on conflict (id) do nothing;
 
 create table if not exists public.incident_reports (

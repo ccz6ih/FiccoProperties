@@ -54,7 +54,7 @@ begin
       old.narrative, old.anyone_hurt, old.hurt_details, old.police_called, old.police_ref,
       old.has_evidence, old.happened_before, old.before_when, old.additional,
       old.attestation_text, old.signed_name, old.signed_at, old.submitted_at,
-      old.submitter_ip, old.submitter_user_agent, old.log_seq, old.log_number,
+      old.submitter_ip, old.submitter_user_agent, old.log_seq,
       old.created_at, old.supersedes_id
     ) is distinct from row(
       new.reporter_id, new.unit_id, new.property_id, new.reporter_name, new.reporter_phone,
@@ -62,7 +62,7 @@ begin
       new.narrative, new.anyone_hurt, new.hurt_details, new.police_called, new.police_ref,
       new.has_evidence, new.happened_before, new.before_when, new.additional,
       new.attestation_text, new.signed_name, new.signed_at, new.submitted_at,
-      new.submitter_ip, new.submitter_user_agent, new.log_seq, new.log_number,
+      new.submitter_ip, new.submitter_user_agent, new.log_seq,
       new.created_at, new.supersedes_id
     )
   then
