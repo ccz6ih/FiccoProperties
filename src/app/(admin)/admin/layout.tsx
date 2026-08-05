@@ -26,6 +26,7 @@ export default async function AdminLayout({
     { href: "/admin/rent-board", label: "Rent board", icon: navIcons.checklist },
     { href: "/admin/delinquency", label: "Delinquency", icon: navIcons.alert },
     { href: "/admin/notices", label: "Notices", icon: navIcons.notice },
+    { href: "/admin/incidents", label: "Incidents", icon: navIcons.alert },
     { href: "/admin/messages", label: "Messages", icon: navIcons.chat },
     { href: "/admin/community-note", label: "Community note", icon: navIcons.notice },
     { href: "/admin/residents", label: "Residents", icon: navIcons.users },

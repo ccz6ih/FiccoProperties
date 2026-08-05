@@ -60,6 +60,7 @@ const tools = [
   { href: "/portal/year", label: "Year in review", hint: "Your tenancy recap" },
   { href: "/portal/lease", label: "Your lease", hint: "Terms & documents" },
   { href: "/portal/maintenance", label: "Maintenance", hint: "Request a repair" },
+  { href: "/portal/incident", label: "Report an incident", hint: "Safety & disputes" },
   { href: "/portal/messages", label: "Message us", hint: "On-site team" },
   { href: "/portal/notices", label: "Notices", hint: "From management" },
   { href: "/portal/community", label: "Community", hint: "Info & resources" },
