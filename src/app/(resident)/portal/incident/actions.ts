@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getResidentUnitId } from "@/lib/occupancy";
 import { sendNotification } from "@/lib/email";
+import { getOwnerRecipients } from "@/lib/owners";
 import { incidentAlertEmail, incidentReceiptEmail } from "@/lib/incident-email";
 import { renderIncidentSnapshot } from "@/lib/incident-snapshot";
 
@@ -204,7 +205,9 @@ export async function submitIncidentReport(
     appUrl,
   };
   const alert = incidentAlertEmail(emailData);
+  const owners = await getOwnerRecipients();
   await sendNotification({
+    to: owners.length ? owners.join(",") : undefined,
     subject: alert.subject,
     html: alert.html,
     replyTo: reporterEmail ?? undefined,

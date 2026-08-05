@@ -108,18 +108,23 @@ export function customerHtml(heading: string, paragraphs: string[]): string {
   </div>`;
 }
 
-/** Minimal HTML wrapper for a notification body. */
+/** Branded notification card for staff/owner alerts. Matches the resident-facing
+ * emails so every message looks like it's from the same place. */
 export function notificationHtml(title: string, rows: [string, string][]): string {
+  const PINE = "#2f5d50", INK = "#2c2622", FAINT = "#9b9286", LINE = "#e6dcc8";
   const items = rows
     .filter(([, v]) => v)
     .map(
       ([k, v]) =>
-        `<tr><td style="padding:4px 12px 4px 0;color:#6f655a;font-size:13px">${k}</td><td style="padding:4px 0;color:#2c2622;font-size:13px"><strong>${v}</strong></td></tr>`
+        `<tr><td style="padding:8px 16px 8px 0;color:${FAINT};font-size:13px;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:8px 0;color:${INK};font-size:14px;font-weight:600">${v}</td></tr>`
     )
     .join("");
-  return `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px">
-    <h2 style="color:#2f5d50;font-size:18px;margin:0 0 12px">${title}</h2>
-    <table style="border-collapse:collapse">${items}</table>
-    <p style="margin:18px 0 0;font-size:12px;color:#9b9286">38th Ave Properties · admin notification</p>
-  </div>`;
+  return `<div style="background:#f2ece0;margin:0;padding:24px 12px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr><td align="center">
+    <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="width:560px;max-width:560px;background:#fff;border:1px solid ${LINE};border-radius:16px;overflow:hidden">
+      <tr><td style="background:${PINE};padding:20px 26px"><div style="font-family:Georgia,'Times New Roman',serif;font-size:19px;font-weight:600;color:#f7f3ea">38th Ave Properties</div><div style="font-size:11px;color:#bcd2c8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px">Notification</div></td></tr>
+      <tr><td style="padding:24px 26px 8px"><div style="font-family:Georgia,'Times New Roman',serif;font-size:19px;color:${INK};margin-bottom:12px">${title}</div><table role="presentation" style="border-collapse:collapse">${items}</table></td></tr>
+      <tr><td style="padding:8px 26px 24px"><div style="border-top:1px solid #f0e9db;padding-top:12px"><p style="margin:0;font-size:12px;color:${FAINT}">38th Ave Properties · admin notification</p></div></td></tr>
+    </table>
+  </td></tr></table></div>`;
 }
