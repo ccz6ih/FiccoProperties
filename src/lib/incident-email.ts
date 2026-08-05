@@ -9,6 +9,7 @@ const TERRA = "#b4562f";
 
 export type IncidentEmailData = {
   id: string;
+  logNumber: string;
   reporterName: string;
   home: string;
   occurred: string; // human date/time
@@ -41,6 +42,7 @@ function shell(bandLabel: string, headline: string, inner: string): string {
 export function incidentAlertEmail(d: IncidentEmailData): { subject: string; html: string } {
   const police = d.policeCalled === "yes" ? "Yes" : d.policeCalled === "unknown" ? "Don't know" : "No";
   const details = `<table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:16px">
+      ${row("Log number", esc(d.logNumber))}
       ${row("Reported by", esc(d.reporterName))}
       ${row("Home", esc(d.home))}
       ${row("When", esc(d.occurred))}
@@ -61,6 +63,7 @@ export function incidentAlertEmail(d: IncidentEmailData): { subject: string; htm
 /** Confirmation copy to the resident who filed it. */
 export function incidentReceiptEmail(d: IncidentEmailData): { subject: string; html: string } {
   const inner = `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:${INK}">Thank you, ${esc(d.reporterName)}. We've received your incident report and it's now on file. Our team will review it, and we'll follow up if we need anything more from you.</p>
+    <div style="background:#faf7f1;border:1px solid ${LINE};border-radius:10px;padding:12px 16px;margin-bottom:16px"><div style="font-size:11px;color:${FAINT};text-transform:uppercase;letter-spacing:.05em">Your log number</div><div style="font-family:Georgia,serif;font-size:20px;font-weight:700;color:${PINE}">${esc(d.logNumber)}</div><div style="font-size:12px;color:${FAINT};margin-top:2px">Keep this for your records — it confirms you reported this, and when.</div></div>
     <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:16px">
       ${row("Home", esc(d.home))}
       ${row("When", esc(d.occurred))}
