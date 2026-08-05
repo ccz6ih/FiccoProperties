@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { signInLink } from "@/lib/portal-invite";
+import { sendNotification } from "@/lib/email";
+import { incidentRequestEmail } from "@/lib/incident-email";
 
-export type IncidentAdminState = { ok: boolean; error?: string };
+export type IncidentAdminState = { ok: boolean; error?: string; sentTo?: string };
 
 const STATUSES = new Set(["new", "reviewed", "action_taken", "closed"]);
 
@@ -51,6 +55,45 @@ export async function updateIncident(
   revalidatePath(`/admin/incidents/${id}`);
   revalidatePath("/admin/incidents");
   return { ok: true };
+}
+
+/** Email a resident a one-click link to the incident form. Staff-only. */
+export async function emailIncidentForm(
+  _prev: IncidentAdminState,
+  form: FormData
+): Promise<IncidentAdminState> {
+  const { profile } = await requireProfile("/admin/incidents");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const residentId = str(form.get("resident_id"));
+  const note = str(form.get("note"));
+  if (!residentId) return { ok: false, error: "Pick a resident." };
+
+  const admin = createAdminClient();
+  const { data: p } = await admin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", residentId)
+    .maybeSingle<{ full_name: string | null; email: string | null }>();
+
+  const email = p?.email?.trim();
+  if (!email) return { ok: false, error: "That resident has no email on file." };
+
+  const link = await signInLink(email, "/portal/incident");
+  const { subject, html } = incidentRequestEmail({
+    firstName: p?.full_name?.split(" ")[0] ?? "there",
+    link,
+    note,
+  });
+  const res = await sendNotification({
+    to: email,
+    subject,
+    html,
+    meta: { kind: "incident_form_request", refType: "profile", refId: residentId },
+  });
+  if (!res.sent) return { ok: false, error: "Could not send the email. Please try again." };
+
+  return { ok: true, sentTo: email };
 }
 
 /** Add a staff note to an incident's append-only note log. */

@@ -60,6 +60,23 @@ export function incidentAlertEmail(d: IncidentEmailData): { subject: string; htm
   };
 }
 
+/** Staff asks a resident to document an incident — one-click link to the form. */
+export function incidentRequestEmail(d: {
+  firstName: string;
+  link: string;
+  note: string | null;
+}): { subject: string; html: string } {
+  const inner = `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:${INK}">Hi ${esc(d.firstName)},</p>
+    <p style="margin:0 0 16px;font-size:14px;line-height:1.65;color:${INK}">When you have a few minutes, please document the incident using our secure form. It takes about five minutes, it's kept on file, and it helps us follow up properly. Write only what you saw and heard yourself.</p>
+    ${d.note ? `<div style="border-left:3px solid ${PINE};background:#faf7f1;padding:10px 14px;margin:0 0 16px;font-size:14px;line-height:1.6;color:${INK};white-space:pre-wrap">${esc(d.note)}</div>` : ""}
+    <a href="${d.link}" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:15px;font-weight:600;padding:12px 24px;border-radius:8px">Open the incident form →</a>
+    <p style="margin:16px 0 0;font-size:12px;color:${FAINT}">This link signs you straight in to the form. If anything is happening right now, call 911 first.</p>`;
+  return {
+    subject: "Please document an incident — 38th Ave Properties",
+    html: shell("Incident report", "We'd like you to document an incident", inner),
+  };
+}
+
 /** Confirmation copy to the resident who filed it. */
 export function incidentReceiptEmail(d: IncidentEmailData): { subject: string; html: string } {
   const inner = `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:${INK}">Thank you, ${esc(d.reporterName)}. We've received your incident report and it's now on file. Our team will review it, and we'll follow up if we need anything more from you.</p>

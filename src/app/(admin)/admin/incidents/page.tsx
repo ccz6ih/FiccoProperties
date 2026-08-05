@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
+import { IncidentRequestForm, type ResidentOpt } from "@/components/incident-request-form";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,19 +36,44 @@ export default async function AdminIncidents({
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
-  const [{ data: reports }, { data: photoRows }] = await Promise.all([
-    db
-      .from("incident_reports")
-      .select(
-        "id, created_at, occurred_on, occurred_time, reporter_name, location, narrative, anyone_hurt, police_called, status, units:unit_id(label, properties(name))"
-      )
-      .order("created_at", { ascending: false })
-      .returns<Row[]>(),
-    db.from("incident_report_photos").select("report_id").returns<{ report_id: string }[]>(),
-  ]);
+  const [{ data: reports }, { data: photoRows }, { data: residentRows }, { data: occRows }] =
+    await Promise.all([
+      db
+        .from("incident_reports")
+        .select(
+          "id, created_at, occurred_on, occurred_time, reporter_name, location, narrative, anyone_hurt, police_called, status, units:unit_id(label, properties(name))"
+        )
+        .order("created_at", { ascending: false })
+        .returns<Row[]>(),
+      db.from("incident_report_photos").select("report_id").returns<{ report_id: string }[]>(),
+      db
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("role", "resident")
+        .not("email", "is", null)
+        .order("full_name")
+        .returns<{ id: string; full_name: string | null; email: string | null }[]>(),
+      db
+        .from("unit_occupancy")
+        .select("occupant_profile_id, units:unit_id(label, properties(name))")
+        .not("occupant_profile_id", "is", null)
+        .returns<{ occupant_profile_id: string; units: { label: string; properties: { name: string | null } | null } | null }[]>(),
+    ]);
 
   const photoCount = new Map<string, number>();
   for (const p of photoRows ?? []) photoCount.set(p.report_id, (photoCount.get(p.report_id) ?? 0) + 1);
+
+  const homeByProfile = new Map<string, string>();
+  for (const o of occRows ?? []) {
+    if (o.occupant_profile_id && o.units) {
+      homeByProfile.set(o.occupant_profile_id, `${o.units.properties?.name ?? "—"} · ${o.units.label}`);
+    }
+  }
+  const residents: ResidentOpt[] = (residentRows ?? []).map((r) => ({
+    id: r.id,
+    name: r.full_name ?? r.email ?? "Resident",
+    home: homeByProfile.get(r.id) ?? null,
+  }));
 
   const all = reports ?? [];
   const newCount = all.filter((r) => r.status === "new").length;
@@ -60,6 +86,16 @@ export default async function AdminIncidents({
         title="Incident reports"
         subtitle="Resident-filed reports of safety events, disputes, or damage — kept on file."
       />
+
+      {residents.length > 0 && (
+        <Card className="mb-6 p-5">
+          <h2 className="font-display text-base font-semibold text-ink">Ask a resident to file a report</h2>
+          <p className="mb-3 text-xs text-ink-faint">
+            Emails them a one-click link straight to the incident form — no password needed.
+          </p>
+          <IncidentRequestForm residents={residents} />
+        </Card>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2 text-sm">
         <Filter active={!openView} href="/admin/incidents" label={`All (${all.length})`} />
