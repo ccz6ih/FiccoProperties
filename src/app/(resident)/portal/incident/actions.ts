@@ -20,8 +20,9 @@ const FILE_TYPES = new Set([
 const MAX_PHOTOS = 10;
 
 /** The exact wording the resident attests to — snapshotted on every report so a
- * later reword never changes what a past filer agreed to. */
-export const ATTESTATION_TEXT =
+ * later reword never changes what a past filer agreed to. (Not exported: a
+ * "use server" file may only export async functions.) */
+const ATTESTATION_TEXT =
   "Everything I wrote above is true and correct as far as I know. I understand this report may be kept on file and may be used if this matter goes to court.";
 
 function str(form: FormData, key: string): string | null {
