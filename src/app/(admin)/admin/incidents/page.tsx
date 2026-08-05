@@ -74,6 +74,14 @@ export default async function AdminIncidents({
     name: r.full_name ?? r.email ?? "Resident",
     home: homeByProfile.get(r.id) ?? null,
   }));
+  // Unit-first ordering: by property + unit number, homes before "no home".
+  residents.sort((a, b) => {
+    if (!a.home !== !b.home) return a.home ? -1 : 1;
+    return (
+      (a.home ?? "").localeCompare(b.home ?? "", undefined, { numeric: true }) ||
+      a.name.localeCompare(b.name)
+    );
+  });
 
   const all = reports ?? [];
   const newCount = all.filter((r) => r.status === "new").length;
@@ -89,9 +97,10 @@ export default async function AdminIncidents({
 
       {residents.length > 0 && (
         <Card className="mb-6 p-5">
-          <h2 className="font-display text-base font-semibold text-ink">Ask a resident to file a report</h2>
+          <h2 className="font-display text-base font-semibold text-ink">Send the incident form</h2>
           <p className="mb-3 text-xs text-ink-faint">
-            Emails them a one-click link straight to the incident form — no password needed.
+            Pick a unit and we&apos;ll email that resident a one-click link straight to the incident
+            form — no password needed. (Units whose tenant has a portal account appear here.)
           </p>
           <IncidentRequestForm residents={residents} />
         </Card>

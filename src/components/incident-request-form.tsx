@@ -19,12 +19,14 @@ export function IncidentRequestForm({ residents }: { residents: ResidentOpt[] })
     <form action={action} className="space-y-3" key={state.ok ? "sent" : "form"}>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">Resident</span>
+          <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+            Unit / resident
+          </span>
           <select name="resident_id" defaultValue="" required className={field}>
-            <option value="" disabled>Choose a resident…</option>
+            <option value="" disabled>Choose a unit…</option>
             {residents.map((r) => (
               <option key={r.id} value={r.id}>
-                {r.name}{r.home ? ` · ${r.home}` : ""}
+                {r.home ? `${r.home} — ${r.name}` : r.name}
               </option>
             ))}
           </select>
