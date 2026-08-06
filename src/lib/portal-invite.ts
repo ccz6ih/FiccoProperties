@@ -108,6 +108,7 @@ export async function sendResidentWelcome(opts: {
     <div style="border:1px solid #e6dcc8;border-radius:10px;padding:12px 16px;margin:14px 0">
       <div style="font-size:11px;color:#9b9286;text-transform:uppercase;letter-spacing:.04em">Rent drop box (check or money order)</div>
       <div style="font-size:14px;font-weight:600;color:#2c2622">${RENT_DROPBOX.full}</div>
+      <div style="font-size:13px;color:#2c2622;margin-top:3px">Make checks / money orders payable to <strong>${RENT_DROPBOX.payee}</strong>.</div>
       <div style="font-size:12px;color:#9b9286">Please write your unit number on your payment.</div>
     </div>
 

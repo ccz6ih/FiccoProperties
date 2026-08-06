@@ -94,7 +94,7 @@ Re: ${addr}
 
 This is a friendly reminder that rent of ${amount} for ${period} was due on ${due} and our records show it remains unpaid. A late fee may apply under your lease.
 
-Please bring your balance current as soon as possible. Pay by check or money order (write your unit number on it) in the rent drop box at ${RENT_DROPBOX.full}.
+Please bring your balance current as soon as possible. Pay by check or money order made payable to ${RENT_DROPBOX.payee} (write your unit number on it) in the rent drop box at ${RENT_DROPBOX.full}.
 
 If you have already paid, thank you — please disregard this notice. If you have questions or need to make arrangements, call our office at ${RENT_DROPBOX.phone}.
 

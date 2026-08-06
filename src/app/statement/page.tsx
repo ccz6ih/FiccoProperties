@@ -182,7 +182,9 @@ export default async function StatementPage() {
               How to pay
             </div>
             <div className="mt-0.5 text-sm text-ink-soft">
-              By check or money order (write your unit number on it) — drop it in the rent drop box at{" "}
+              By check or money order made payable to{" "}
+              <span className="font-medium text-ink">{RENT_DROPBOX.payee}</span> (write your unit
+              number on it) — drop it in the rent drop box at{" "}
               <span className="font-medium text-ink">{RENT_DROPBOX.line1}, {RENT_DROPBOX.city}</span>.
             </div>
           </div>

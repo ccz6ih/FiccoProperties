@@ -302,7 +302,8 @@ export default async function TenancyPage() {
           {rentCents != null && (
             <p className="mt-4 text-xs text-ink-faint">
               Your rent is {formatCents(rentCents)}, due on the 1st each month. Pay by check or money
-              order in the rent drop box at {RENT_DROPBOX.line1}, {RENT_DROPBOX.city}.
+              order made payable to <span className="font-medium text-ink">{RENT_DROPBOX.payee}</span>,
+              in the rent drop box at {RENT_DROPBOX.line1}, {RENT_DROPBOX.city}.
             </p>
           )}
         </Card>

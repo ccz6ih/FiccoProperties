@@ -4,6 +4,7 @@ import { PageHeader, StatCard, StatusPill, EmptyState } from "@/components/dashb
 import { PaymentsAddMethod } from "@/components/payments-add-method";
 import { PaymentsPayButton } from "@/components/payments-pay-button";
 import { formatCents, formatDate } from "@/lib/format";
+import { RENT_DROPBOX } from "@/lib/rent-dropbox";
 import { requireProfile } from "@/lib/auth";
 import { isStripeActive } from "@/lib/payments/provider";
 import { getResidentPaymentInsights } from "@/lib/payment-insights";
@@ -381,6 +382,17 @@ export default async function PortalPayments() {
                 Please pay by <span className="font-medium text-ink">check or money order</span> (write
                 your unit number on it).
               </p>
+              <div className="mt-3 rounded-xl border border-pine/30 bg-pine/5 px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+                  Make it payable to
+                </div>
+                <div className="mt-0.5 font-display text-lg font-semibold text-pine">
+                  {RENT_DROPBOX.payee}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  Same owners, same place — just our business name.
+                </div>
+              </div>
               <div className="mt-3 rounded-xl border border-clay bg-sand/40 px-4 py-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">
                   Rent drop box
