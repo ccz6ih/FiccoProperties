@@ -1,8 +1,9 @@
 /**
- * Owner digest — Monday/Wednesday/Friday mornings. Everything since the last
- * edition: money in, what happened, what got DONE (completed maintenance,
- * finished tasks, work logged on units), notes from the field, what needs
- * attention today — and a closing quote. Big-type and plain-English.
+ * Weekly owner digest — Monday mornings, covering the whole prior week:
+ * money in, what happened, what got DONE (completed maintenance, finished
+ * tasks), what the office put in motion (tasks, notices, offers, bills),
+ * notes from the field, what needs attention — and a closing quote.
+ * Urgent events (emergencies, incidents) still email owners instantly.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,8 +48,8 @@ export async function buildDailyDigest(
 ): Promise<{ subject: string; html: string }> {
   const db = createAdminClient() as unknown as SupabaseClient;
   const now = new Date();
-  // Everything since the previous edition (fallback: the last 3 days).
-  const sinceIso = sinceIsoInput || new Date(now.getTime() - 72 * 3600_000).toISOString();
+  // Everything since the previous edition (fallback: the last 8 days).
+  const sinceIso = sinceIsoInput || new Date(now.getTime() - 8 * 86_400_000).toISOString();
   const todayIso = now.toISOString().slice(0, 10);
   const in60 = new Date(now.getTime() + 60 * 86_400_000).toISOString().slice(0, 10);
 
@@ -69,6 +70,15 @@ export async function buildDailyDigest(
     { data: completedMaint },
     { data: doneTasks },
     { data: fieldNotes },
+    { data: newTasks },
+    { data: newNotices },
+    { data: newAnnouncements },
+    { data: newOffers },
+    { data: newInspections },
+    { data: newBills },
+    { data: newExpenses },
+    { data: newVendors },
+    { data: answeredIdeas },
   ] = await Promise.all([
     db.from("payments").select("amount_cents, units:unit_id(label, properties(name))").eq("status", "succeeded").gte("created_at", sinceIso)
       .returns<{ amount_cents: number; units: UnitJoin }[]>(),
@@ -102,6 +112,20 @@ export async function buildDailyDigest(
     db.from("unit_log_entries").select("kind, body, created_at, author:author_id(full_name), units:unit_id(label, properties(name))")
       .gte("created_at", sinceIso).order("created_at", { ascending: false }).limit(8)
       .returns<{ kind: string; body: string; created_at: string; author: { full_name: string | null } | null; units: UnitJoin }[]>(),
+    db.from("tasks").select("title, created_at").gte("created_at", sinceIso).neq("status", "cancelled")
+      .returns<{ title: string; created_at: string }[]>(),
+    db.from("notices").select("title, type, units:unit_id(label, properties(name))").gte("created_at", sinceIso)
+      .returns<{ title: string; type: string; units: UnitJoin }[]>(),
+    db.from("announcements").select("title").gte("created_at", sinceIso).returns<{ title: string }[]>(),
+    db.from("renewal_offers").select("new_rent_cents, units:unit_id(label, properties(name))").gte("created_at", sinceIso)
+      .returns<{ new_rent_cents: number; units: UnitJoin }[]>(),
+    db.from("inspections").select("scheduled_for, units:unit_id(label, properties(name))").gte("created_at", sinceIso)
+      .returns<{ scheduled_for: string; units: UnitJoin }[]>(),
+    db.from("unit_costs").select("amount_cents").gte("created_at", sinceIso).returns<{ amount_cents: number }[]>(),
+    db.from("property_expenses").select("amount_cents").gte("created_at", sinceIso).returns<{ amount_cents: number }[]>(),
+    db.from("vendors").select("name").gte("created_at", sinceIso).returns<{ name: string }[]>(),
+    db.from("community_posts").select("title").not("staff_reply_at", "is", null).gte("staff_reply_at", sinceIso)
+      .returns<{ title: string }[]>(),
   ]);
 
   // ---- yesterday ----
@@ -168,6 +192,46 @@ export async function buildDailyDigest(
     )
   );
 
+  // ---- from the office: what Craig/staff put in motion this week ----
+  const NOTICE_LABEL: Record<string, string> = {
+    late_rent: "Late-rent reminder",
+    pay_or_quit: "Demand for rent (pay or quit)",
+    lease_violation: "Lease-violation notice",
+    entry: "Notice of entry",
+    general: "Notice",
+  };
+  const officeItems: string[] = [];
+  const taskList = newTasks ?? [];
+  if (taskList.length > 0) {
+    const titles = taskList.slice(0, 4).map((t) => esc(t.title)).join(", ");
+    officeItems.push(li(`📌 ${taskList.length} task${taskList.length === 1 ? "" : "s"} added — ${titles}${taskList.length > 4 ? "…" : ""}`));
+  }
+  for (const n of newNotices ?? []) {
+    officeItems.push(li(`📮 ${NOTICE_LABEL[n.type] ?? "Notice"} — ${esc(homeOf(n.units))}`));
+  }
+  for (const a of newAnnouncements ?? []) {
+    officeItems.push(li(`📣 Announcement posted: “${esc(a.title)}”`));
+  }
+  for (const o of newOffers ?? []) {
+    officeItems.push(li(`📄 Renewal offer — ${esc(homeOf(o.units))} at ${formatCents(o.new_rent_cents)}/mo`));
+  }
+  for (const i of newInspections ?? []) {
+    officeItems.push(li(`🔍 Inspection scheduled — ${esc(homeOf(i.units))}`));
+  }
+  const billCount = (newBills ?? []).length + (newExpenses ?? []).length;
+  const billTotal =
+    (newBills ?? []).reduce((s, b) => s + b.amount_cents, 0) +
+    (newExpenses ?? []).reduce((s, e) => s + e.amount_cents, 0);
+  if (billCount > 0) {
+    officeItems.push(li(`🧾 ${billCount} bill${billCount === 1 ? "" : "s"}/expense${billCount === 1 ? "" : "s"} recorded — ${formatCents(billTotal)} for the books`));
+  }
+  for (const v of newVendors ?? []) {
+    officeItems.push(li(`🤝 New contractor on file: ${esc(v.name)}`));
+  }
+  for (const idea of answeredIdeas ?? []) {
+    officeItems.push(li(`💬 Replied to the community idea “${esc(idea.title)}”`));
+  }
+
   const quote = OWNER_QUOTES[Math.floor(Math.random() * OWNER_QUOTES.length)];
 
   const attentionItems: string[] = [];
@@ -189,7 +253,7 @@ export async function buildDailyDigest(
   <table role="presentation" width="620" style="width:620px;max-width:620px;background:#fff;border:1px solid ${LINE};border-radius:16px;overflow:hidden">
     <tr><td style="background:${PINE};padding:22px 28px">
       <div style="font-family:Georgia,serif;font-size:20px;font-weight:600;color:#f7f3ea">38th Ave Properties</div>
-      <div style="font-size:11px;color:#bcd2c8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px">Morning digest · ${esc(dateLabel)}</div>
+      <div style="font-size:11px;color:#bcd2c8;letter-spacing:.08em;text-transform:uppercase;margin-top:3px">Weekly digest · ${esc(dateLabel)}</div>
     </td></tr>
     <tr><td style="padding:24px 28px 4px">
       <div style="font-size:16px;color:${INK};line-height:1.6;margin-bottom:20px">
@@ -199,6 +263,7 @@ export async function buildDailyDigest(
       </div>
       ${section("Since the last digest", INK, yesterdayItems, "A quiet stretch — nothing new came in.")}
       ${section("What got done ✅", PINE, doneItems, "No work closed out this stretch.")}
+      ${section("From the office 🗂", INK, officeItems, "Nothing new put in motion this week.")}
       ${noteItems.length > 0 ? section("Notes from the field", INK, noteItems, "") : ""}
       ${section("Needs attention today", attentionCount > 0 ? TERRA : PINE, attentionItems, "All clear — clocks green, nothing waiting.")}
       <div style="background:${SAND};border-left:3px solid #c9932f;border-top:1px solid ${LINE};border-right:1px solid ${LINE};border-bottom:1px solid ${LINE};border-radius:10px;padding:12px 16px;margin-bottom:14px">
@@ -214,14 +279,14 @@ export async function buildDailyDigest(
       </div>
     </td></tr>
     <tr><td style="padding:8px 28px 24px">
-      <p style="margin:0;font-size:12px;color:${FAINT};line-height:1.6;border-top:1px solid #f0e9db;padding-top:12px">Sent Monday, Wednesday, and Friday mornings to the owners of 38th Ave Properties. Reply to this email to reach the office.</p>
+      <p style="margin:0;font-size:12px;color:${FAINT};line-height:1.6;border-top:1px solid #f0e9db;padding-top:12px">Sent every Monday morning to the owners of 38th Ave Properties. Reply to this email to reach the office.</p>
     </td></tr>
   </table></td></tr></table></div>`;
 
   const subject =
     attentionCount > 0
-      ? `Morning digest — ${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`
-      : `Morning digest — all clear${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`;
+      ? `Weekly digest — ${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`
+      : `Weekly digest — all clear${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`;
 
   return { subject, html };
 }

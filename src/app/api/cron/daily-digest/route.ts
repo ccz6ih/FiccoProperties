@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * previous one. Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron)
  * or `?key=`. `?force=1` bypasses the day gate + dedupe for manual testing.
  */
-const SEND_DAYS = new Set([1, 3, 5]); // Mon / Wed / Fri (UTC ≈ same weekday at 13:00)
+const SEND_DAYS = new Set([1]); // Mondays — one weekly edition covering the whole prior week
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   const todayIso = now.toISOString().slice(0, 10);
 
   if (!force && !SEND_DAYS.has(now.getUTCDay())) {
-    return NextResponse.json({ ok: true, skipped: "not a digest day (Mon/Wed/Fri)" });
+    return NextResponse.json({ ok: true, skipped: "not Monday" });
   }
 
   const db = createAdminClient() as unknown as SupabaseClient;
