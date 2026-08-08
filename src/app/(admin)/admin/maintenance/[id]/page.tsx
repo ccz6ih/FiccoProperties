@@ -8,6 +8,7 @@ import {
   MaintenanceAssigneeControl,
 } from "@/components/maintenance-controls";
 import { MaintenanceCommentForm } from "@/components/maintenance-comment-form";
+import { MaintenanceVendorPanel } from "@/components/maintenance-vendor-panel";
 import { Avatar } from "@/components/avatar";
 import {
   addMaintenanceComment,
@@ -77,6 +78,27 @@ export default async function MaintenanceDetail({
     .in("role", ["owner", "admin"])
     .order("full_name", { ascending: true })
     .returns<StaffRow[]>();
+
+  // Vendor assignment + work-order state (columns added in 0048).
+  const [{ data: vendorState }, { data: vendorRows }] = await Promise.all([
+    db
+      .from("maintenance_requests")
+      .select("vendor_id, work_order_sent_at")
+      .eq("id", id)
+      .maybeSingle<{ vendor_id: string | null; work_order_sent_at: string | null }>(),
+    db
+      .from("vendors")
+      .select("id, name, trade, coi_expires_on")
+      .eq("active", true)
+      .order("name")
+      .returns<{ id: string; name: string; trade: string | null; coi_expires_on: string | null }[]>(),
+  ]);
+  const vendorOpts = (vendorRows ?? []).map((v) => ({
+    id: v.id,
+    name: v.name,
+    trade: v.trade,
+    coiExpired: !!v.coi_expires_on && new Date(v.coi_expires_on) < new Date(),
+  }));
 
   const thread = comments ?? [];
   const staffList = staff ?? [];
@@ -202,6 +224,15 @@ export default async function MaintenanceDetail({
             {user && request.assigned_to === user.id && (
               <p className="pt-1 text-xs font-medium text-pine-dark">✓ Assigned to you</p>
             )}
+          </div>
+
+          <div className="border-t border-clay pt-4">
+            <MaintenanceVendorPanel
+              requestId={request.id}
+              vendorId={vendorState?.vendor_id ?? null}
+              vendors={vendorOpts}
+              workOrderSentAt={vendorState?.work_order_sent_at ?? null}
+            />
           </div>
         </Card>
       </div>
