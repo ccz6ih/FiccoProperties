@@ -64,6 +64,7 @@ const tools = [
   { href: "/portal/incident", label: "Report an incident", hint: "Safety & disputes" },
   { href: "/portal/messages", label: "Message us", hint: "On-site team" },
   { href: "/portal/notices", label: "Notices", hint: "From management" },
+  { href: "/portal/ideas", label: "Idea board", hint: "Share & vote" },
   { href: "/portal/community", label: "Community", hint: "Info & resources" },
   { href: "/account", label: "Account", hint: "Insurance & contacts" },
 ];

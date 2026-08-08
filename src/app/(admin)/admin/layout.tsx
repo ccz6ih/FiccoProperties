@@ -35,6 +35,7 @@ export default async function AdminLayout({
     { href: "/admin/messages", label: "Messages", icon: navIcons.chat },
     { href: "/admin/community-note", label: "Community note", icon: navIcons.notice },
     { href: "/admin/announcements", label: "Announcements", icon: navIcons.notice },
+    { href: "/admin/ideas", label: "Community ideas", icon: navIcons.chat },
     { href: "/admin/residents", label: "Residents", icon: navIcons.users },
     { href: "/admin/tasks", label: "Tasks", icon: navIcons.tasks },
     { href: "/admin/petty-cash", label: "Petty cash", icon: navIcons.receipt },
