@@ -18,6 +18,8 @@ export default async function AdminLayout({
     { href: "/admin/tenants/new", label: "Add tenant", icon: navIcons.users },
     { href: "/admin/import", label: "Import tenants", icon: navIcons.inbox },
     { href: "/admin/applications", label: "Applications", icon: navIcons.inbox },
+    { href: "/admin/waitlist", label: "Waitlist", icon: navIcons.users },
+    { href: "/admin/funnel", label: "Funnel", icon: navIcons.search },
     { href: "/admin/tours", label: "Tours", icon: navIcons.calendar },
     { href: "/admin/leases", label: "Leases", icon: navIcons.doc },
     { href: "/admin/renewals", label: "Renewals", icon: navIcons.calendar },

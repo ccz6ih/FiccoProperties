@@ -8,6 +8,7 @@ import { getCommunityContent, NEIGHBORHOOD } from "@/lib/content";
 import { createClient } from "@/lib/supabase/server";
 import { listingPublicUrl } from "@/lib/unit-photos";
 import { propertyTypeLabel, formatCents } from "@/lib/format";
+import { FunnelPing } from "@/components/funnel-ping";
 
 export const revalidate = 60;
 
@@ -91,6 +92,7 @@ export default async function PropertyPage({ params }: Params) {
 
   return (
     <>
+      <FunnelPing step="listing_view" propertyId={property.id} />
       {/* Hero */}
       <section className={`relative bg-gradient-to-br ${content.gradient} text-cream`}>
         {property.hero_image && (

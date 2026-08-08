@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 const links = [
   { href: "/#communities", label: "Communities" },
+  { href: "/availability", label: "Availability" },
   { href: "/properties/mountain-village-square", label: "Mountain Village Square" },
   { href: "/properties/senior-villa", label: "Senior Villa" },
   { href: "/properties/villa-victoria", label: "Villa Victoria" },

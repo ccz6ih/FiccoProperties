@@ -31,6 +31,7 @@ export function SiteFooter() {
             Residents
           </div>
           <ul className="space-y-2 text-sm text-ink-soft">
+            <li><Link href="/availability" className="hover:text-ink">Availability &amp; waitlist</Link></li>
             <li><Link href="/apply" className="hover:text-ink">Apply online</Link></li>
             <li><Link href="/login" className="hover:text-ink">Resident login</Link></li>
             <li><Link href="/portal/maintenance" className="hover:text-ink">Request maintenance</Link></li>

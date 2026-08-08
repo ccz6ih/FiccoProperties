@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Container, Eyebrow } from "@/components/ui";
 import { ApplyForm } from "@/components/apply-form";
+import { FunnelPing } from "@/components/funnel-ping";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -27,6 +28,7 @@ export default async function ApplyPage({
 
   return (
     <section className="py-16">
+      <FunnelPing step="application_start" />
       <Container className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <Eyebrow>Apply online</Eyebrow>

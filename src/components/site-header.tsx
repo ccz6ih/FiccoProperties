@@ -4,6 +4,7 @@ import { MobileSiteNav } from "@/components/mobile-site-nav";
 
 const nav = [
   { href: "/#communities", label: "Communities" },
+  { href: "/availability", label: "Availability" },
   { href: "/#about", label: "About" },
   { href: "/apply", label: "Apply" },
 ];

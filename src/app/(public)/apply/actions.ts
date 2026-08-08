@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification, notificationHtml, customerHtml, esc } from "@/lib/email";
+import { logFunnelEvent } from "@/lib/funnel";
 
 export type ApplyState = {
   ok: boolean;
@@ -161,6 +162,9 @@ export async function submitApplication(
       `Questions in the meantime? Just reply to this email.`,
     ]),
   });
+
+  // Conversion event — the bottom of the marketing funnel.
+  await logFunnelEvent({ step: "application_complete", propertyId: property_id });
 
   return { ok: true };
 }
