@@ -33,6 +33,7 @@ export default async function AdminLayout({
     { href: "/admin/residents", label: "Residents", icon: navIcons.users },
     { href: "/admin/tasks", label: "Tasks", icon: navIcons.tasks },
     { href: "/admin/petty-cash", label: "Petty cash", icon: navIcons.receipt },
+    { href: "/admin/financials", label: "Financials", icon: navIcons.card },
     { href: "/admin/anniversaries", label: "Anniversaries", icon: navIcons.calendar },
   ];
 
