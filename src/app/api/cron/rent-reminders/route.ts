@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
 import { renderReminderEmail, type ReminderStage } from "@/lib/rent-reminder";
+import { applyDueRenewals } from "@/lib/renewals";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,14 @@ export async function GET(req: Request) {
   const authed =
     !secret || req.headers.get("authorization") === `Bearer ${secret}` || key === secret;
   if (!authed) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+  // Piggyback on the daily run: roll any accepted renewals whose effective
+  // date has arrived into the tenancy (idempotent; never blocks reminders).
+  try {
+    await applyDueRenewals();
+  } catch {
+    /* best-effort */
+  }
 
   const force = url.searchParams.get("force") === "1";
   const today = new Date();

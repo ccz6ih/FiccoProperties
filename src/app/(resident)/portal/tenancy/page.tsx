@@ -59,6 +59,7 @@ const tools = [
   { href: "/statement", label: "Rent statement", hint: "Printable ledger" },
   { href: "/portal/year", label: "Year in review", hint: "Your tenancy recap" },
   { href: "/portal/lease", label: "Your lease", hint: "Terms & documents" },
+  { href: "/portal/renewal", label: "Lease renewal", hint: "Offers & responses" },
   { href: "/portal/maintenance", label: "Maintenance", hint: "Request a repair" },
   { href: "/portal/incident", label: "Report an incident", hint: "Safety & disputes" },
   { href: "/portal/messages", label: "Message us", hint: "On-site team" },
