@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, ButtonLink, Eyebrow } from "@/components/ui";
 import { PageHeader, StatCard, StatusPill } from "@/components/dashboard-ui";
+import { PortalAnnouncements } from "@/components/portal-announcements";
 import { formatCents, formatDate } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -106,6 +107,8 @@ export default async function PortalHome() {
         title={`Welcome back, ${firstName}`}
         subtitle="Here's everything about your home in one place."
       />
+
+      <PortalAnnouncements userId={user.id} />
 
       {hasHome && !checkinComplete && (
         <Card className="mb-8 border-pine/30 bg-pine/5 p-6">
