@@ -19,6 +19,41 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: "completed", label: "Completed" },
 ];
 
+// Colorado warranty-of-habitability response windows (C.R.S. 38-12-503):
+// life/safety conditions → 24h to respond; other habitability issues → 96h.
+const HABITABILITY_CATEGORIES = new Set(["plumbing", "hvac", "heating", "electrical", "pest"]);
+
+function habitabilityClock(
+  r: { category: string; priority: string; status: string; created_at: string },
+  nowMs: number
+): { label: string; cls: string } | null {
+  if (!["open", "in_progress"].includes(r.status)) return null;
+  const emergency = r.priority === "emergency";
+  const habitability = HABITABILITY_CATEGORIES.has(r.category);
+  if (!emergency && !habitability) return null;
+
+  const windowHours = emergency ? 24 : 96;
+  const elapsed = (nowMs - new Date(r.created_at).getTime()) / 3_600_000;
+  const left = windowHours - elapsed;
+
+  if (left <= 0) {
+    return {
+      label: `⏰ Habitability window passed (${windowHours}h) — respond now`,
+      cls: "bg-terracotta text-cream",
+    };
+  }
+  if (left <= windowHours / 3) {
+    return {
+      label: `⏳ Habitability: ${Math.ceil(left)}h left of ${windowHours}h`,
+      cls: "bg-gold/30 text-ink",
+    };
+  }
+  return {
+    label: `Habitability: respond within ${windowHours}h (${Math.ceil(left)}h left)`,
+    cls: "bg-pine/10 text-pine",
+  };
+}
+
 export default async function AdminMaintenance() {
   const supabase = await createClient();
   const [{ data: requests }, { data: units }] = await Promise.all([
@@ -36,6 +71,7 @@ export default async function AdminMaintenance() {
   ]);
 
   const all = requests ?? [];
+  const nowMs = new Date().getTime();
   const unitOpts: MaintUnitOpt[] = (units ?? []).map((u) => ({
     id: u.id,
     label: u.label,
@@ -70,6 +106,14 @@ export default async function AdminMaintenance() {
                           <span className="text-sm font-medium text-ink">{r.title}</span>
                           {r.priority !== "normal" && <StatusPill value={r.priority} />}
                         </div>
+                        {(() => {
+                          const clock = habitabilityClock(r, nowMs);
+                          return clock ? (
+                            <div className={`rounded-lg px-2 py-1 text-[11px] font-medium leading-tight ${clock.cls}`}>
+                              {clock.label}
+                            </div>
+                          ) : null;
+                        })()}
                         <div className="text-xs text-ink-faint">
                           {r.units?.properties?.name ?? "Unassigned"}
                           {r.units?.label ? ` · ${r.units.label}` : ""}

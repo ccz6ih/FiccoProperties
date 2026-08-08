@@ -15,11 +15,10 @@ export default async function AdminVendors() {
     .returns<Vendor[]>();
 
   const list = vendors ?? [];
-  const lapsed = list.filter((v) => {
-    if (!v.active || !v.coi_expires_on) return false;
-    const [y, m, d] = v.coi_expires_on.split("-").map(Number);
-    return new Date(y, m - 1, d).getTime() < Date.now();
-  });
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const lapsed = list.filter(
+    (v) => v.active && !!v.coi_expires_on && v.coi_expires_on < todayIso
+  );
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -44,7 +43,7 @@ export default async function AdminVendors() {
         <VendorAddForm />
       </Card>
 
-      <VendorTable vendors={list} />
+      <VendorTable vendors={list} todayIso={todayIso} />
     </div>
   );
 }

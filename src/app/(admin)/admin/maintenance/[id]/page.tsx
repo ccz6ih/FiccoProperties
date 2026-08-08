@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
-import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
+import { PageHeader, StatusPill } from "@/components/dashboard-ui";
 import {
   MaintenanceStatusControl,
   MaintenancePriorityControl,

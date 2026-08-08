@@ -25,10 +25,13 @@ export type Vendor = {
   active: boolean;
 };
 
-function coiStatus(v: Vendor): { label: string; cls: string } {
+function coiStatus(v: Vendor, todayIso: string): { label: string; cls: string } {
   if (!v.coi_expires_on) return { label: "No COI on file", cls: "bg-sand text-ink-soft" };
   const [y, m, d] = v.coi_expires_on.split("-").map(Number);
-  const days = Math.round((new Date(y, m - 1, d).getTime() - Date.now()) / 86_400_000);
+  const [ty, tm, td] = todayIso.split("-").map(Number);
+  const days = Math.round(
+    (new Date(y, m - 1, d).getTime() - new Date(ty, tm - 1, td).getTime()) / 86_400_000
+  );
   if (days < 0) return { label: `Insurance expired ${formatDate(v.coi_expires_on)}`, cls: "bg-terracotta text-cream" };
   if (days <= 30) return { label: `Insurance expires in ${days}d`, cls: "bg-gold/25 text-ink" };
   return { label: `Insured thru ${formatDate(v.coi_expires_on)}`, cls: "bg-pine/15 text-pine" };
@@ -121,7 +124,7 @@ function VendorEditForm({ vendor, onDone }: { vendor: Vendor; onDone: () => void
   );
 }
 
-export function VendorTable({ vendors }: { vendors: Vendor[] }) {
+export function VendorTable({ vendors, todayIso }: { vendors: Vendor[]; todayIso: string }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -153,7 +156,7 @@ export function VendorTable({ vendors }: { vendors: Vendor[] }) {
             </thead>
             <tbody className="divide-y divide-clay">
               {visible.map((v) => {
-                const coi = coiStatus(v);
+                const coi = coiStatus(v, todayIso);
                 return (
                   <Fragment key={v.id}>
                     <tr className={v.active ? "hover:bg-sand/30" : "opacity-60"}>
