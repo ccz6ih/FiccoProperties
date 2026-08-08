@@ -8,10 +8,13 @@ import { sendNotification } from "@/lib/email";
 export const dynamic = "force-dynamic";
 
 /**
- * Owner morning digest — runs daily via Vercel Cron (~7am Mountain).
- * Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron) or `?key=`.
- * `?force=1` bypasses the once-a-day dedupe for manual testing.
+ * Owner digest — cron fires daily (~7am Mountain), but the digest only goes
+ * out Monday / Wednesday / Friday, each edition covering everything since the
+ * previous one. Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron)
+ * or `?key=`. `?force=1` bypasses the day gate + dedupe for manual testing.
  */
+const SEND_DAYS = new Set([1, 3, 5]); // Mon / Wed / Fri (UTC ≈ same weekday at 13:00)
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const secret = process.env.CRON_SECRET;
@@ -22,7 +25,12 @@ export async function GET(req: Request) {
 
   const force = url.searchParams.get("force") === "1";
   const kind = "daily_digest";
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+
+  if (!force && !SEND_DAYS.has(now.getUTCDay())) {
+    return NextResponse.json({ ok: true, skipped: "not a digest day (Mon/Wed/Fri)" });
+  }
 
   const db = createAdminClient() as unknown as SupabaseClient;
   if (!force) {
@@ -35,7 +43,17 @@ export async function GET(req: Request) {
     if (already) return NextResponse.json({ ok: true, skipped: "already sent today" });
   }
 
-  const { subject, html } = await buildDailyDigest();
+  // Cover everything since the previous edition (fallback inside the builder).
+  const { data: last } = await db
+    .from("report_log")
+    .select("sent_on")
+    .eq("kind", kind)
+    .order("sent_on", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ sent_on: string }>();
+  const sinceIso = last?.sent_on ? `${last.sent_on}T13:00:00Z` : null;
+
+  const { subject, html } = await buildDailyDigest(sinceIso);
   const recipients = await getOwnerRecipients();
   if (recipients.length === 0) {
     return NextResponse.json({ ok: false, error: "no recipients" }, { status: 500 });
