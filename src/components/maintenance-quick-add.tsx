@@ -21,6 +21,7 @@ export type MaintUnitOpt = { id: string; label: string; property: string };
 export function MaintenanceQuickAdd({ units }: { units: MaintUnitOpt[] }) {
   const [state, action, pending] = useActionState(createAdminMaintenanceRequest, initial);
   const [open, setOpen] = useState(false);
+  const [alreadyDone, setAlreadyDone] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -95,16 +96,42 @@ export function MaintenanceQuickAdd({ units }: { units: MaintUnitOpt[] }) {
       <textarea
         name="description"
         rows={2}
-        placeholder="Details (optional)…"
+        placeholder={alreadyDone ? "What was done, parts used, who did it…" : "Details (optional)…"}
         className={field}
       />
+
+      <div className="rounded-xl border border-clay bg-sand/40 px-3.5 py-3">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            name="already_done"
+            checked={alreadyDone}
+            onChange={(e) => setAlreadyDone(e.target.checked)}
+            className="h-4 w-4 rounded border-clay-deep accent-pine"
+          />
+          <span>
+            <strong>Already completed</strong> — just logging it for the record
+          </span>
+        </label>
+        {alreadyDone && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-ink-soft">
+              Date the work was done
+              <input type="date" name="completed_on" className={`${field} w-auto`} />
+            </label>
+            <span className="text-xs text-ink-faint">
+              Goes straight to Completed — no emails to anyone.
+            </span>
+          </div>
+        )}
+      </div>
 
       {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}
       {state.ok && <p className="text-xs text-pine">Added to the board ✓</p>}
 
       <div className="flex items-center gap-3">
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Adding…" : "Add request"}
+          {pending ? "Saving…" : alreadyDone ? "Log completed work" : "Add request"}
         </Button>
         <button
           type="button"

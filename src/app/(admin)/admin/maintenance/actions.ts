@@ -13,7 +13,11 @@ const PRIORITIES = ["low", "normal", "high", "emergency"];
 
 export type NewRequestState = { ok: boolean; error?: string };
 
-/** Staff-opened maintenance request (e.g. a tenant told you in person). */
+/**
+ * Staff-opened maintenance request (e.g. a tenant told you in person). Can
+ * also log ALREADY-COMPLETED work for the record — verbal requests, fixed on
+ * the spot — with a backdatable completion date. Never emails the tenant.
+ */
 export async function createAdminMaintenanceRequest(
   _prev: NewRequestState,
   form: FormData
@@ -31,6 +35,16 @@ export async function createAdminMaintenanceRequest(
     : "normal";
   const unitId = (form.get("unit_id") as string) || null;
 
+  // "Already done" mode: lands directly in Completed with the date it actually
+  // happened (defaults to today), so records and the weekly digest stay honest.
+  const alreadyDone = form.get("already_done") === "on";
+  const completedOn = ((form.get("completed_on") as string) || "").trim();
+  const completedAt = alreadyDone
+    ? completedOn
+      ? `${completedOn}T12:00:00Z`
+      : new Date().toISOString()
+    : null;
+
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
   const { error } = await db.from("maintenance_requests").insert({
@@ -40,6 +54,8 @@ export async function createAdminMaintenanceRequest(
     priority,
     unit_id: unitId,
     created_by: user.id,
+    status: alreadyDone ? "completed" : "open",
+    completed_at: completedAt,
   });
   if (error) return { ok: false, error: "Could not create the request." };
 
