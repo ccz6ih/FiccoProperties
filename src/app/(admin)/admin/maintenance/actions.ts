@@ -285,6 +285,78 @@ export async function recordMaintenanceCost(
   return { ok: true, notice: "Cost recorded to the unit." };
 }
 
+/** Schedule the visit (ETA) — saves date + window, tells the tenant. */
+export async function scheduleMaintenanceVisit(
+  _prev: WorkOrderState,
+  form: FormData
+): Promise<WorkOrderState> {
+  const { user, profile } = await requireProfile("/admin/maintenance");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const id = (form.get("id") as string)?.trim();
+  const date = ((form.get("scheduled_for") as string) || "").trim();
+  const window = ((form.get("scheduled_window") as string) || "").trim() || null;
+  if (!id) return { ok: false, error: "Missing request." };
+  if (!date) return { ok: false, error: "Pick the date." };
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { error } = await db
+    .from("maintenance_requests")
+    .update({ scheduled_for: date, scheduled_window: window })
+    .eq("id", id);
+  if (error) return { ok: false, error: "Could not save the schedule." };
+
+  const [y, m, d] = date.split("-").map(Number);
+  const dateLabel = new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric",
+  });
+
+  // Tell the tenant in their thread (shows on their timeline page too).
+  await db.from("maintenance_comments").insert({
+    request_id: id,
+    author_id: user.id,
+    body: `We're scheduled to come ${dateLabel}${window ? `, ${window}` : ""}. You don't need to be home — we'll use our key if you're out.`,
+    internal: false,
+  });
+
+  // And by email, when they have one on file.
+  const { data: req } = await db
+    .from("maintenance_requests")
+    .select("title, created_by, units(label, properties(name))")
+    .eq("id", id)
+    .maybeSingle<{
+      title: string;
+      created_by: string | null;
+      units: { label: string; properties: { name: string | null } | null } | null;
+    }>();
+  if (req?.created_by) {
+    const { data: p } = await db
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", req.created_by)
+      .maybeSingle<{ full_name: string | null; email: string | null }>();
+    if (p?.email) {
+      const home = req.units
+        ? `${req.units.properties?.name ? `${req.units.properties.name} · ` : ""}${req.units.label}`
+        : "your home";
+      await sendNotification({
+        to: p.email,
+        subject: `Repair scheduled — ${dateLabel}${window ? `, ${window}` : ""}`,
+        html: notificationHtml("Your repair is scheduled 🔧", [
+          ["Request", req.title],
+          ["Home", home],
+          ["When", `${dateLabel}${window ? `, ${window}` : ""}`],
+          ["Need to change it?", "Reply to this email or call (720) 527-2596"],
+        ]),
+      });
+    }
+  }
+
+  revalidatePath(`/admin/maintenance/${id}`);
+  revalidatePath("/portal/maintenance");
+  return { ok: true, notice: `Scheduled for ${dateLabel} — tenant notified.` };
+}
+
 export async function addMaintenanceComment(form: FormData) {
   const requestId = form.get("request_id") as string;
   const body = (form.get("body") as string)?.trim();

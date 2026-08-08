@@ -7,6 +7,7 @@ import {
   setMaintenanceVendor,
   emailWorkOrder,
   recordMaintenanceCost,
+  scheduleMaintenanceVisit,
   type WorkOrderState,
 } from "@/app/(admin)/admin/maintenance/actions";
 
@@ -26,18 +27,51 @@ export function MaintenanceVendorPanel({
   vendorId,
   vendors,
   workOrderSentAt,
+  scheduledFor,
+  scheduledWindow,
 }: {
   requestId: string;
   vendorId: string | null;
   vendors: VendorOpt[];
   workOrderSentAt: string | null;
+  scheduledFor: string | null;
+  scheduledWindow: string | null;
 }) {
   const [woState, woAction, woPending] = useActionState(emailWorkOrder, initial);
   const [costState, costAction, costPending] = useActionState(recordMaintenanceCost, initial);
+  const [schedState, schedAction, schedPending] = useActionState(scheduleMaintenanceVisit, initial);
   const assigned = vendors.find((v) => v.id === vendorId) ?? null;
 
   return (
     <div className="space-y-4">
+      <div>
+        <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">
+          Schedule the visit (tenant sees this)
+        </div>
+        {scheduledFor && (
+          <p className="mb-2 text-xs text-pine">
+            ✓ Scheduled {formatDate(scheduledFor)}{scheduledWindow ? ` · ${scheduledWindow}` : ""}
+          </p>
+        )}
+        <form action={schedAction} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="id" value={requestId} />
+          <label className="space-y-1">
+            <span className="block text-xs text-ink-soft">Date</span>
+            <input type="date" name="scheduled_for" defaultValue={scheduledFor ?? ""} className={field} />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-xs text-ink-soft">Window</span>
+            <input name="scheduled_window" defaultValue={scheduledWindow ?? ""} placeholder="9 am – noon" className={`${field} w-28`} />
+          </label>
+          <Button type="submit" variant="outline" size="md" disabled={schedPending}>
+            {schedPending ? "Saving…" : scheduledFor ? "Update" : "Set ETA"}
+          </Button>
+        </form>
+        {schedState.ok && schedState.notice && (
+          <p className="mt-1.5 text-xs font-medium text-pine">{schedState.notice}</p>
+        )}
+        {schedState.error && <p className="mt-1.5 text-xs text-terracotta-dark">{schedState.error}</p>}
+      </div>
       <div>
         <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">Vendor</div>
         <form action={setMaintenanceVendor}>

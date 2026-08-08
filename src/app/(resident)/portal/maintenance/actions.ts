@@ -2,8 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification, notificationHtml } from "@/lib/email";
+import { getOwnerRecipients } from "@/lib/owners";
+import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+const PHOTO_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+]);
 
 export type MaintenanceState = { ok: boolean; error?: string };
 
@@ -43,27 +50,64 @@ export async function createMaintenanceRequest(
     unitId = lease?.unit_id ?? null;
   }
 
-  const { error } = await supabase.from("maintenance_requests").insert({
-    title,
-    description: description || null,
-    category,
-    priority,
-    created_by: user.id,
-    unit_id: unitId,
-  });
+  const { data: inserted, error } = await supabase
+    .from("maintenance_requests")
+    .insert({
+      title,
+      description: description || null,
+      category,
+      priority,
+      created_by: user.id,
+      unit_id: unitId,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
-  if (error) return { ok: false, error: "Could not submit your request. Please try again." };
+  if (error || !inserted) return { ok: false, error: "Could not submit your request. Please try again." };
 
-  // New request -> alert the shared staff inbox so someone can claim it.
-  await sendNotification({
-    subject: `New maintenance request — ${title}`,
-    html: notificationHtml("New maintenance request", [
-      ["Request", title],
-      ["Priority", priority],
-      ["Category", category],
-      ["Open board", "https://38thaveproperties.com/admin/maintenance"],
-    ]),
-  });
+  // Photos (optional, up to 6) — private bucket, best-effort.
+  const admin = createAdminClient();
+  const adb = admin as unknown as SupabaseClient;
+  const files = form.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  let photoCount = 0;
+  for (const file of files.slice(0, 6)) {
+    if (!PHOTO_TYPES.has(file.type)) continue;
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `maintenance/${inserted.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from(CONDITION_BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) continue;
+    await adb.from("maintenance_photos").insert({
+      request_id: inserted.id,
+      path,
+      created_by: user.id,
+    });
+    photoCount++;
+  }
+
+  // Alert — emergencies go straight to every owner; the rest to the staff inbox.
+  const rows: [string, string][] = [
+    ["Request", title],
+    ["Priority", priority],
+    ["Category", category],
+    ["Photos", photoCount > 0 ? String(photoCount) : "None"],
+    ["Open board", "https://38thaveproperties.com/admin/maintenance"],
+  ];
+  if (priority === "emergency") {
+    const owners = await getOwnerRecipients();
+    await sendNotification({
+      to: owners.length > 0 ? owners.join(",") : undefined,
+      subject: `🚨 EMERGENCY maintenance — ${title}`,
+      html: notificationHtml("Emergency maintenance request", rows),
+      meta: { kind: "maintenance_emergency", refType: "maintenance", refId: inserted.id },
+    });
+  } else {
+    await sendNotification({
+      subject: `New maintenance request — ${title}`,
+      html: notificationHtml("New maintenance request", rows),
+    });
+  }
 
   revalidatePath("/portal/maintenance");
   revalidatePath("/portal");

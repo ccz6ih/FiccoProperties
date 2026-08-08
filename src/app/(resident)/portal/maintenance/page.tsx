@@ -2,11 +2,14 @@ import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MaintenanceForm } from "@/components/maintenance-form";
 import { MaintenanceCommentForm } from "@/components/maintenance-comment-form";
+import { MaintenanceTimeline } from "@/components/maintenance-timeline";
 import { Avatar } from "@/components/avatar";
 import { addResidentComment } from "@/app/(resident)/portal/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type CommentRow = {
@@ -23,11 +26,28 @@ export default async function MaintenancePage() {
   // maintenance_comments isn't in the generated types yet (added in 0004).
   const db = supabase as unknown as SupabaseClient;
 
-  const { data: requests } = await supabase
+  // Loose handle — scheduled_for/scheduled_window/vendor_id are newer columns.
+  const { data: requests } = await db
     .from("maintenance_requests")
     .select("*")
     .eq("created_by", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .returns<
+      {
+        id: string;
+        title: string;
+        description: string | null;
+        category: string;
+        priority: string;
+        status: string;
+        created_at: string;
+        completed_at: string | null;
+        assigned_to: string | null;
+        vendor_id: string | null;
+        scheduled_for: string | null;
+        scheduled_window: string | null;
+      }[]
+    >();
 
   const list = requests ?? [];
 
@@ -51,6 +71,27 @@ export default async function MaintenancePage() {
     const arr = commentsByRequest.get(c.request_id) ?? [];
     arr.push(c);
     commentsByRequest.set(c.request_id, arr);
+  }
+
+  // Photos (RLS scopes to their own requests); signed URLs from the private bucket.
+  const photosByRequest = new Map<string, string[]>();
+  if (list.length > 0) {
+    const { data: photoRows } = await db
+      .from("maintenance_photos")
+      .select("request_id, path")
+      .in("request_id", list.map((r) => r.id))
+      .returns<{ request_id: string; path: string }[]>();
+    const admin = createAdminClient();
+    for (const p of photoRows ?? []) {
+      const { data: signed } = await admin.storage
+        .from(CONDITION_BUCKET)
+        .createSignedUrl(p.path, 3600);
+      if (signed?.signedUrl) {
+        const arr = photosByRequest.get(p.request_id) ?? [];
+        arr.push(signed.signedUrl);
+        photosByRequest.set(p.request_id, arr);
+      }
+    }
   }
 
   const isOpen = (status: string) => status !== "completed" && status !== "cancelled";
@@ -90,6 +131,28 @@ export default async function MaintenancePage() {
                         {r.priority !== "normal" && <StatusPill value={r.priority} />}
                       </div>
                     </div>
+
+                    <div className="mt-4">
+                      <MaintenanceTimeline
+                        createdAt={r.created_at}
+                        assigned={!!r.assigned_to || !!r.vendor_id}
+                        scheduledFor={r.scheduled_for ?? null}
+                        scheduledWindow={r.scheduled_window ?? null}
+                        status={r.status}
+                        completedAt={r.completed_at ?? null}
+                      />
+                    </div>
+
+                    {(photosByRequest.get(r.id) ?? []).length > 0 && (
+                      <div className="mt-3 flex gap-2 overflow-x-auto">
+                        {(photosByRequest.get(r.id) ?? []).map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="Request photo" className="h-16 w-20 rounded-lg border border-clay object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
 
                     {(thread.length > 0 || isOpen(r.status)) && (
                       <div className="mt-4 space-y-3 border-t border-clay pt-4">

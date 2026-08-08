@@ -16,6 +16,8 @@ import {
 } from "@/app/(admin)/admin/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type RequestRow = {
@@ -83,9 +85,14 @@ export default async function MaintenanceDetail({
   const [{ data: vendorState }, { data: vendorRows }] = await Promise.all([
     db
       .from("maintenance_requests")
-      .select("vendor_id, work_order_sent_at")
+      .select("vendor_id, work_order_sent_at, scheduled_for, scheduled_window")
       .eq("id", id)
-      .maybeSingle<{ vendor_id: string | null; work_order_sent_at: string | null }>(),
+      .maybeSingle<{
+        vendor_id: string | null;
+        work_order_sent_at: string | null;
+        scheduled_for: string | null;
+        scheduled_window: string | null;
+      }>(),
     db
       .from("vendors")
       .select("id, name, trade, coi_expires_on")
@@ -99,6 +106,21 @@ export default async function MaintenanceDetail({
     trade: v.trade,
     coiExpired: !!v.coi_expires_on && new Date(v.coi_expires_on) < new Date(),
   }));
+
+  // Tenant-submitted photos, via signed URLs from the private bucket.
+  const { data: photoRows } = await db
+    .from("maintenance_photos")
+    .select("path")
+    .eq("request_id", id)
+    .returns<{ path: string }[]>();
+  const adminStorage = createAdminClient();
+  const photoUrls: string[] = [];
+  for (const p of photoRows ?? []) {
+    const { data: signed } = await adminStorage.storage
+      .from(CONDITION_BUCKET)
+      .createSignedUrl(p.path, 3600);
+    if (signed?.signedUrl) photoUrls.push(signed.signedUrl);
+  }
 
   const thread = comments ?? [];
   const staffList = staff ?? [];
@@ -140,6 +162,16 @@ export default async function MaintenanceDetail({
               </p>
             ) : (
               <p className="text-sm text-ink-faint">No additional details provided.</p>
+            )}
+            {photoUrls.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto border-t border-clay pt-3">
+                {photoUrls.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt="Tenant photo" className="h-24 w-32 rounded-lg border border-clay object-cover" />
+                  </a>
+                ))}
+              </div>
             )}
           </Card>
 
@@ -232,6 +264,8 @@ export default async function MaintenanceDetail({
               vendorId={vendorState?.vendor_id ?? null}
               vendors={vendorOpts}
               workOrderSentAt={vendorState?.work_order_sent_at ?? null}
+              scheduledFor={vendorState?.scheduled_for ?? null}
+              scheduledWindow={vendorState?.scheduled_window ?? null}
             />
           </div>
         </Card>
