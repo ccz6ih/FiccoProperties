@@ -46,6 +46,7 @@ type RequestRow = {
   status: string;
   priority: string;
   created_at: string;
+  completed_at: string | null;
 };
 
 type TurnRow = {
@@ -284,7 +285,7 @@ export default async function UnitDetail({
   const [{ data: requests }, { data: turns }, { data: templates }] = await Promise.all([
     supabase
       .from("maintenance_requests")
-      .select("id, title, category, status, priority, created_at")
+      .select("id, title, category, status, priority, created_at, completed_at")
       .eq("unit_id", id)
       .order("created_at", { ascending: false })
       .returns<RequestRow[]>(),
@@ -318,7 +319,7 @@ export default async function UnitDetail({
   const historyItems = [
     ...requestList.map((r) => ({
       key: `r-${r.id}`,
-      date: r.created_at,
+      date: r.status === "completed" && r.completed_at ? r.completed_at : r.created_at,
       title: r.title,
       sub: humanize(r.category),
       tag: "Request",

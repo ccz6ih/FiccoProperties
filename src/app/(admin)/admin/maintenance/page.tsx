@@ -120,7 +120,11 @@ export default async function AdminMaintenance() {
                         </div>
                         <div className="flex items-center justify-between text-xs text-ink-faint">
                           <span>{humanize(r.category)}</span>
-                          <span>{formatDate(r.created_at)}</span>
+                          <span>
+                            {r.status === "completed" && r.completed_at
+                              ? `Done ${formatDate(r.completed_at)}`
+                              : formatDate(r.created_at)}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 border-t border-clay pt-2 text-xs">
                           {r.assignee ? (
