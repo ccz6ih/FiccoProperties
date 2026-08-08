@@ -128,6 +128,46 @@ export async function buildDailyDigest(
       .returns<{ title: string }[]>(),
   ]);
 
+  // ---- rent still owed (current month) ----
+  const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const { data: monthCharges } = await db
+    .from("charges")
+    .select("id, amount_cents, due_date, unit_id, units:unit_id(label, properties(name))")
+    .eq("period", period)
+    .neq("status", "void")
+    .returns<{ id: string; amount_cents: number; due_date: string | null; unit_id: string | null; units: UnitJoin }[]>();
+  const chargeIds = (monthCharges ?? []).map((c) => c.id);
+  const paidByCharge = new Map<string, number>();
+  if (chargeIds.length > 0) {
+    const { data: chargePays } = await db
+      .from("payments")
+      .select("charge_id, amount_cents")
+      .in("charge_id", chargeIds)
+      .eq("status", "succeeded")
+      .returns<{ charge_id: string | null; amount_cents: number }[]>();
+    for (const p of chargePays ?? []) {
+      if (p.charge_id) paidByCharge.set(p.charge_id, (paidByCharge.get(p.charge_id) ?? 0) + p.amount_cents);
+    }
+  }
+  const { data: occNames } = await db
+    .from("unit_occupancy")
+    .select("unit_id, tenant_name")
+    .returns<{ unit_id: string; tenant_name: string | null }[]>();
+  const tenantByUnit = new Map((occNames ?? []).map((o) => [o.unit_id, o.tenant_name]));
+  const owed = (monthCharges ?? [])
+    .map((c) => ({
+      home: homeOf(c.units),
+      tenant: (c.unit_id ? tenantByUnit.get(c.unit_id) : null) ?? "—",
+      remaining: Math.max(0, c.amount_cents - (paidByCharge.get(c.id) ?? 0)),
+      daysLate:
+        c.due_date && c.due_date < todayIso
+          ? Math.max(0, Math.floor((now.getTime() - new Date(`${c.due_date}T12:00:00Z`).getTime()) / 86_400_000))
+          : 0,
+    }))
+    .filter((c) => c.remaining > 0)
+    .sort((a, b) => a.home.localeCompare(b.home, undefined, { numeric: true }));
+  const owedTotal = owed.reduce((s, c) => s + c.remaining, 0);
+
   // ---- yesterday ----
   const payCount = (pays ?? []).length;
   const payTotal = (pays ?? []).reduce((s, p) => s + p.amount_cents, 0);
@@ -232,6 +272,22 @@ export async function buildDailyDigest(
     officeItems.push(li(`💬 Replied to the community idea “${esc(idea.title)}”`));
   }
 
+  // ---- rent-owed list items ----
+  const owedItems: string[] = owed.slice(0, 15).map((c) =>
+    li(
+      `🏠 <strong>${esc(c.home)}</strong> — ${esc(c.tenant)} · <strong style="color:${TERRA}">${formatCents(c.remaining)}</strong>${
+        c.daysLate > 0 ? ` <span style="color:${FAINT}">(${c.daysLate} day${c.daysLate === 1 ? "" : "s"} late)</span>` : ""
+      }`,
+      c.daysLate > 0
+    )
+  );
+  if (owed.length > 15) owedItems.push(li(`…and ${owed.length - 15} more — see the rent board`));
+  if (owed.length > 0) {
+    owedItems.push(
+      li(`<strong>Total still owed: <span style="color:${TERRA}">${formatCents(owedTotal)}</span></strong> across ${owed.length} unit${owed.length === 1 ? "" : "s"}`)
+    );
+  }
+
   const quote = OWNER_QUOTES[Math.floor(Math.random() * OWNER_QUOTES.length)];
 
   const attentionItems: string[] = [];
@@ -258,9 +314,11 @@ export async function buildDailyDigest(
     <tr><td style="padding:24px 28px 4px">
       <div style="font-size:16px;color:${INK};line-height:1.6;margin-bottom:20px">
         Good morning. ${payCount > 0 ? `<strong style="color:${PINE}">${formatCents(payTotal)}</strong> came in since the last digest.` : "No payments landed since the last digest."}
+        ${owed.length > 0 ? ` <strong style="color:${TERRA}">${formatCents(owedTotal)}</strong> in rent is still owed by ${owed.length} unit${owed.length === 1 ? "" : "s"}.` : ` <strong style="color:${PINE}">Every unit is paid up.</strong>`}
         ${doneItems.length > 0 ? ` <strong>${doneItems.length}</strong> job${doneItems.length === 1 ? "" : "s"} got done.` : ""}
         ${attentionCount > 0 ? ` <strong style="color:${TERRA}">${attentionCount} thing${attentionCount === 1 ? "" : "s"}</strong> could use your attention today.` : ` <strong style="color:${PINE}">Nothing needs your attention today.</strong> 🎉`}
       </div>
+      ${section("Rent still owed this month", owed.length > 0 ? TERRA : PINE, owedItems, "Everyone's paid — nothing owed. 🎉")}
       ${section("Since the last digest", INK, yesterdayItems, "A quiet stretch — nothing new came in.")}
       ${section("What got done ✅", PINE, doneItems, "No work closed out this stretch.")}
       ${section("From the office 🗂", INK, officeItems, "Nothing new put in motion this week.")}
@@ -283,10 +341,11 @@ export async function buildDailyDigest(
     </td></tr>
   </table></td></tr></table></div>`;
 
+  const owedTag = owed.length > 0 ? ` · ${formatCents(owedTotal)} owed` : "";
   const subject =
     attentionCount > 0
-      ? `Weekly digest — ${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`
-      : `Weekly digest — all clear${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}`;
+      ? `Weekly digest — ${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}${owedTag}`
+      : `Weekly digest — ${owed.length > 0 ? "rent to chase" : "all clear"}${payCount > 0 ? ` · ${formatCents(payTotal)} in` : ""}${owedTag}`;
 
   return { subject, html };
 }
