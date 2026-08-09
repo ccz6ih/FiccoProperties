@@ -117,6 +117,8 @@ The rent for the premises is ${rent} per month.
 
 GROUNDS: You are in default for non-payment of rent. Past rent due: ${amount}${missed ? `, for payment(s) due on: ${missed}` : ` for ${period}`}.
 
+NOTE — RENT ONLY: The amount demanded above is RENT only. Any late fees on your account are billed separately and are NOT included in — and are NOT required to satisfy — this demand. Under Colorado law (C.R.S. § 38-12-105), late fees cannot be grounds for eviction.
+
 TIME TO COMPLY: Within TEN (10) DAYS after this notice is served on you — on or before ${cure} — you must either:
   (1) pay the full past-due amount stated above in certified funds, OR
   (2) move out and return possession of the premises to the Landlord.

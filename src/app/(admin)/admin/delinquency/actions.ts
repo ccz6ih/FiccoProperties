@@ -154,13 +154,21 @@ async function buildDemandForUnit(
       .maybeSingle<OccInfo>(),
     db
       .from("charges")
-      .select("amount_cents, due_date, status")
+      .select("amount_cents, due_date, status, description")
       .eq("unit_id", unitId)
       .in("status", ["open", "past_due"])
-      .returns<{ amount_cents: number; due_date: string | null; status: string }[]>(),
+      .returns<{ amount_cents: number; due_date: string | null; status: string; description: string | null }[]>(),
   ]);
 
-  const overdue = (charges ?? []).filter((c) => c.due_date && c.due_date < todayIso);
+  // RENT ONLY. Colorado (C.R.S. 38-12-105) bars eviction over late fees, so a
+  // pay-or-quit must be curable by paying the rent alone — fees stay on the
+  // account but never in the demand.
+  const overdue = (charges ?? []).filter(
+    (c) =>
+      c.due_date &&
+      c.due_date < todayIso &&
+      !(c.description ?? "").toLowerCase().includes("late fee")
+  );
   if (overdue.length === 0) return null;
 
   const pastDueCents = overdue.reduce((s, c) => s + c.amount_cents, 0);
