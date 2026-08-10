@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 type PlanRow = {
   id: string;
+  unit_id: string | null;
   total_cents: number;
   down_payment_cents: number;
   installments: number;
@@ -27,7 +28,6 @@ type PlanRow = {
   units: {
     label: string;
     properties: { name: string | null; address_line1: string | null; city: string | null; state: string | null } | null;
-    unit_occupancy: { tenant_name: string | null }[] | null;
   } | null;
 };
 type ItemRow = { id: string; seq: number; due_date: string; amount_cents: number; status: string; paid_at: string | null };
@@ -43,7 +43,7 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
   const [{ data: plan }, { data: items }] = await Promise.all([
     db
       .from("repayment_plans")
-      .select("id, total_cents, down_payment_cents, installments, cadence, start_date, status, notes, created_at, units:unit_id(label, properties(name, address_line1, city, state), unit_occupancy(tenant_name))")
+      .select("id, unit_id, total_cents, down_payment_cents, installments, cadence, start_date, status, notes, created_at, units:unit_id(label, properties(name, address_line1, city, state))")
       .eq("id", id)
       .maybeSingle<PlanRow>(),
     db.from("repayment_plan_items").select("id, seq, due_date, amount_cents, status, paid_at").eq("plan_id", id).order("seq", { ascending: true }).returns<ItemRow[]>(),
@@ -52,7 +52,15 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
   if (!plan) redirect("/admin/repayment-plans");
 
   const rows = items ?? [];
-  const tenant = plan.units?.unit_occupancy?.[0]?.tenant_name ?? "Resident";
+  // Occupancy fetched separately — the nested embed under units comes back empty.
+  const { data: occ } = plan.unit_id
+    ? await db
+        .from("unit_occupancy")
+        .select("tenant_name")
+        .eq("unit_id", plan.unit_id)
+        .maybeSingle<{ tenant_name: string | null }>()
+    : { data: null };
+  const tenant = occ?.tenant_name ?? "Resident";
   const p = plan.units?.properties;
   const home = `${p?.name ?? ""} · ${plan.units?.label ?? ""}`;
   const premises = [p?.address_line1, plan.units?.label, p?.city, p?.state].filter(Boolean).join(", ");

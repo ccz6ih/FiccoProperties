@@ -153,11 +153,12 @@ export async function emailRepaymentPlan(
     db
       .from("repayment_plans")
       .select(
-        "id, total_cents, down_payment_cents, installments, cadence, status, notes, units:unit_id(label, properties(name, address_line1, city, state), unit_occupancy(tenant_name, tenant_email, occupant_profile_id))"
+        "id, unit_id, total_cents, down_payment_cents, installments, cadence, status, notes, units:unit_id(label, properties(name, address_line1, city, state))"
       )
       .eq("id", planId)
       .maybeSingle<{
         id: string;
+        unit_id: string | null;
         total_cents: number;
         down_payment_cents: number;
         installments: number;
@@ -167,7 +168,6 @@ export async function emailRepaymentPlan(
         units: {
           label: string;
           properties: { name: string | null; address_line1: string | null; city: string | null; state: string | null } | null;
-          unit_occupancy: { tenant_name: string | null; tenant_email: string | null; occupant_profile_id: string | null }[] | null;
         } | null;
       }>(),
     db
@@ -179,7 +179,14 @@ export async function emailRepaymentPlan(
   ]);
   if (!plan) return { ok: false, error: "Plan not found." };
 
-  const occ = plan.units?.unit_occupancy?.[0] ?? null;
+  // Occupancy fetched separately — the nested embed under units comes back empty.
+  const { data: occ } = plan.unit_id
+    ? await db
+        .from("unit_occupancy")
+        .select("tenant_name, tenant_email, occupant_profile_id")
+        .eq("unit_id", plan.unit_id)
+        .maybeSingle<{ tenant_name: string | null; tenant_email: string | null; occupant_profile_id: string | null }>()
+    : { data: null };
   let email = occ?.tenant_email?.trim() || null;
   if (occ?.occupant_profile_id) {
     const { data: p } = await db
