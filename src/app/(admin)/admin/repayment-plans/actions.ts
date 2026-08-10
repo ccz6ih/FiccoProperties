@@ -11,6 +11,7 @@ import { sendNotification, esc } from "@/lib/email";
 import { formatCents, formatDate } from "@/lib/format";
 import { RENT_DROPBOX } from "@/lib/rent-dropbox";
 import type { EmailActionState } from "@/lib/action-state";
+import { maybeSendExecutedCopies } from "@/lib/repayment-esign";
 
 const CADENCES: Cadence[] = ["weekly", "biweekly", "monthly"];
 
@@ -230,6 +231,7 @@ export async function emailRepaymentPlan(
         • This agreement doesn't waive your rights under Colorado law, including any right to mediation.
       </div>
       ${plan.notes ? `<p style="margin:0 0 14px;font-size:13px;color:${FAINT}">Note: ${esc(plan.notes)}</p>` : ""}
+      <a href="https://38thaveproperties.com/portal/repayment" style="display:inline-block;background:${PINE};color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px;margin-bottom:8px">Review &amp; sign online →</a>
     </td></tr>
     <tr><td style="padding:8px 28px 26px"><div style="border-top:1px solid #f0e9db;padding-top:14px"><p style="margin:0;font-size:12px;color:${FAINT};line-height:1.6">Questions or something changes? Reply to this email or call ${RENT_DROPBOX.phone} — we'd rather adjust the plan than see it break.</p></div></td></tr>
   </table></td></tr></table></div>`;
@@ -242,4 +244,41 @@ export async function emailRepaymentPlan(
   });
   if (!res.sent) return { ok: false, error: "Could not send. Please try again." };
   return { ok: true, sentTo: email };
+}
+
+/** Landlord countersigns the agreement (typed name, timestamped). */
+export async function signRepaymentPlanAsLandlord(
+  _prev: EmailActionState,
+  form: FormData
+): Promise<EmailActionState> {
+  const { profile } = await requireProfile("/admin/repayment-plans");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const planId = (form.get("plan_id") as string)?.trim();
+  const signedName = (form.get("signed_name") as string)?.trim();
+  if (!planId) return { ok: false, error: "Missing plan." };
+  if (!signedName) return { ok: false, error: "Type your name to sign." };
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { data: plan } = await db
+    .from("repayment_plans")
+    .select("id, status, landlord_signed_at")
+    .eq("id", planId)
+    .maybeSingle<{ id: string; status: string; landlord_signed_at: string | null }>();
+  if (!plan) return { ok: false, error: "Plan not found." };
+  if (plan.status === "cancelled") return { ok: false, error: "This plan is cancelled." };
+  if (plan.landlord_signed_at) return { ok: false, error: "Already countersigned." };
+
+  const { error } = await db
+    .from("repayment_plans")
+    .update({ landlord_signed_name: signedName, landlord_signed_at: new Date().toISOString() })
+    .eq("id", planId);
+  if (error) return { ok: false, error: "Could not record the signature." };
+
+  // If the tenant already signed, both sides get the executed copy now.
+  await maybeSendExecutedCopies(planId);
+
+  revalidatePath(`/admin/repayment-plans/${planId}`);
+  revalidatePath("/portal/repayment");
+  return { ok: true, sentTo: signedName };
 }

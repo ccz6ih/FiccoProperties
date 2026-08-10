@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Container } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { ActionFeedbackButton } from "@/components/action-feedback-button";
+import { LandlordSignForm } from "@/components/landlord-sign-form";
 import { formatCents, formatDate } from "@/lib/format";
 import { CADENCE_LABEL, type Cadence } from "@/lib/repayment";
 import { requireProfile, isStaff } from "@/lib/auth";
@@ -25,6 +26,11 @@ type PlanRow = {
   status: string;
   notes: string | null;
   created_at: string;
+  tenant_signed_name: string | null;
+  tenant_signed_at: string | null;
+  tenant_signed_ip: string | null;
+  landlord_signed_name: string | null;
+  landlord_signed_at: string | null;
   units: {
     label: string;
     properties: { name: string | null; address_line1: string | null; city: string | null; state: string | null } | null;
@@ -43,7 +49,7 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
   const [{ data: plan }, { data: items }] = await Promise.all([
     db
       .from("repayment_plans")
-      .select("id, unit_id, total_cents, down_payment_cents, installments, cadence, start_date, status, notes, created_at, units:unit_id(label, properties(name, address_line1, city, state))")
+      .select("id, unit_id, total_cents, down_payment_cents, installments, cadence, start_date, status, notes, created_at, tenant_signed_name, tenant_signed_at, tenant_signed_ip, landlord_signed_name, landlord_signed_at, units:unit_id(label, properties(name, address_line1, city, state))")
       .eq("id", id)
       .maybeSingle<PlanRow>(),
     db.from("repayment_plan_items").select("id, seq, due_date, amount_cents, status, paid_at").eq("plan_id", id).order("seq", { ascending: true }).returns<ItemRow[]>(),
@@ -205,9 +211,43 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
 
           {/* Signatures */}
           <div className="grid gap-8 sm:grid-cols-2">
-            <SignLine role="Tenant" name={tenant} />
-            <SignLine role="Landlord — 38th Ave Properties" />
+            {plan.tenant_signed_at ? (
+              <SignedStamp
+                role="Tenant"
+                name={plan.tenant_signed_name ?? tenant}
+                at={plan.tenant_signed_at}
+                detail={plan.tenant_signed_ip ? `from ${plan.tenant_signed_ip}` : undefined}
+              />
+            ) : (
+              <SignLine role="Tenant" name={tenant} />
+            )}
+            {plan.landlord_signed_at ? (
+              <SignedStamp
+                role="Landlord — 38th Ave Properties"
+                name={plan.landlord_signed_name ?? "38th Ave Properties"}
+                at={plan.landlord_signed_at}
+              />
+            ) : (
+              <SignLine role="Landlord — 38th Ave Properties" />
+            )}
           </div>
+
+          {!plan.landlord_signed_at && plan.status !== "cancelled" && (
+            <div className="mt-4 print:hidden">
+              <LandlordSignForm planId={plan.id} defaultName={profile?.full_name ?? ""} />
+              {!plan.tenant_signed_at && (
+                <p className="mt-1.5 text-xs text-ink-faint">
+                  Tenant hasn&apos;t signed yet — they can sign from their portal (the emailed copy
+                  has a &ldquo;Review &amp; sign online&rdquo; button).
+                </p>
+              )}
+            </div>
+          )}
+          {plan.tenant_signed_at && plan.landlord_signed_at && (
+            <p className="mt-4 rounded-xl bg-pine/10 px-4 py-3 text-sm font-medium text-pine print:hidden">
+              Fully executed ✓ — the official copy was emailed to both parties.
+            </p>
+          )}
 
           <p className="mt-6 text-xs text-ink-faint">
             Workflow aid, not legal advice. For a victim-survivor of domestic violence, stalking, or unlawful
@@ -217,6 +257,19 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
         </div>
       </Container>
     </main>
+  );
+}
+
+function SignedStamp({ role, name, at, detail }: { role: string; name: string; at: string; detail?: string }) {
+  const when = new Date(at).toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+  return (
+    <div>
+      <div className="border-b border-ink pb-1 font-display text-xl italic text-ink">{name}</div>
+      <div className="mt-1 text-xs uppercase tracking-wide text-ink-faint">{role}</div>
+      <div className="text-xs text-pine">Signed electronically {when}{detail ? ` · ${detail}` : ""} ✓</div>
+    </div>
   );
 }
 
