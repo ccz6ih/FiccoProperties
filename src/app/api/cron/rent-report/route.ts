@@ -17,6 +17,7 @@ type ChargeRow = {
   amount_cents: number;
   due_date: string | null;
   status: string;
+  description: string | null;
   units: { label: string; properties: { name: string | null } | null } | null;
 };
 type OccRow = { unit_id: string; tenant_name: string | null; tenant_phone: string | null };
@@ -84,7 +85,7 @@ export async function GET(req: Request) {
     db
       .from("charges")
       .select(
-        "id, unit_id, amount_cents, due_date, status, units:unit_id(label, properties(name))"
+        "id, unit_id, amount_cents, due_date, status, description, units:unit_id(label, properties(name))"
       )
       .eq("period", period)
       .neq("status", "void")
@@ -134,43 +135,111 @@ export async function GET(req: Request) {
   let outstandingCents = 0;
   let paidUnits = 0;
 
+  // Aggregate PER UNIT, not per charge — a unit's rent + late fee reads as one
+  // line ("$1,575 · rent + late fee"), and every count is a count of homes, so
+  // the report never makes 4 late tenants look like 7.
+  type UnitAgg = {
+    property: string;
+    unit: string;
+    tenant: string;
+    phone?: string;
+    address?: string;
+    billed: number;
+    paid: number;
+    remaining: number;
+    maxDaysLate: number;
+    owedParts: string[];
+    paidParts: string[];
+  };
+  const units = new Map<string, UnitAgg>();
+
   for (const c of all) {
     const paid = paidByCharge.get(c.id) ?? 0;
     const remaining = Math.max(0, c.amount_cents - paid);
     const propName = c.units?.properties?.name ?? "Unassigned";
     const occ = c.unit_id ? occByUnit.get(c.unit_id) : null;
-    const tenant = occ?.name ?? "—";
-    const unit = c.units?.label ?? "—";
-    const address = addrByProperty.get(propName);
+    const key = c.unit_id ?? c.id;
 
-    billedCents += c.amount_cents;
-    collectedCents += paid;
-    outstandingCents += remaining;
-    if (remaining === 0) paidUnits += 1;
+    const agg =
+      units.get(key) ??
+      {
+        property: propName,
+        unit: c.units?.label ?? "—",
+        tenant: occ?.name ?? "—",
+        phone: occ?.phone ?? undefined,
+        address: addrByProperty.get(propName),
+        billed: 0,
+        paid: 0,
+        remaining: 0,
+        maxDaysLate: 0,
+        owedParts: [],
+        paidParts: [],
+      };
+
+    const label = (c.description ?? "charge").toLowerCase().includes("late fee")
+      ? "late fee"
+      : "rent";
+    agg.billed += c.amount_cents;
+    agg.paid += paid;
+    agg.remaining += remaining;
+    if (remaining > 0) {
+      agg.owedParts.push(label);
+      if (c.due_date && c.due_date < todayIso) {
+        const days = Math.max(
+          0,
+          Math.floor((today.getTime() - new Date(c.due_date).getTime()) / 86_400_000)
+        );
+        agg.maxDaysLate = Math.max(agg.maxDaysLate, days);
+      }
+    } else if (paid > 0) {
+      agg.paidParts.push(label);
+    }
+    units.set(key, agg);
+  }
+
+  const partsNote = (parts: string[]): string | undefined => {
+    const uniq = [...new Set(parts)];
+    return uniq.length > 1 || (uniq.length === 1 && uniq[0] === "late fee")
+      ? uniq.sort().reverse().join(" + ") // "rent + late fee"
+      : undefined;
+  };
+
+  for (const agg of units.values()) {
+    billedCents += agg.billed;
+    collectedCents += agg.paid;
+    outstandingCents += agg.remaining;
+    if (agg.remaining === 0) paidUnits += 1;
 
     const b =
-      buckets.get(propName) ??
-      { name: propName, paid: 0, total: 0, collectedCents: 0, outstandingCents: 0 };
+      buckets.get(agg.property) ??
+      { name: agg.property, paid: 0, total: 0, collectedCents: 0, outstandingCents: 0 };
     b.total += 1;
-    b.collectedCents += paid;
-    b.outstandingCents += remaining;
-    if (remaining === 0) b.paid += 1;
-    buckets.set(propName, b);
+    b.collectedCents += agg.paid;
+    b.outstandingCents += agg.remaining;
+    if (agg.remaining === 0) b.paid += 1;
+    buckets.set(agg.property, b);
 
-    if (remaining === 0 && paid > 0) {
-      paidList.push({ property: propName, unit, tenant, paidCents: paid, address });
+    if (agg.remaining === 0 && agg.paid > 0) {
+      paidList.push({
+        property: agg.property,
+        unit: agg.unit,
+        tenant: agg.tenant,
+        paidCents: agg.paid,
+        address: agg.address,
+        note: partsNote(agg.paidParts),
+      });
     }
 
-    if (remaining > 0 && c.due_date && c.due_date < todayIso) {
-      const ms = today.getTime() - new Date(c.due_date).getTime();
+    if (agg.remaining > 0 && agg.maxDaysLate > 0) {
       late.push({
-        property: propName,
-        unit,
-        tenant,
-        dueCents: remaining,
-        daysLate: Math.max(0, Math.floor(ms / 86_400_000)),
-        address,
-        phone: occ?.phone ?? undefined,
+        property: agg.property,
+        unit: agg.unit,
+        tenant: agg.tenant,
+        dueCents: agg.remaining,
+        daysLate: agg.maxDaysLate,
+        address: agg.address,
+        phone: agg.phone,
+        note: partsNote(agg.owedParts),
       });
     }
   }
@@ -223,7 +292,7 @@ export async function GET(req: Request) {
     collectedCents,
     outstandingCents,
     paidUnits,
-    totalUnits: all.length,
+    totalUnits: units.size,
     lateCount: late.length,
     pctCollected: billedCents > 0 ? Math.round((collectedCents / billedCents) * 100) : 0,
     properties,

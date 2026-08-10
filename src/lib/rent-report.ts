@@ -22,6 +22,7 @@ export type ReportLate = {
   daysLate: number;
   address?: string;
   phone?: string;
+  note?: string;
 };
 
 export type ReportPaid = {
@@ -30,6 +31,7 @@ export type ReportPaid = {
   tenant: string;
   paidCents: number;
   address?: string;
+  note?: string;
 };
 
 export type RentReportData = {
@@ -74,6 +76,7 @@ type SectionRow = {
   amountCents: number;
   phone?: string;
   extra?: string;
+  note?: string;
 };
 
 /**
@@ -121,7 +124,7 @@ function communitySection(
           return `<tr>
             <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${INK};font-size:16px;font-weight:600;white-space:nowrap">${esc(it.unit)}</td>
             <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${SOFT};font-size:15px">${esc(it.tenant)}${phoneLine}</td>
-            <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${opts.amountColor};font-size:16px;font-weight:700;text-align:right;white-space:nowrap">${formatCents(it.amountCents)}</td>
+            <td style="padding:12px 16px;border-bottom:1px solid ${LINE};color:${opts.amountColor};font-size:16px;font-weight:700;text-align:right;white-space:nowrap">${formatCents(it.amountCents)}${it.note ? `<div style="font-size:12px;color:${FAINT};font-weight:400;margin-top:2px">${esc(it.note)}</div>` : ""}</td>
             ${extraCell}
           </tr>`;
         })
@@ -195,6 +198,7 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
       tenant: p.tenant,
       address: p.address,
       amountCents: p.paidCents,
+      note: p.note,
     })),
     {
       amountColor: PINE,
@@ -211,6 +215,7 @@ export function renderRentReportEmail(d: RentReportData): { subject: string; htm
       tenant: l.tenant,
       address: l.address,
       amountCents: l.dueCents,
+      note: l.note,
       phone: l.phone,
       extra: `${l.daysLate} day${l.daysLate === 1 ? "" : "s"}`,
     })),
