@@ -30,6 +30,7 @@ export default async function AdminLayout({
     { href: "/admin/payments", label: "Payments", icon: navIcons.card },
     { href: "/admin/rent-board", label: "Rent board", icon: navIcons.checklist },
     { href: "/admin/delinquency", label: "Delinquency", icon: navIcons.alert },
+    { href: "/admin/repayment-plans", label: "Repayment plans", icon: navIcons.doc },
     { href: "/admin/notices", label: "Notices", icon: navIcons.notice },
     { href: "/admin/incidents", label: "Incidents", icon: navIcons.alert },
     { href: "/admin/messages", label: "Messages", icon: navIcons.chat },
