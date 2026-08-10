@@ -4,11 +4,12 @@ import type { Metadata } from "next";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Container } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
+import { ActionFeedbackButton } from "@/components/action-feedback-button";
 import { formatCents, formatDate } from "@/lib/format";
 import { CADENCE_LABEL, type Cadence } from "@/lib/repayment";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { toggleInstallment, setPlanStatus } from "@/app/(admin)/admin/repayment-plans/actions";
+import { toggleInstallment, setPlanStatus, emailRepaymentPlan } from "@/app/(admin)/admin/repayment-plans/actions";
 
 export const metadata: Metadata = { title: "Repayment plan" };
 export const dynamic = "force-dynamic";
@@ -87,6 +88,14 @@ export default async function RepaymentPlanDetail({ params }: { params: Promise<
                 <button className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand">Reactivate</button>
               </form>
             )}
+            <ActionFeedbackButton
+              action={emailRepaymentPlan}
+              hidden={<input type="hidden" name="plan_id" value={plan.id} />}
+              label="Email to tenant"
+              successLabel="Emailed"
+              sendingLabel="Sending…"
+              compact
+            />
             <PrintButton label="Print agreement" />
           </div>
         </div>
