@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 
 type PlanRow = {
   id: string;
+  unit_id: string | null;
   total_cents: number;
   down_payment_cents: number;
   status: string;
   created_at: string;
-  units: { label: string; properties: { name: string | null } | null; unit_occupancy: { tenant_name: string | null }[] | null } | null;
+  units: { label: string; properties: { name: string | null } | null } | null;
 };
 type ItemRow = { plan_id: string; amount_cents: number; status: string };
 
@@ -28,7 +29,7 @@ export default async function RepaymentPlans() {
 
   const { data: plans } = await db
     .from("repayment_plans")
-    .select("id, total_cents, down_payment_cents, status, created_at, units:unit_id(label, properties(name), unit_occupancy(tenant_name))")
+    .select("id, unit_id, total_cents, down_payment_cents, status, created_at, units:unit_id(label, properties(name))")
     .order("created_at", { ascending: false })
     .returns<PlanRow[]>();
 
@@ -54,6 +55,18 @@ export default async function RepaymentPlans() {
 
   const rows = plans ?? [];
   const activeCount = rows.filter((p) => p.status === "active").length;
+
+  // Tenant names — occupancy fetched separately (nested embeds come back empty).
+  const unitIds = [...new Set(rows.map((p) => p.unit_id).filter((v): v is string => !!v))];
+  const tenantByUnit = new Map<string, string>();
+  if (unitIds.length > 0) {
+    const { data: occ } = await db
+      .from("unit_occupancy")
+      .select("unit_id, tenant_name")
+      .in("unit_id", unitIds)
+      .returns<{ unit_id: string; tenant_name: string | null }[]>();
+    for (const o of occ ?? []) if (o.tenant_name) tenantByUnit.set(o.unit_id, o.tenant_name);
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -88,7 +101,7 @@ export default async function RepaymentPlans() {
                 {rows.map((p) => {
                   const prog = countByPlan.get(p.id) ?? { paid: 0, total: 0 };
                   const paidCents = paidByPlan.get(p.id) ?? 0;
-                  const tenant = p.units?.unit_occupancy?.[0]?.tenant_name ?? "—";
+                  const tenant = (p.unit_id ? tenantByUnit.get(p.unit_id) : null) ?? "—";
                   return (
                     <tr key={p.id} className="hover:bg-sand/30">
                       <td className="px-5 py-3">
@@ -97,7 +110,9 @@ export default async function RepaymentPlans() {
                         </Link>
                       </td>
                       <td className="px-5 py-3 text-ink-soft">
-                        {p.units?.properties?.name} · {p.units?.label}
+                        <Link href={`/admin/repayment-plans/${p.id}`} className="hover:text-pine">
+                          {p.units?.properties?.name} · {p.units?.label}
+                        </Link>
                       </td>
                       <td className="px-5 py-3 text-right text-ink">{formatCents(p.total_cents)}</td>
                       <td className="px-5 py-3 text-ink-soft">
