@@ -36,9 +36,10 @@ function periodLabel(period: string): string {
 }
 
 /**
- * Scheduled owner rent report. Sends on the 3rd, 5th, and 8th of the month, then
- * every Monday thereafter until month-end. Emails collection stats, per-
- * community breakdown, and the list of late tenants to the owners.
+ * Scheduled owner rent report. Sends the 5th (mid-grace check-in), the 10th
+ * (grace over + late fees on — the real late list), and the 15th (mid-month
+ * wrap as demand cure deadlines near). After that, the Monday weekly digest's
+ * "Rent still owed" section carries the tail of the month — no double-emailing.
  *
  * Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron) or `?key=`.
  * `?force=1` bypasses the date gate + dedupe for manual testing.
@@ -58,11 +59,10 @@ export async function GET(req: Request) {
   const force = url.searchParams.get("force") === "1";
   const today = new Date();
   const day = today.getDate();
-  const dow = today.getDay(); // 0 Sun … 1 Mon
-  // Early nudges on the 3rd & 5th, end-of-grace on the 8th, then weekly (Mon).
-  const shouldSend = day === 3 || day === 5 || day === 8 || (day > 8 && dow === 1);
+  // 5th: mid-grace · 10th: post-grace reality · 15th: mid-month wrap.
+  const shouldSend = day === 5 || day === 10 || day === 15;
   if (!force && !shouldSend) {
-    return NextResponse.json({ ok: true, skipped: "not a scheduled day", day, dow });
+    return NextResponse.json({ ok: true, skipped: "not a scheduled day (5th, 10th, 15th)", day });
   }
 
   const db = createAdminClient() as unknown as SupabaseClient;
