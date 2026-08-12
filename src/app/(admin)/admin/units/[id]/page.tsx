@@ -18,6 +18,7 @@ import {
   deleteUnitCost,
   linkResidentAccount,
   unlinkResidentAccount,
+  useResidentNames,
 } from "@/app/(admin)/admin/units/actions";
 
 const LEASE_BUCKET = "lease-docs";
@@ -471,6 +472,18 @@ export default async function UnitDetail({
               </ul>
             ) : (
               <p className="mt-2 text-sm text-ink-faint">No portal accounts linked yet.</p>
+            )}
+            {(occupants ?? []).length > 0 && (
+              <form action={useResidentNames} className="mt-3">
+                <input type="hidden" name="unit_id" value={unit.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-sand"
+                  title="Use these residents' names as the household name shown on the rent board, payments, and reports"
+                >
+                  Use residents&apos; names as the tenant name
+                </button>
+              </form>
             )}
             <form action={linkResidentAccount} className="mt-3 flex flex-wrap items-center gap-2">
               <input type="hidden" name="unit_id" value={unit.id} />

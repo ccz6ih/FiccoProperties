@@ -411,3 +411,47 @@ export async function deleteLogEntry(form: FormData): Promise<void> {
 
   if (unitId) revalidatePath(`/admin/units/${unitId}`);
 }
+
+/**
+ * Set the tenancy's display name from the linked resident accounts — so boards,
+ * reports, and notices read "Dan Barone / Geimy Sundheim" instead of a bare
+ * surname. Only touches the label; nobody's account is changed.
+ */
+export async function useResidentNames(form: FormData): Promise<void> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!unitId) return;
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { data: links } = await db
+    .from("unit_occupants")
+    .select("profile_id, is_primary")
+    .eq("unit_id", unitId)
+    .order("is_primary", { ascending: false })
+    .returns<{ profile_id: string; is_primary: boolean }[]>();
+
+  const ids = (links ?? []).map((l) => l.profile_id);
+  if (ids.length === 0) return;
+
+  const { data: profs } = await db
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", ids)
+    .returns<{ id: string; full_name: string | null }[]>();
+
+  // Keep the primary-first order from the links.
+  const nameById = new Map((profs ?? []).map((p) => [p.id, p.full_name?.trim() || null]));
+  const names = ids.map((id) => nameById.get(id)).filter((n): n is string => !!n);
+  if (names.length === 0) return;
+
+  await db
+    .from("unit_occupancy")
+    .update({ tenant_name: names.join(" / ") })
+    .eq("unit_id", unitId);
+
+  revalidatePath(`/admin/units/${unitId}`);
+  revalidatePath("/admin/rent-board");
+  revalidatePath("/admin/payments");
+}
