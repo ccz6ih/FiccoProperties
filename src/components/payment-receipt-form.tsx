@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { savePaymentReceipt, type ReceiptState } from "@/app/(admin)/admin/payments-log/actions";
+import { sendReceiptForCharge, type AdminPaymentsState } from "@/app/(admin)/admin/payments/actions";
 
 const initial: ReceiptState = { ok: false };
 
@@ -20,6 +21,10 @@ export function PaymentReceipt({
 }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(savePaymentReceipt, initial);
+  const [mailState, mailAction, mailPending] = useActionState(
+    sendReceiptForCharge,
+    { ok: false } as AdminPaymentsState
+  );
 
   return (
     <div className="space-y-1">
@@ -30,6 +35,19 @@ export function PaymentReceipt({
             View
           </a>
         )}
+        {chargeId && (
+          <form action={mailAction} className="inline print:hidden">
+            <input type="hidden" name="charge_id" value={chargeId} />
+            <button
+              type="submit"
+              disabled={mailPending}
+              title="Email this receipt to everyone on the home"
+              className="text-xs font-medium text-pine hover:underline disabled:opacity-50"
+            >
+              {mailPending ? "Sending…" : "Email receipt"}
+            </button>
+          </form>
+        )}
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -38,6 +56,12 @@ export function PaymentReceipt({
           {open ? "Close" : note || receiptUrl ? "Edit receipt" : "+ Receipt"}
         </button>
       </div>
+      {mailState.ok && mailState.notice && (
+        <div className="text-xs font-medium text-pine print:hidden">{mailState.notice}</div>
+      )}
+      {mailState.error && (
+        <div className="text-xs text-terracotta-dark print:hidden">{mailState.error}</div>
+      )}
 
       {open && (
         <form action={action} className="mt-1 space-y-2 rounded-lg border border-clay bg-sand/30 p-2 print:hidden">

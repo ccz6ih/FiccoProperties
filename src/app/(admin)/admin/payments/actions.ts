@@ -546,3 +546,67 @@ export async function recordManualPayment(
         : `Recorded ${formatCents(amountCents)} — paid in full.`;
   return { ok: true, notice };
 }
+
+/**
+ * Re-send (or send for the first time) the receipt for one charge — for a
+ * tenant who wasn't set up when the payment was recorded, or who lost it.
+ * Goes to every address on the home.
+ */
+export async function sendReceiptForCharge(
+  _prev: AdminPaymentsState,
+  form: FormData
+): Promise<AdminPaymentsState> {
+  const { profile } = await requireProfile("/admin/payments");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const chargeId = (form.get("charge_id") as string)?.trim();
+  if (!chargeId) return { ok: false, error: "Missing charge." };
+
+  const admin = createAdminClient() as unknown as SupabaseClient;
+  const { data: charge } = await admin
+    .from("charges")
+    .select("id, resident_id, unit_id, amount_cents, period")
+    .eq("id", chargeId)
+    .maybeSingle<{
+      id: string;
+      resident_id: string | null;
+      unit_id: string | null;
+      amount_cents: number;
+      period: string | null;
+    }>();
+  if (!charge) return { ok: false, error: "Charge not found." };
+
+  const recips = await getUnitRecipients(charge.unit_id);
+  if (!recips.to) return { ok: false, error: "No email on file for this home." };
+
+  const { data: pays } = await admin
+    .from("payments")
+    .select("amount_cents, provider_ref, receipt_note, created_at")
+    .eq("charge_id", chargeId)
+    .eq("status", "succeeded")
+    .order("created_at", { ascending: false })
+    .returns<{ amount_cents: number; provider_ref: string | null; receipt_note: string | null }[]>();
+  const paid = (pays ?? []).reduce((s, p) => s + p.amount_cents, 0);
+  if (paid <= 0) return { ok: false, error: "No payment recorded on this charge yet." };
+
+  const latest = (pays ?? [])[0];
+  const refLabel =
+    latest?.receipt_note ??
+    (latest?.provider_ref && latest.provider_ref !== "offline" ? latest.provider_ref : null);
+
+  await emailReceipts(
+    [
+      {
+        resident_id: charge.resident_id,
+        unit_id: charge.unit_id,
+        period: charge.period,
+        amountCents: paid,
+        remainingCents: Math.max(0, charge.amount_cents - paid),
+      },
+    ],
+    refLabel
+  );
+
+  revalidatePath("/admin/payments");
+  return { ok: true, notice: `Receipt sent to ${recips.emails.join(", ")}` };
+}
