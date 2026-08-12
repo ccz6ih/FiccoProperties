@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
-import { sendResidentWelcome } from "@/lib/portal-invite";
+import { sendResidentWelcome, emailLoginCredentials } from "@/lib/portal-invite";
 
 /**
  * Link an existing resident account to a unit as a co-tenant (a second login for
@@ -17,15 +17,34 @@ export async function linkResidentAccount(form: FormData): Promise<void> {
 
   const unitId = (form.get("unit_id") as string)?.trim();
   const email = (form.get("email") as string)?.trim().toLowerCase();
+  const name = (form.get("full_name") as string)?.trim() || null;
   if (!unitId || !email) return;
 
-  const db = createAdminClient() as unknown as SupabaseClient;
-  const { data: account } = await db
+  const admin = createAdminClient();
+  const db = admin as unknown as SupabaseClient;
+  let { data: account } = await db
     .from("profiles")
     .select("id, full_name, email")
     .ilike("email", email)
     .maybeSingle<{ id: string; full_name: string | null; email: string | null }>();
-  if (!account) return; // no account with that email — invite them first
+
+  // No account yet (e.g. a spouse who never signed up): create one, then email
+  // them their login. Previously this silently did nothing.
+  let createdNow = false;
+  if (!account) {
+    const tempPassword = `38thAve-${crypto.randomUUID().slice(0, 8)}`;
+    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+      email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: name ?? email },
+    });
+    if (createErr || !created?.user) return;
+    if (name) await db.from("profiles").update({ full_name: name }).eq("id", created.user.id);
+    await emailLoginCredentials(email, name, tempPassword);
+    account = { id: created.user.id, full_name: name, email };
+    createdNow = true;
+  }
 
   // Was this account already a co-tenant here? If so, don't re-welcome them.
   const { data: prevLink } = await db
@@ -39,7 +58,7 @@ export async function linkResidentAccount(form: FormData): Promise<void> {
     .from("unit_occupants")
     .upsert({ unit_id: unitId, profile_id: account.id, is_primary: false }, { onConflict: "unit_id,profile_id" });
 
-  if (!prevLink && account.email) {
+  if (!prevLink && !createdNow && account.email) {
     const { data: unit } = await db
       .from("units")
       .select("label, properties(name)")

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { sendNotification, esc } from "@/lib/email";
+import { getUnitRecipients } from "@/lib/unit-recipients";
 
 const NOTICE_TYPES = [
   "late_rent",
@@ -114,6 +115,11 @@ export async function setNoticeServed(form: FormData) {
         .eq("id", n.resident_id)
         .maybeSingle<{ email: string | null }>();
       email = p?.email ?? null;
+    }
+    // Prefer every address on the home so co-tenants each get served a copy.
+    if (n?.unit_id) {
+      const recips = await getUnitRecipients(n.unit_id);
+      if (recips.to) email = recips.to;
     }
     if (!email && n?.unit_id) {
       const { data: o } = await admin

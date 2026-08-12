@@ -7,6 +7,7 @@ import { requireProfile, isStaff } from "@/lib/auth";
 import { formatCents } from "@/lib/format";
 import { sendNotification } from "@/lib/email";
 import { paymentReceiptEmail } from "@/lib/payment-email";
+import { getUnitRecipients } from "@/lib/unit-recipients";
 import { getResidentPaymentInsights } from "@/lib/payment-insights";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -64,7 +65,9 @@ async function emailReceipts(items: ReceiptItem[], refLabel: string | null): Pro
     for (const it of items) {
       const prof = it.resident_id ? profById.get(it.resident_id) : null;
       const occ = it.unit_id ? occByUnit.get(it.unit_id) : null;
-      const email = prof?.email ?? occ?.tenant_email ?? null;
+      // Every address on the home — both spouses get their own copy.
+      const recips = await getUnitRecipients(it.unit_id);
+      const email = recips.to ?? prof?.email ?? occ?.tenant_email ?? null;
       if (!email) continue;
       const name = (prof?.full_name ?? occ?.tenant_name ?? "there").split(" ")[0];
       const home = occ ? `${occ.units?.properties?.name ?? ""} · ${occ.units?.label ?? ""}`.trim() : "your home";

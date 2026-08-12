@@ -437,7 +437,9 @@ export default async function UnitDetail({
               Resident accounts
             </h3>
             <p className="mt-1 text-[11px] text-ink-faint">
-              Link more than one login to this home for co-tenants who each want their own account.
+              Add a spouse or roommate so they get their own login — and so receipts,
+              reminders, and notices go to both of you. If they haven&apos;t signed up yet,
+              we&apos;ll create their account and email them their login.
               The account must already exist — invite them first, then link by email.
             </p>
             {occupants && occupants.length > 0 ? (
@@ -473,9 +475,14 @@ export default async function UnitDetail({
             <form action={linkResidentAccount} className="mt-3 flex flex-wrap items-center gap-2">
               <input type="hidden" name="unit_id" value={unit.id} />
               <input
+                name="full_name"
+                placeholder="their name"
+                className="min-w-0 flex-1 rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink"
+              />
+              <input
                 type="email"
                 name="email"
-                placeholder="account email to link"
+                placeholder="their email"
                 className="min-w-0 flex-1 rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink"
               />
               <button

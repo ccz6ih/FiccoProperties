@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
+import { getUnitRecipients } from "@/lib/unit-recipients";
 import { renderReminderEmail, type ReminderStage } from "@/lib/rent-reminder";
 import { applyDueRenewals } from "@/lib/renewals";
 
@@ -108,7 +109,7 @@ export async function GET(req: Request) {
     const remaining = Math.max(0, c.amount_cents - (paidByCharge.get(c.id) ?? 0));
     if (remaining <= 0) continue;
     const occ = occByUnit.get(c.unit_id) ?? null;
-    const email = c.profiles?.email ?? occ?.tenant_email ?? null;
+    const email = c.profiles?.email ?? occ?.tenant_email ?? null; // widened below
     const name = (c.profiles?.full_name ?? occ?.tenant_name ?? "there").split(" ")[0];
     const home = `${c.units?.properties?.name ?? ""} · ${c.units?.label ?? ""}`.trim();
     const g = groups.get(c.unit_id) ?? {
@@ -127,6 +128,12 @@ export async function GET(req: Request) {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://38thaveproperties.com").replace(/\/$/, "");
   let sent = 0;
   let noEmail = 0;
+  // Widen each unit's recipient to every address on the home (co-tenants).
+  for (const g of groups.values()) {
+    const recips = await getUnitRecipients(g.unitId);
+    if (recips.to) g.email = recips.to;
+  }
+
   for (const g of groups.values()) {
     if (!g.email) {
       noEmail += 1;
