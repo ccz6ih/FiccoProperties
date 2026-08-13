@@ -149,7 +149,7 @@ export default async function ResidentDetailPage({
   if (!profile) notFound();
 
   const [
-    { data: occupancy },
+    { data: primaryOccupancy },
     { data: maintenance },
     { data: conversations },
     { data: charges },
@@ -202,6 +202,30 @@ export default async function ResidentDetailPage({
       .order("created_at", { ascending: true })
       .returns<VehicleRow[]>(),
   ]);
+
+  // Co-tenant aware: this account may be linked to the home through
+  // unit_occupants rather than being the tenancy's primary occupant.
+  let occupancy = primaryOccupancy;
+  if (!occupancy) {
+    const codb = supabase as unknown as SupabaseClient;
+    const { data: link } = await codb
+      .from("unit_occupants")
+      .select("unit_id")
+      .eq("profile_id", id)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ unit_id: string }>();
+    if (link?.unit_id) {
+      const { data: coOcc } = await supabase
+        .from("unit_occupancy")
+        .select(
+          "unit_id, rent_cents, tenant_name, tenant_email, tenant_phone, lease_start_date, lease_signed_date, lease_end_date, move_in_date, units(label, properties(name, slug, address_line1, city, state))"
+        )
+        .eq("unit_id", link.unit_id)
+        .maybeSingle<OccupancyRow>();
+      occupancy = coOcc ?? null;
+    }
+  }
 
   const balanceCents = (ledger ?? []).reduce((sum, e) => sum + e.amount_cents, 0);
   const property = occupancy?.units?.properties ?? null;

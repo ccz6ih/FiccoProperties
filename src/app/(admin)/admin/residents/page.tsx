@@ -65,11 +65,25 @@ export default async function AdminResidents({
   ]);
 
   const homeByProfile = new Map<string, string>();
+  const homeByUnit = new Map<string, string>();
   const recordOnly: OccRow[] = [];
   for (const o of occ ?? []) {
     const home = `${o.units?.properties?.name ?? "—"} · ${o.units?.label ?? "—"}`;
+    homeByUnit.set(o.unit_id, home);
     if (o.occupant_profile_id) homeByProfile.set(o.occupant_profile_id, home);
     else if (o.tenant_name || o.tenant_email) recordOnly.push(o);
+  }
+
+  // Co-tenants are linked through unit_occupants, not occupant_profile_id.
+  const { data: coLinks } = await db
+    .from("unit_occupants")
+    .select("unit_id, profile_id")
+    .returns<{ unit_id: string; profile_id: string }[]>();
+  for (const l of coLinks ?? []) {
+    if (!homeByProfile.has(l.profile_id)) {
+      const home = homeByUnit.get(l.unit_id);
+      if (home) homeByProfile.set(l.profile_id, home);
+    }
   }
 
   const accountRows: Row[] = (profiles ?? []).map((p) => ({
