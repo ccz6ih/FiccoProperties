@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import {
@@ -40,6 +40,7 @@ export function MaintenanceVendorPanel({
   const [woState, woAction, woPending] = useActionState(emailWorkOrder, initial);
   const [costState, costAction, costPending] = useActionState(recordMaintenanceCost, initial);
   const [schedState, schedAction, schedPending] = useActionState(scheduleMaintenanceVisit, initial);
+  const [entry, setEntry] = useState("knock");
   const assigned = vendors.find((v) => v.id === vendorId) ?? null;
 
   return (
@@ -53,16 +54,40 @@ export function MaintenanceVendorPanel({
             ✓ Scheduled {formatDate(scheduledFor)}{scheduledWindow ? ` · ${scheduledWindow}` : ""}
           </p>
         )}
-        <form action={schedAction} className="flex flex-wrap items-end gap-2">
+        <form action={schedAction} className="space-y-2">
           <input type="hidden" name="id" value={requestId} />
-          <label className="space-y-1">
-            <span className="block text-xs text-ink-soft">Date</span>
-            <input type="date" name="scheduled_for" defaultValue={scheduledFor ?? ""} className={field} />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="space-y-1">
+              <span className="block text-xs text-ink-soft">Date</span>
+              <input type="date" name="scheduled_for" defaultValue={scheduledFor ?? ""} className={field} />
+            </label>
+            <label className="space-y-1">
+              <span className="block text-xs text-ink-soft">Window</span>
+              <input name="scheduled_window" defaultValue={scheduledWindow ?? ""} placeholder="9 am – noon" className={`${field} w-28`} />
+            </label>
+          </div>
+          <label className="block space-y-1">
+            <span className="block text-xs text-ink-soft">Getting in (the tenant reads this)</span>
+            <select
+              name="entry_note"
+              value={entry}
+              onChange={(e) => setEntry(e.target.value)}
+              className={`${field} w-full`}
+            >
+              <option value="knock">Knock first — they don&apos;t need to be home</option>
+              <option value="key">We&apos;ll use our key if they&apos;re out</option>
+              <option value="present">Someone must be home</option>
+              <option value="custom">Write my own…</option>
+              <option value="none">Say nothing about entry</option>
+            </select>
           </label>
-          <label className="space-y-1">
-            <span className="block text-xs text-ink-soft">Window</span>
-            <input name="scheduled_window" defaultValue={scheduledWindow ?? ""} placeholder="9 am – noon" className={`${field} w-28`} />
-          </label>
+          {entry === "custom" && (
+            <input
+              name="entry_custom"
+              placeholder="e.g. We'll come to the back door — please keep the dog inside."
+              className={`${field} w-full`}
+            />
+          )}
           <Button type="submit" variant="outline" size="md" disabled={schedPending}>
             {schedPending ? "Saving…" : scheduledFor ? "Update" : "Set ETA"}
           </Button>

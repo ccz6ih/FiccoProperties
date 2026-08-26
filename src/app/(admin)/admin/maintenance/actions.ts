@@ -327,11 +327,25 @@ export async function scheduleMaintenanceVisit(
     weekday: "long", month: "long", day: "numeric",
   });
 
+  // How entry is handled — the tenant reads this, so it should match the job.
+  const ENTRY: Record<string, string> = {
+    knock:
+      "We'll knock when we arrive. You don't need to be home — if you'd rather be there, just reply and we'll find another time.",
+    key:
+      "You don't need to be home. We'll knock first, and let ourselves in with our key if you're out.",
+    present:
+      "Please have someone 18 or older home for this visit so we can get in.",
+    none: "",
+  };
+  const entryChoice = ((form.get("entry_note") as string) || "knock").trim();
+  const entryCustom = ((form.get("entry_custom") as string) || "").trim();
+  const entryLine = entryChoice === "custom" ? entryCustom : ENTRY[entryChoice] ?? ENTRY.knock;
+
   // Tell the tenant in their thread (shows on their timeline page too).
   await db.from("maintenance_comments").insert({
     request_id: id,
     author_id: user.id,
-    body: `We're scheduled to come ${dateLabel}${window ? `, ${window}` : ""}. You don't need to be home — we'll use our key if you're out.`,
+    body: `We're scheduled to come ${dateLabel}${window ? `, ${window}` : ""}.${entryLine ? ` ${entryLine}` : ""}`,
     internal: false,
   });
 
@@ -362,6 +376,7 @@ export async function scheduleMaintenanceVisit(
           ["Request", req.title],
           ["Home", home],
           ["When", `${dateLabel}${window ? `, ${window}` : ""}`],
+          ...(entryLine ? ([["Getting in", entryLine]] as [string, string][]) : []),
           ["Need to change it?", "Reply to this email or call (720) 527-2596"],
         ]),
       });
