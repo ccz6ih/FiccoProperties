@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useFormStatus } from "react-dom";
 import {
   setMaintenanceStatus,
   setMaintenancePriority,
@@ -16,6 +17,21 @@ const selectClass =
 function label(value: string) {
   const s = value.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * These dropdowns save the moment you pick — there's no Save button. Without a
+ * cue that's unnerving, so say so, and show "Saving…" while it's in flight.
+ */
+function SaveHint({ savedLabel = "Saves as soon as you pick" }: { savedLabel?: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <span
+      className={`mt-1 block text-[11px] ${pending ? "font-medium text-pine" : "text-ink-faint"}`}
+    >
+      {pending ? "Saving…" : savedLabel}
+    </span>
+  );
 }
 
 export function MaintenanceStatusControl({ id, status }: { id: string; status: string }) {
@@ -35,6 +51,13 @@ export function MaintenanceStatusControl({ id, status }: { id: string; status: s
           </option>
         ))}
       </select>
+      <SaveHint
+        savedLabel={
+          status === "completed"
+            ? "✓ Completed — saved"
+            : "Saves as soon as you pick"
+        }
+      />
     </form>
   );
 }
@@ -56,6 +79,7 @@ export function MaintenancePriorityControl({ id, priority }: { id: string; prior
           </option>
         ))}
       </select>
+      <SaveHint />
     </form>
   );
 }
@@ -86,6 +110,7 @@ export function MaintenanceAssigneeControl({
           </option>
         ))}
       </select>
+      <SaveHint />
     </form>
   );
 }
