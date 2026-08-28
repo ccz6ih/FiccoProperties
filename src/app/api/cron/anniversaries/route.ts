@@ -7,8 +7,11 @@ import { annivInfo, anniversaryEmail } from "@/lib/anniversary";
 export const dynamic = "force-dynamic";
 
 type OccRow = {
+  unit_id: string;
   occupant_profile_id: string | null;
   move_in_date: string | null;
+  tenant_name: string | null;
+  tenant_email: string | null;
   units: { properties: { name: string | null } | null } | null;
   profiles: { full_name: string | null; email: string | null } | null;
 };
@@ -35,15 +38,17 @@ export async function GET(req: Request) {
   const { data: occ } = await db
     .from("unit_occupancy")
     .select(
-      "occupant_profile_id, move_in_date, units(properties(name)), profiles:occupant_profile_id(full_name, email)"
+      "unit_id, occupant_profile_id, move_in_date, tenant_name, tenant_email, units(properties(name)), profiles:occupant_profile_id(full_name, email)"
     )
-    .not("occupant_profile_id", "is", null)
     .not("move_in_date", "is", null)
     .returns<OccRow[]>();
 
   // Residents whose anniversary is today, 1+ years in, with an email on file.
+  const emailOf = (o: OccRow) => o.profiles?.email?.trim() || o.tenant_email?.trim() || null;
+  const keyOf = (o: OccRow) => o.occupant_profile_id ?? o.unit_id;
+
   const due = (occ ?? []).filter((o) => {
-    if (!o.move_in_date || !o.occupant_profile_id || !o.profiles?.email) return false;
+    if (!o.move_in_date || !emailOf(o)) return false;
     const { years, isToday } = annivInfo(o.move_in_date, today);
     return isToday && years >= 1;
   });
@@ -53,7 +58,7 @@ export async function GET(req: Request) {
   }
 
   // Skip anyone already emailed this calendar year.
-  const ids = due.map((o) => o.occupant_profile_id!);
+  const ids = due.map(keyOf);
   const { data: already } = await db
     .from("anniversary_emails")
     .select("resident_id")
@@ -64,19 +69,21 @@ export async function GET(req: Request) {
 
   let sent = 0;
   for (const o of due) {
-    const residentId = o.occupant_profile_id!;
+    const residentId = keyOf(o);
     if (done.has(residentId)) continue;
 
     const { years } = annivInfo(o.move_in_date!, today);
-    const firstName = o.profiles!.full_name?.split(" ")[0] ?? "there";
+    const fullName = o.profiles?.full_name ?? o.tenant_name ?? null;
+    const firstName = fullName?.trim().split(/\s+/)[0] ?? "there";
     const { subject, html } = anniversaryEmail({
       firstName,
       years,
       propertyName: o.units?.properties?.name ?? null,
+      moveInDate: o.move_in_date,
     });
 
     const { sent: ok } = await sendNotification({
-      to: o.profiles!.email!,
+      to: emailOf(o)!,
       subject,
       html,
     });

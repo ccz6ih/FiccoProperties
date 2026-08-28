@@ -48,6 +48,7 @@ export async function sendAnniversaryCongrats(form: FormData): Promise<void> {
     firstName,
     years,
     propertyName: occ.units?.properties?.name ?? null,
+    moveInDate: occ.move_in_date,
   });
 
   const { sent } = await sendNotification({
