@@ -88,12 +88,27 @@ export default async function AdminAnniversaries() {
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Anniversaries"
-        subtitle={`Residents celebrating a move-in anniversary in ${MONTHS[today.getMonth()]}.`}
+        subtitle="Move-in milestones across the communities — this month, what’s coming, and who’s been with you longest."
       />
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label="This month" value={rows.length} tone="pine" />
-        <StatCard label="Still upcoming" value={upcoming} tone="gold" />
+      <div className="mb-8 grid gap-4 sm:grid-cols-4">
+        <StatCard
+          label={`In ${MONTHS[today.getMonth()]}`}
+          value={rows.length}
+          tone="pine"
+          hint={rows.length > 0 ? `${upcoming} still to come` : "None this month"}
+        />
+        <StatCard
+          label="Next 90 days"
+          value={soon.length}
+          tone="gold"
+          hint={soon.length > 0 ? `Next: ${soon[0].name.split(" ")[0]} in ${soon[0].daysAway}d` : undefined}
+        />
+        <StatCard
+          label="Longest resident"
+          value={longest.length > 0 ? `${longest[0].years} yrs` : "—"}
+          hint={longest.length > 0 ? longest[0].name : undefined}
+        />
         <StatCard
           label="Congrats sent"
           value={rows.filter((r) => r.emailed).length}
