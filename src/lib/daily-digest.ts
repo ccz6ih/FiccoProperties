@@ -288,6 +288,58 @@ export async function buildDailyDigest(
     );
   }
 
+  // ---- anniversaries: once a month, on the first Monday ----
+  const isFirstMondayOfMonth = now.getDate() <= 7;
+  const annivItems: string[] = [];
+  let annivCount = 0;
+  if (isFirstMondayOfMonth) {
+    const thisMonth = String(now.getMonth() + 1).padStart(2, "0");
+    const { data: annivRows } = await db
+      .from("unit_occupancy")
+      .select("move_in_date, tenant_name, tenant_email, units:unit_id(label, properties(name)), profiles:occupant_profile_id(full_name, email)")
+      .not("move_in_date", "is", null)
+      .returns<
+        {
+          move_in_date: string;
+          tenant_name: string | null;
+          tenant_email: string | null;
+          units: UnitJoin;
+          profiles: { full_name: string | null; email: string | null } | null;
+        }[]
+      >();
+
+    const list = (annivRows ?? [])
+      .map((r) => {
+        const [yy, mm, dd] = r.move_in_date.split("-");
+        return {
+          month: mm,
+          day: Number(dd),
+          years: now.getFullYear() - Number(yy),
+          name: r.profiles?.full_name ?? r.tenant_name ?? "Resident",
+          home: homeOf(r.units),
+          hasEmail: !!(r.profiles?.email || r.tenant_email),
+        };
+      })
+      .filter((r) => r.month === thisMonth && r.years >= 1)
+      .sort((a, b) => a.day - b.day || b.years - a.years);
+
+    annivCount = list.length;
+    const monthName = now.toLocaleDateString("en-US", { month: "long" });
+    for (const a of list) {
+      const milestone = a.years >= 10 ? " 🏆" : "";
+      annivItems.push(
+        li(
+          `🎉 <strong>${esc(a.name)}</strong> — ${esc(a.home)} · <strong>${a.years} year${a.years === 1 ? "" : "s"}</strong>${milestone} on ${esc(monthName)} ${a.day}${a.hasEmail ? "" : ` <span style="color:${FAINT}">(no email — a card or a knock?)</span>`}`
+        )
+      );
+    }
+    if (annivItems.length > 0) {
+      annivItems.push(
+        li(`<span style="color:${FAINT}">A thank-you note goes out automatically on each one.</span>`)
+      );
+    }
+  }
+
   const quote = OWNER_QUOTES[Math.floor(Math.random() * OWNER_QUOTES.length)];
 
   const attentionItems: string[] = [];
@@ -321,6 +373,7 @@ export async function buildDailyDigest(
       ${section("Rent still owed this month", owed.length > 0 ? TERRA : PINE, owedItems, "Everyone's paid — nothing owed. 🎉")}
       ${section("Since the last digest", INK, yesterdayItems, "A quiet stretch — nothing new came in.")}
       ${section("What got done ✅", PINE, doneItems, "No work closed out this stretch.")}
+      ${isFirstMondayOfMonth && annivItems.length > 0 ? section(`Anniversaries this month 🎉 (${annivCount})`, PINE, annivItems, "") : ""}
       ${section("From the office 🗂", INK, officeItems, "Nothing new put in motion this week.")}
       ${noteItems.length > 0 ? section("Notes from the field", INK, noteItems, "") : ""}
       ${section("Needs attention today", attentionCount > 0 ? TERRA : PINE, attentionItems, "All clear — clocks green, nothing waiting.")}
