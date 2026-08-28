@@ -46,6 +46,7 @@ export function LeaseCreateForm({
   const [unitId, setUnitId] = useState(defaults?.unit_id ?? "");
   const [includeGarage, setIncludeGarage] = useState(false);
   const [utilities, setUtilities] = useState<"standard" | "tenant" | "landlord">("standard");
+  const [tenancyType, setTenancyType] = useState<"fixed" | "month_to_month">("fixed");
   const formRef = useRef<HTMLFormElement>(null);
 
   // Warn if the generated/edited terms don't name the selected unit.
@@ -71,7 +72,8 @@ export function LeaseCreateForm({
         rentDollars: val("rent"),
         depositDollars: val("deposit"),
         startDate: val("start_date"),
-        endDate: val("end_date"),
+        endDate: tenancyType === "month_to_month" ? null : val("end_date"),
+        tenancyType,
         includeGarage,
         includeTownhomeRules: townhome,
         utilities,
@@ -139,15 +141,52 @@ export function LeaseCreateForm({
           </label>
         </div>
 
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-ink">Agreement type</span>
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["fixed", "Fixed term (has an end date)"],
+              ["month_to_month", "Month-to-month (no end date)"],
+            ] as const).map(([value, text]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTenancyType(value)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                  tenancyType === value
+                    ? "border-pine bg-pine text-cream"
+                    : "border-clay-deep bg-white/70 text-ink-soft hover:bg-sand"
+                }`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-ink-faint">
+            Month-to-month swaps in Colorado&apos;s periodic-tenancy terms: 60-day notice for a
+            rent change (one per 12 months), the C.R.S. 13-40-107 notice schedule to end it, and
+            the &ldquo;for cause&rdquo; protections for residents of 12 months or more.
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block space-y-1.5">
             <span className="text-sm font-medium text-ink">Start date</span>
             <input type="date" name="start_date" className={inputClass} />
           </label>
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-ink">End date (optional)</span>
-            <input type="date" name="end_date" className={inputClass} />
-          </label>
+          {tenancyType === "fixed" ? (
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">End date (optional)</span>
+              <input type="date" name="end_date" className={inputClass} />
+            </label>
+          ) : (
+            <div className="block space-y-1.5">
+              <span className="text-sm font-medium text-ink">End date</span>
+              <div className="rounded-xl border border-clay bg-sand/40 px-4 py-2.5 text-sm text-ink-soft">
+                None — continues month to month
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

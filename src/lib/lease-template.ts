@@ -29,6 +29,12 @@ export type LeaseTemplateData = {
   children?: string | number | null;
   /** Appliances provided with the unit (defaults to range/fridge/dishwasher). */
   appliances?: string | null;
+  /**
+   * "fixed" = a term lease with an end date. "month_to_month" = a continuing
+   * tenancy with no end date, which changes the term, notice, and rent-increase
+   * clauses to the ones Colorado requires for a periodic tenancy.
+   */
+  tenancyType?: "fixed" | "month_to_month";
 };
 
 function householdLine(adults: string | number | null | undefined, children: string | number | null | undefined): string {
@@ -65,6 +71,7 @@ function longDate(iso: string | null | undefined): string {
 }
 
 export function buildLeaseTerms(data: LeaseTemplateData): string {
+  const m2m = data.tenancyType === "month_to_month";
   const tenant = data.tenantName?.trim() || "________________________";
   const home =
     [data.propertyName, data.unitLabel].filter(Boolean).join(" — ") ||
@@ -86,7 +93,7 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
   const header = [
     `Tenant: ${tenant}`,
     `Premises: ${home}, ${addressLine}`,
-    `Term: ${start} to ${end}`,
+    m2m ? `Term: Month-to-month, beginning ${start} (continues until ended as described below)` : `Term: ${start} to ${end}`,
     `Monthly rent: ${rent}     Security deposit: ${deposit}`,
     household ? `Household: ${household}` : null,
   ]
@@ -97,9 +104,11 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
     `Parties. This Lease is made between 38th Ave Properties ("Landlord") and ${tenant} ("Tenant"). If more than one person signs as Tenant, each is jointly and individually responsible for the full performance of this Lease.`,
     `Premises. Landlord leases to Tenant the residence located at ${home}, ${addressLine} (the "Premises"), to be used only as a private home for the Tenant and the members of the Tenant's household.`,
     `Appliances. The Premises is provided with ${appliances}. These appliances remain the Landlord's property, are to be kept clean and in good working order, and must be returned at move-out in the condition received, ordinary wear and tear excepted. Tenant shall not remove them from the Premises.`,
-    `Term. The lease term begins on ${start} and runs ${end}. Possession of the Premises is delivered at 12:00 noon on the start date.`,
+    m2m
+      ? `Term. This is a month-to-month tenancy beginning ${start}. It renews automatically each month on the same terms and continues until it is ended as described in the "Ending this tenancy" section below. There is no fixed end date.`
+      : `Term. The lease term begins on ${start} and runs ${end}. Possession of the Premises is delivered at 12:00 noon on the start date.`,
     `Rent. Tenant shall pay rent of ${rent} per month, in advance, on or before the 1st day of each month, at the Landlord's office or as the Landlord otherwise directs. Rent is due in full regardless of any setoff or claim.`,
-    `Late charge & returned payments. If rent is not received within five (5) days after its due date, Tenant shall pay a late charge equal to ten percent (10%) of the monthly rent, treated as additional rent, all within the limits allowed by Colorado law. Acceptance of a late or partial payment does not waive the Landlord's rights or the default. A reasonable fee applies to any payment returned unpaid by the bank.`,
+    `Late charge & returned payments. If rent has not been received within seven (7) calendar days after its due date, Tenant shall pay a one-time late charge equal to five percent (5%) of the past-due rent, or fifty dollars ($50), whichever is greater — the maximum Colorado allows under C.R.S. 38-12-105. The late charge is assessed once per late month and does not continue to accrue daily. Landlord will not terminate this tenancy, or refuse to renew it, because of an unpaid late fee. Acceptance of a late or partial payment does not waive the Landlord's rights or the default. A reasonable fee applies to any payment returned unpaid by the bank.`,
     `Security deposit. Tenant has deposited ${deposit} as a security deposit, held as security for the full performance of this Lease. Landlord may apply it to unpaid rent, charges, cleaning, or damage beyond ordinary wear and tear. The deposit may not be used by Tenant as last month's rent. Landlord will return the deposit, without interest, within sixty (60) days after Tenant returns possession and the Premises are left clean and undamaged, together with an itemized statement of any amounts withheld, as required by Colorado law.`,
     utilitiesClause(data.utilities),
     `Use & lawful conduct. Tenant shall use the Premises only as a private residence and shall obey all applicable laws, ordinances, and health, fire, and safety codes. Tenant shall not use the Premises for any business, unlawful, hazardous, or improper purpose, shall not keep flammable or dangerous materials on the Premises, and shall not create or allow any odor, condition, or activity that is offensive or a nuisance to neighbors.`,
@@ -118,7 +127,11 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
     `Liability. Except to the extent caused by the Landlord's negligence or required by law, Landlord is not liable for injury to any person or for loss of or damage to any property on the Premises or property, including loss caused by fire, water, theft, or the acts of others. Tenant is encouraged to insure Tenant's own belongings.`,
     `Assignment & subletting. Tenant shall not sublet the Premises or assign this Lease without the Landlord's prior written consent.`,
     `Abandonment & reletting. If Tenant moves out before the term ends or the Premises are left vacant with rent unpaid, Landlord may retake possession and re-rent the Premises, using reasonable efforts to mitigate, and Tenant remains responsible for the difference between the rent owed under this Lease and the rent actually received, plus the reasonable costs of re-renting.`,
-    `Holdover. If Tenant stays after the term ends without a new written agreement, the tenancy becomes month-to-month at the same monthly rent, subject to all other terms of this Lease, and may be ended by either party with the notice required by Colorado law.`,
+    ...(m2m
+      ? []
+      : [
+          `Holdover. If Tenant stays after the term ends without a new written agreement, the tenancy becomes month-to-month at the same monthly rent, subject to all other terms of this Lease, and may be ended by either party with the notice required by Colorado law.`,
+        ]),
     `Default & remedies. If Tenant fails to pay rent or otherwise breaches this Lease, Landlord may, after giving any notice required by law, declare the term ended and recover possession under the Colorado Forcible Entry and Detainer statute, recover unpaid and future rent and damages and the costs of re-renting, and pursue any other remedy available in law or equity. Landlord will mitigate damages as required by Colorado law (including C.R.S. 13-40-104 and 13-40-107.5). In a dispute over this Lease, the prevailing party is entitled to its reasonable attorney's fees and costs.`,
   ];
 
@@ -128,10 +141,20 @@ export function buildLeaseTerms(data: LeaseTemplateData): string {
     );
   }
 
+  if (m2m) {
+    sections.push(
+      `Rent increases. Landlord may change the monthly rent only by giving Tenant at least sixty (60) days' written notice before the increase takes effect, and may not raise the rent more than once in any twelve (12) month period, as required by C.R.S. 38-12-701. The notice will state the new amount and the date it begins. If Tenant does not wish to accept the new rent, Tenant may end the tenancy by giving the notice described above before the increase takes effect.`,
+      `Ending this tenancy — by Landlord. Landlord will give Tenant written notice as required by C.R.S. 13-40-107 (the same schedule described above, based on how long the tenancy has lasted). In addition, for a Tenant who has lived in the Premises for twelve (12) months or more, or whose agreement has renewed at least once, Colorado's "for cause" law (C.R.S. 38-12-1301 et seq.) requires that Landlord have a legal ground before ending or declining to continue the tenancy — for example, nonpayment of rent, a violation of this Agreement, or one of the no-fault grounds the statute allows, such as the owner or an immediate family member moving in, demolition or substantial repairs, withdrawal of the unit from the rental market, or the Tenant's refusal to accept reasonable new terms after proper notice. Landlord will follow the notice and filing requirements of the Colorado Forcible Entry and Detainer statute in every case.`,
+      `Continuing terms. Except as stated in this Agreement, all other terms — rent due date, late charges, utilities, maintenance, entry, insurance, occupancy, and conduct — continue to apply each month for as long as the tenancy continues.`
+    );
+  }
+
   sections.push(
     `Fire & casualty. If the Premises are made unfit to live in by fire or other casualty not caused by Tenant, Landlord may either end this Lease (with rent paid only to the date of the casualty) or repair the Premises with reasonable diligence, in which case rent is reduced in proportion to the part of the Premises that cannot be used until repairs are complete.`,
     `Surrender & keys. At the end of the tenancy Tenant shall return possession of the Premises and all keys, remotes, and access devices to the Landlord.`,
-    `Notice to vacate. After the lease term is met, Tenant shall give at least thirty (30) days' written notice before moving out, and that notice must be given on the 1st day of a month.`,
+    m2m
+      ? `Ending this tenancy — by Tenant. Tenant may end this tenancy by giving Landlord written notice at least the number of days required by C.R.S. 13-40-107 before the intended move-out date. That period depends on how long the tenancy has lasted: twenty-one (21) days for a tenancy of one month or more but less than six months, twenty-eight (28) days for six months or more but less than a year, and ninety-one (91) days for a tenancy of one year or longer. Rent is owed through the end of the notice period. Tenant is encouraged to give notice effective the last day of a month so the final month's rent is not prorated.`
+      : `Notice to vacate. After the lease term is met, Tenant shall give at least thirty (30) days' written notice before moving out, and that notice must be given on the 1st day of a month.`,
     `Subordination. This Lease is subordinate to any current or future mortgage or deed of trust on the property.`,
     `General. This Lease, with any signed addenda, is the entire agreement between the parties and may be changed only in a writing signed by both. No Landlord agent has authority to change it orally. The Landlord's failure to enforce any term at any time is not a waiver of that term. The words "Landlord" and "Tenant" include the plural and any successors. If any term is unenforceable, the rest of the Lease remains in effect.`,
     `Governing law. This Lease is governed by the laws of the State of Colorado.`
@@ -149,12 +172,12 @@ These rules are part of this Lease for our town home communities (The Villa and 
 ${TOWN_HOME_RULES.map((r, i) => `   ${i + 1}. ${r.title}. ${r.body}`).join("\n")}`
     : "";
 
-  return `RESIDENTIAL LEASE AGREEMENT — 38TH AVE PROPERTIES
+  return `${m2m ? "MONTH-TO-MONTH RENTAL AGREEMENT" : "RESIDENTIAL LEASE AGREEMENT"} — 38TH AVE PROPERTIES
 
 ${header}
 
 ${body}
 ${townhomeAddendum}
 
-By signing below electronically, Tenant acknowledges that Tenant has read, understands, and agrees to the terms of this Lease${data.includeTownhomeRules ? ", including the Community Rules Addendum above" : ""}.`;
+By signing below electronically, Tenant acknowledges that Tenant has read, understands, and agrees to the terms of this ${m2m ? "Agreement" : "Lease"}${data.includeTownhomeRules ? ", including the Community Rules Addendum above" : ""}.`;
 }
