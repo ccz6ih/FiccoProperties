@@ -3,6 +3,7 @@ import { Card, ButtonLink, Eyebrow } from "@/components/ui";
 import { PageHeader, StatCard, StatusPill } from "@/components/dashboard-ui";
 import { PortalAnnouncements } from "@/components/portal-announcements";
 import { formatCents, formatDate } from "@/lib/format";
+import { getResidentUnitId } from "@/lib/occupancy";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
@@ -54,11 +55,17 @@ export default async function PortalHome() {
       .returns<LeaseRow[]>(),
     supabase
       .from("maintenance_requests")
-      .select("id, title, status, priority, created_at")
-      .eq("created_by", user.id)
+      .select("id, title, status, priority, created_at, unit_id")
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(40),
   ]);
+
+  // RLS returns this household's requests (plus anything they filed). Keep the
+  // ones for their home so a staff-opened request shows on their dashboard too.
+  const homeUnitId = await getResidentUnitId(user.id);
+  const homeRequests = (maintenance ?? [])
+    .filter((m) => !homeUnitId || m.unit_id === homeUnitId)
+    .slice(0, 5);
 
   const activeLease = leases?.find((l) => l.status === "active") ?? leases?.[0] ?? null;
 
@@ -71,7 +78,7 @@ export default async function PortalHome() {
   const tenure = tenureLabel(occupancy?.lease_start_date ?? activeLease?.start_date);
 
   const openCount =
-    maintenance?.filter((m) => !["completed", "cancelled"].includes(m.status)).length ?? 0;
+    homeRequests.filter((m) => !["completed", "cancelled"].includes(m.status)).length;
 
   const firstName = profile?.full_name?.split(" ")[0] ?? "there";
   const rulesAck =
@@ -187,9 +194,9 @@ export default async function PortalHome() {
               View all
             </Link>
           </div>
-          {maintenance && maintenance.length > 0 ? (
+          {homeRequests.length > 0 ? (
             <ul className="divide-y divide-clay">
-              {maintenance.map((m) => (
+              {homeRequests.map((m) => (
                 <li key={m.id} className="flex items-center justify-between py-3">
                   <div>
                     <div className="text-sm font-medium text-ink">{m.title}</div>

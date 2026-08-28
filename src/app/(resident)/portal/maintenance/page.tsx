@@ -9,6 +9,7 @@ import { formatDate, humanize } from "@/lib/format";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getResidentUnitId } from "@/lib/occupancy";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -27,10 +28,14 @@ export default async function MaintenancePage() {
   const db = supabase as unknown as SupabaseClient;
 
   // Loose handle — scheduled_for/scheduled_window/vendor_id are newer columns.
-  const { data: requests } = await db
-    .from("maintenance_requests")
-    .select("*")
-    .eq("created_by", user.id)
+  // Everything for THIS HOME — including requests staff opened on the
+  // household's behalf, and a co-tenant's. RLS bounds it to their tenancy.
+  const myUnitId = await getResidentUnitId(user.id);
+  const requestQuery = db.from("maintenance_requests").select("*");
+  const { data: requests } = await (myUnitId
+    ? requestQuery.or(`unit_id.eq.${myUnitId},created_by.eq.${user.id}`)
+    : requestQuery.eq("created_by", user.id)
+  )
     .order("created_at", { ascending: false })
     .returns<
       {
