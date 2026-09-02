@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import { saveDepositSettlement, addDeduction, deleteDeduction } from "@/app/(admin)/admin/move-out/actions";
+import { MoveOutForm } from "@/components/move-out-form";
 
 export const metadata: Metadata = { title: "Move-out & deposit" };
 export const dynamic = "force-dynamic";
@@ -19,6 +20,19 @@ type UnitRow = {
   properties: { name: string | null; address_line1: string | null; city: string | null; state: string | null } | null;
 };
 type OccRow = { tenant_name: string | null; forwarding_address: string | null; move_out_date: string | null };
+type LiveOccRow = {
+  tenant_name: string | null;
+  move_in_date: string | null;
+  rent_cents: number | null;
+  deposit_cents: number | null;
+};
+type HistoryRow = {
+  tenant_name: string | null;
+  forwarding_address: string | null;
+  move_out_date: string | null;
+  move_in_date: string | null;
+  deposit_cents: number | null;
+};
 type LeaseRow = { deposit_cents: number | null };
 type SettlementRow = { deposit_cents: number; notes: string | null; status: string };
 type DeductionRow = { id: string; description: string; amount_cents: number };
@@ -35,17 +49,32 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
   const db = supabase as unknown as SupabaseClient;
   const admin = createAdminClient() as unknown as SupabaseClient;
 
-  const [{ data: unit }, { data: occ }, { data: lease }, { data: settlement }, { data: deductions }, { data: photoRows }] =
-    await Promise.all([
+  const [
+    { data: unit },
+    { data: occ },
+    { data: lease },
+    { data: settlement },
+    { data: deductions },
+    { data: photoRows },
+    { data: liveOcc },
+    { data: history },
+  ] = await Promise.all([
       db.from("units").select("label, properties(name, address_line1, city, state)").eq("id", unitId).maybeSingle<UnitRow>(),
       db.from("unit_occupancy").select("tenant_name, forwarding_address, move_out_date").eq("unit_id", unitId).maybeSingle<OccRow>(),
       db.from("leases").select("deposit_cents").eq("unit_id", unitId).order("start_date", { ascending: false }).limit(1).maybeSingle<LeaseRow>(),
       db.from("deposit_settlements").select("deposit_cents, notes, status").eq("unit_id", unitId).maybeSingle<SettlementRow>(),
       db.from("deposit_deductions").select("id, description, amount_cents").eq("unit_id", unitId).order("created_at", { ascending: true }).returns<DeductionRow[]>(),
       admin.from("unit_photos").select("id, kind, path, caption").eq("unit_id", unitId).in("kind", ["move_in", "move_out"]).order("created_at", { ascending: true }).returns<PhotoRow[]>(),
+      db.from("unit_occupancy").select("tenant_name, move_in_date, rent_cents, deposit_cents").eq("unit_id", unitId).maybeSingle<LiveOccRow>(),
+      db.from("tenancy_history").select("tenant_name, forwarding_address, move_out_date, move_in_date, deposit_cents").eq("unit_id", unitId).order("move_out_date", { ascending: false }).limit(1).maybeSingle<HistoryRow>(),
     ]);
 
   if (!unit) redirect("/admin/delinquency");
+
+  // Still occupied? Then the move-out hasn't been recorded yet — that comes
+  // first. Once it is, the tenancy lives in the archive and reads from there.
+  const stillHere = !!liveOcc?.tenant_name;
+  const past = history ?? null;
 
   const signed = await Promise.all(
     (photoRows ?? []).map((p) => admin.storage.from(CONDITION_BUCKET).createSignedUrl(p.path, 3600))
@@ -54,14 +83,17 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
   const moveInPhotos = photos.filter((p) => p.kind === "move_in");
   const moveOutPhotos = photos.filter((p) => p.kind === "move_out");
 
-  const depositCents = settlement?.deposit_cents ?? lease?.deposit_cents ?? 0;
+  const depositCents =
+    settlement?.deposit_cents ?? past?.deposit_cents ?? lease?.deposit_cents ?? 0;
   const items = deductions ?? [];
   const deductionsCents = items.reduce((s, d) => s + d.amount_cents, 0);
   const refundCents = depositCents - deductionsCents;
 
   const p = unit.properties;
   const premises = [p?.address_line1, unit.label, p?.city, p?.state].filter(Boolean).join(", ");
-  const tenant = occ?.tenant_name ?? "—";
+  const tenant = occ?.tenant_name ?? past?.tenant_name ?? "—";
+  const moveOutDate = occ?.move_out_date ?? past?.move_out_date ?? null;
+  const forwarding = occ?.forwarding_address ?? past?.forwarding_address ?? null;
   const reportDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
   return (
@@ -76,6 +108,40 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
           </Link>
           <PrintButton label="Print disposition" />
         </div>
+
+        {/* Step 1 — end the tenancy. Until this is done they're still billed. */}
+        {stillHere && (
+          <div className="mb-6 rounded-2xl border-2 border-terracotta/40 bg-white p-6 print:hidden">
+            <div className="mb-1 font-display text-xl font-semibold text-ink">
+              Move {liveOcc?.tenant_name} out of {unit.label}
+            </div>
+            <p className="mb-4 text-sm text-ink-soft">
+              This home still shows as occupied, so it&apos;s on the rent board and will be billed
+              again next month. Recording the move-out takes it off both, files the tenancy in the
+              home&apos;s history, and puts the unit into make-ready.
+            </p>
+            <MoveOutForm
+              unitId={unitId}
+              tenantName={liveOcc?.tenant_name ?? "the tenant"}
+              moveInDate={liveOcc?.move_in_date ?? null}
+              rentCents={liveOcc?.rent_cents ?? null}
+            />
+          </div>
+        )}
+
+        {!stillHere && past && (
+          <div className="mb-6 rounded-2xl border border-clay bg-white px-6 py-4 print:hidden">
+            <div className="text-sm text-ink-soft">
+              <strong className="text-ink">{past.tenant_name}</strong> moved out{" "}
+              {past.move_out_date ? formatDate(past.move_out_date) : "—"}
+              {past.move_in_date ? ` after ${yearsBetween(past.move_in_date, past.move_out_date)}` : ""}.
+              The home is off the rent board and set to make-ready.{" "}
+              <Link href="/admin/turns" className="font-medium text-pine hover:text-pine-dark">
+                Start the turn →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Photo comparison (screen only) */}
         <div className="mb-6 grid gap-6 rounded-2xl border border-clay bg-white p-6 sm:grid-cols-2 print:hidden">
@@ -135,8 +201,8 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
           <div className="mb-6 grid gap-px overflow-hidden rounded-xl border border-clay bg-clay sm:grid-cols-2">
             <Field label="Tenant" value={tenant} />
             <Field label="Premises" value={premises || `${p?.name ?? ""} · ${unit.label}`} />
-            <Field label="Move-out date" value={occ?.move_out_date ? formatDate(occ.move_out_date) : "—"} />
-            <Field label="Forwarding address" value={occ?.forwarding_address ?? "—"} />
+            <Field label="Move-out date" value={moveOutDate ? formatDate(moveOutDate) : "—"} />
+            <Field label="Forwarding address" value={forwarding ?? "—"} />
           </div>
 
           <table className="w-full text-sm">
@@ -212,6 +278,19 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
       </Container>
     </main>
   );
+}
+
+/** "4 years" / "8 months" — how long they were here, in plain words. */
+function yearsBetween(from: string, to: string | null): string {
+  const start = new Date(`${from}T00:00:00`);
+  const end = to ? new Date(`${to}T00:00:00`) : new Date();
+  const months = Math.max(
+    0,
+    (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth())
+  );
+  const years = Math.floor(months / 12);
+  if (years >= 1) return `${years} year${years === 1 ? "" : "s"} here`;
+  return `${months} month${months === 1 ? "" : "s"} here`;
 }
 
 function PhotoColumn({

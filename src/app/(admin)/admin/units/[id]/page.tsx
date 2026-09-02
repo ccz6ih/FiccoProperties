@@ -416,6 +416,19 @@ export default async function UnitDetail({
             <Field label="Lease end" value={formatDate(occ?.lease_end_date) || null} />
           </dl>
 
+          {occ?.tenant_name && (
+            <p className="mt-3 text-sm text-ink-faint">
+              Moving out?{" "}
+              <Link
+                href={`/admin/move-out/${unit.id}`}
+                className="font-medium text-pine hover:text-pine-dark"
+              >
+                Record the move-out
+              </Link>{" "}
+              — takes the home off the rent board and starts the deposit paperwork.
+            </p>
+          )}
+
           <UnitEditForm
             unit={{
               id: unit.id,
