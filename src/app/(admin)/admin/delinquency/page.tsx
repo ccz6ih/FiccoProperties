@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { LateFeeForm } from "@/components/late-fee-form";
+import { VoidRentForm } from "@/components/void-rent-form";
 import {
   createDemandForUnit,
   createDemandsForAllOverdue,
@@ -39,6 +40,10 @@ type Delinquent = {
   unit: string;
   property: string;
   overdueCents: number;
+  /** Rent (non-late-fee) charge ids, so rent that isn't owed can be written off. */
+  rentChargeIds: string[];
+  /** Nobody lives here any more — usually why the rent isn't actually owed. */
+  movedOut: boolean;
   count: number;
   oldestDue: string;
 };
@@ -136,6 +141,7 @@ export default async function AdminDelinquency() {
     if (cur) {
       cur.overdueCents += c.amount_cents;
       cur.count += 1;
+      if (!(c.description ?? "").toLowerCase().includes("late fee")) cur.rentChargeIds.push(c.id);
       if (c.due_date! < cur.oldestDue) cur.oldestDue = c.due_date!;
     } else {
       byUnit.set(key, {
@@ -148,6 +154,8 @@ export default async function AdminDelinquency() {
         unit: c.units?.label ?? "—",
         property: c.units?.properties?.name ?? "—",
         overdueCents: c.amount_cents,
+        rentChargeIds: (c.description ?? "").toLowerCase().includes("late fee") ? [] : [c.id],
+        movedOut: !!c.unit_id && !occByUnit.has(c.unit_id),
         count: 1,
         oldestDue: c.due_date!,
       });
@@ -241,6 +249,11 @@ export default async function AdminDelinquency() {
                           <span className="font-medium text-ink">{r.name}</span>
                         )}
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                          {r.movedOut && (
+                            <span className="rounded-full bg-terracotta/15 px-2 py-0.5 text-[11px] font-medium text-terracotta-dark">
+                              Moved out — nobody lives here
+                            </span>
+                          )}
                           {r.email ? (
                             <>
                               <span className="rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
@@ -333,6 +346,13 @@ export default async function AdminDelinquency() {
                           >
                             Record payment →
                           </Link>
+                          {r.rentChargeIds.length > 0 && (
+                            <VoidRentForm
+                              chargeIds={r.rentChargeIds}
+                              amountCents={r.overdueCents}
+                              tenantName={r.name}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>

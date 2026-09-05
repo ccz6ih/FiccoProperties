@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { buildNotice } from "@/lib/notice-template";
-import { formatDate } from "@/lib/format";
+import { formatCents, formatDate } from "@/lib/format";
 
 export type LateFeeState = { ok: boolean; error?: string; notice?: string };
 
@@ -40,6 +40,81 @@ export async function voidLateFee(form: FormData) {
   revalidatePath("/admin/delinquency");
   revalidatePath("/admin/payments");
   revalidatePath("/admin/rent-board");
+}
+
+/**
+ * Void a RENT charge — for rent that was billed but isn't actually owed: a
+ * tenant who moved out mid-month and isn't being held to it, a home billed by
+ * mistake, a month settled another way.
+ *
+ * Deliberately separate from voidLateFee, and it insists on a reason. Writing
+ * off rent is real money, so the unit's log gets a line saying who, how much,
+ * and why — the alternative was editing the database by hand, which leaves no
+ * trace at all.
+ */
+export async function voidRentCharge(form: FormData) {
+  const { profile } = await requireProfile("/admin/delinquency");
+  if (!isStaff(profile)) return;
+
+  const chargeIds = form
+    .getAll("charge_id")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const reason = (form.get("reason") as string)?.trim();
+  if (chargeIds.length === 0 || !reason) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+  const today = new Date().toISOString().slice(0, 10);
+  let touchedUnit: string | null = null;
+
+  for (const chargeId of chargeIds) {
+    const { data: charge } = await db
+      .from("charges")
+      .select("id, unit_id, description, status, amount_cents, period")
+      .eq("id", chargeId)
+      .maybeSingle<{
+        id: string;
+        unit_id: string | null;
+        description: string | null;
+        status: string;
+        amount_cents: number;
+        period: string | null;
+      }>();
+    if (!charge || charge.status !== "open") continue;
+
+    // Never wipe a charge someone has already paid against — that would hide
+    // money that actually came in. Those get fixed on the payment instead.
+    const { data: paid } = await db
+      .from("payments")
+      .select("id")
+      .eq("charge_id", chargeId)
+      .eq("status", "succeeded")
+      .limit(1)
+      .returns<{ id: string }[]>();
+    if ((paid ?? []).length > 0) continue;
+
+    await db.from("charges").update({ status: "void" }).eq("id", chargeId);
+    await db.from("ledger_entries").delete().eq("ref_id", chargeId);
+
+    if (charge.unit_id) {
+      await db.from("unit_log_entries").insert({
+        unit_id: charge.unit_id,
+        kind: "tenancy",
+        body: `Voided ${charge.description ?? "charge"}${
+          charge.period ? ` for ${charge.period}` : ""
+        } (${formatCents(charge.amount_cents)}) — ${reason}`,
+        performed_on: today,
+        author_id: profile!.id,
+      });
+      touchedUnit = charge.unit_id;
+    }
+  }
+
+  revalidatePath("/admin/delinquency");
+  revalidatePath("/admin/payments");
+  revalidatePath("/admin/rent-board");
+  if (touchedUnit) revalidatePath(`/admin/units/${touchedUnit}`);
 }
 
 function currentPeriod(): string {
