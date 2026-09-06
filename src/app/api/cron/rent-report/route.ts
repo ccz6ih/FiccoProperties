@@ -43,8 +43,8 @@ function periodLabel(period: string): string {
  *
  * Auth: CRON_SECRET via `Authorization: Bearer` (Vercel Cron) or `?key=`.
  * `?force=1` bypasses the date gate + dedupe for manual testing.
- * Recipients: every owner account (profiles.role = 'owner') with an email, plus
- * any addresses in OWNER_REPORT_EMAILS — falls back to Craig if none.
+ * Recipients: every owner and admin account with an email, plus any addresses
+ * in OWNER_REPORT_EMAILS — falls back to Craig if none.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -303,11 +303,12 @@ export async function GET(req: Request) {
     appUrl,
   });
 
-  // Recipients: every owner account with an email, plus any env overrides.
+  // Recipients: everyone running the place — owners and admins — with an email,
+  // plus any env overrides. Same rule as getOwnerRecipients.
   const { data: owners } = await db
     .from("profiles")
     .select("email")
-    .eq("role", "owner")
+    .in("role", ["owner", "admin"])
     .not("email", "is", null)
     .returns<{ email: string | null }[]>();
   const ownerEmails = (owners ?? []).map((o) => o.email?.trim()).filter(Boolean) as string[];
