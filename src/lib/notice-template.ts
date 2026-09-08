@@ -55,11 +55,20 @@ export type NoticeData = {
   today?: string; // display string for the notice date
 };
 
+/**
+ * Whole dollars read cleanly ("$1,500"), but cents must never be dropped: a
+ * 5% late fee lands on odd amounts, and a notice that demands $1,496 for a
+ * $1,496.25 debt misstates the sum a tenant has to pay to cure it.
+ */
 function money(v: string | number | null | undefined): string {
   if (v == null || v === "") return "$________";
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return "$________";
-  return `$${n.toLocaleString("en-US")}`;
+  const cents = Math.round(n * 100) % 100 !== 0;
+  return `$${n.toLocaleString("en-US", {
+    minimumFractionDigits: cents ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export function buildNotice(

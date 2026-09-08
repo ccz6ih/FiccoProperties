@@ -368,9 +368,9 @@ export async function rebuildDemandDraft(form: FormData) {
   if (notice.type !== "pay_or_quit" || notice.status !== "draft" || notice.served_at) return;
 
   const row = await buildDemandForUnit(db, notice.unit_id, profile!.id, new Date());
-  // Nothing overdue any more — the draft shouldn't be served at all.
+  // Nothing overdue any more — they paid, so the draft shouldn't be served.
   if (!row) {
-    await db.from("notices").update({ status: "cancelled" }).eq("id", noticeId);
+    await db.from("notices").update({ status: "cured" }).eq("id", noticeId);
     revalidatePath("/admin/notices");
     revalidatePath(`/admin/notices/${noticeId}`);
     return;
