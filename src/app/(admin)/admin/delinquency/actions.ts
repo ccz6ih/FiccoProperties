@@ -336,6 +336,61 @@ export async function createDemandForUnit(form: FormData) {
 }
 
 /**
+ * Rebuild a DRAFT pay-or-quit from today's balances and today's wording.
+ *
+ * A notice's text is frozen at creation — which is right for one that's been
+ * served, but leaves a draft stale the moment a payment lands, a fee is added,
+ * or the template changes. Regenerating resets the ten-day clock, so it only
+ * ever touches drafts: anything served is a legal record and stays untouched.
+ */
+export async function rebuildDemandDraft(form: FormData) {
+  const { profile } = await requireProfile("/admin/notices");
+  if (!isStaff(profile)) return;
+
+  const noticeId = (form.get("notice_id") as string)?.trim();
+  if (!noticeId) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: notice } = await db
+    .from("notices")
+    .select("id, unit_id, type, status, served_at")
+    .eq("id", noticeId)
+    .maybeSingle<{
+      id: string;
+      unit_id: string | null;
+      type: string;
+      status: string;
+      served_at: string | null;
+    }>();
+  if (!notice?.unit_id) return;
+  if (notice.type !== "pay_or_quit" || notice.status !== "draft" || notice.served_at) return;
+
+  const row = await buildDemandForUnit(db, notice.unit_id, profile!.id, new Date());
+  // Nothing overdue any more — the draft shouldn't be served at all.
+  if (!row) {
+    await db.from("notices").update({ status: "cancelled" }).eq("id", noticeId);
+    revalidatePath("/admin/notices");
+    revalidatePath(`/admin/notices/${noticeId}`);
+    return;
+  }
+
+  await db
+    .from("notices")
+    .update({
+      title: row.title,
+      body: row.body,
+      amount_cents: row.amount_cents,
+      cure_by: row.cure_by,
+    })
+    .eq("id", noticeId);
+
+  revalidatePath("/admin/notices");
+  revalidatePath(`/admin/notices/${noticeId}`);
+}
+
+/**
  * Create a Notice of Lease Violation (Demand to Comply) for a unit — a custom
  * violation description with a cure deadline. Opens as a draft to review, print,
  * and serve; flows into the case file.

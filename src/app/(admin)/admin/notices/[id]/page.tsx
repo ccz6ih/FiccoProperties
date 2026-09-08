@@ -6,6 +6,7 @@ import { PrintButton } from "@/components/print-button";
 import { NoticeStatusControl } from "@/components/notice-status-control";
 import { NoticeEmailButton } from "@/components/notice-email-button";
 import { setNoticeServed } from "@/app/(admin)/admin/notices/actions";
+import { rebuildDemandDraft } from "@/app/(admin)/admin/delinquency/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NOTICE_LABELS, type NoticeType } from "@/lib/notice-template";
 import { formatCents, formatDate } from "@/lib/format";
@@ -123,6 +124,26 @@ export default async function NoticeDetail({
             <PrintButton />
           </div>
         </div>
+
+        {/* A draft's text is frozen at creation, so it goes stale when a
+            payment lands or a fee is added. Offer a rebuild before serving. */}
+        {notice.status === "draft" && notice.type === "pay_or_quit" && !notice.served_at && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay bg-sand/40 px-5 py-3 print:hidden">
+            <p className="text-sm text-ink-soft">
+              This draft was written {formatDate(notice.created_at)}. If a payment has come in or a
+              late fee has changed since, rebuild it before you serve it.
+            </p>
+            <form action={rebuildDemandDraft}>
+              <input type="hidden" name="notice_id" value={notice.id} />
+              <button
+                type="submit"
+                className="whitespace-nowrap rounded-lg border border-clay-deep bg-white px-3 py-1.5 text-sm font-medium text-ink hover:bg-sand"
+              >
+                Rebuild from today&apos;s balance
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Printable letter */}
         <div className="rounded-2xl border border-clay bg-white p-8 print:rounded-none print:border-0 print:p-0">
