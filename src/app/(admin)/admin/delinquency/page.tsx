@@ -40,6 +40,8 @@ type Delinquent = {
   unit: string;
   property: string;
   overdueCents: number;
+  /** Past-due RENT only — the base a late fee may lawfully be calculated on. */
+  rentOverdueCents: number;
   /** Rent (non-late-fee) charge ids, so rent that isn't owed can be written off. */
   rentChargeIds: string[];
   /** What actually makes up the balance — one line per unpaid charge. */
@@ -77,11 +79,16 @@ export default async function AdminDelinquency() {
   const occByUnit = new Map<string, { tenant_name: string | null; tenant_email: string | null }>();
   for (const o of occRows ?? []) occByUnit.set(o.unit_id, o);
 
-  // Active late fees by unit, so they can be removed (e.g. the check turned up).
-  const lateFeeByUnit = new Map<string, { id: string; amountCents: number }>();
+  // Every outstanding late fee per unit, so they can be removed individually
+  // (e.g. the check turned up). A tenant who pays rent late two months running
+  // and never clears the fees carries more than one, so this is a list — a
+  // single-value map silently hid all but the last.
+  const lateFeesByUnit = new Map<string, { id: string; amountCents: number; dueDate: string | null }[]>();
   for (const c of charges ?? []) {
     if (c.unit_id && (c.description ?? "").toLowerCase().includes("late fee")) {
-      lateFeeByUnit.set(c.unit_id, { id: c.id, amountCents: c.amount_cents });
+      const list = lateFeesByUnit.get(c.unit_id) ?? [];
+      list.push({ id: c.id, amountCents: c.amount_cents, dueDate: c.due_date });
+      lateFeesByUnit.set(c.unit_id, list);
     }
   }
 
@@ -143,7 +150,10 @@ export default async function AdminDelinquency() {
     if (cur) {
       cur.overdueCents += c.amount_cents;
       cur.count += 1;
-      if (!(c.description ?? "").toLowerCase().includes("late fee")) cur.rentChargeIds.push(c.id);
+      if (!(c.description ?? "").toLowerCase().includes("late fee")) {
+        cur.rentChargeIds.push(c.id);
+        cur.rentOverdueCents += c.amount_cents;
+      }
       cur.items.push({
         description: c.description ?? "Charge",
         amountCents: c.amount_cents,
@@ -161,6 +171,9 @@ export default async function AdminDelinquency() {
         unit: c.units?.label ?? "—",
         property: c.units?.properties?.name ?? "—",
         overdueCents: c.amount_cents,
+        rentOverdueCents: (c.description ?? "").toLowerCase().includes("late fee")
+          ? 0
+          : c.amount_cents,
         rentChargeIds: (c.description ?? "").toLowerCase().includes("late fee") ? [] : [c.id],
         items: [
           { description: c.description ?? "Charge", amountCents: c.amount_cents, dueDate: c.due_date! },
@@ -239,10 +252,12 @@ export default async function AdminDelinquency() {
               </thead>
               <tbody className="divide-y divide-clay">
                 {rows.map((r) => {
-                  const suggested = Math.round(r.overdueCents * 0.05);
-                  const cap = lateFeeCapCents(r.overdueCents);
+                  // C.R.S. 38-12-105 caps the fee against past-due RENT. Using
+                  // the whole balance would charge a late fee on a late fee.
+                  const suggested = Math.round(r.rentOverdueCents * 0.05);
+                  const cap = lateFeeCapCents(r.rentOverdueCents);
                   const daysLate = daysBetween(r.oldestDue, today);
-                  const existingLateFee = r.unitId ? lateFeeByUnit.get(r.unitId) ?? null : null;
+                  const lateFees = r.unitId ? lateFeesByUnit.get(r.unitId) ?? [] : [];
                   const href = r.residentId
                     ? `/admin/residents/${r.residentId}`
                     : r.unitId
@@ -313,26 +328,35 @@ export default async function AdminDelinquency() {
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        {existingLateFee ? (
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-terracotta/15 px-2 py-0.5 text-xs font-medium text-terracotta-dark">
-                              {formatCents(existingLateFee.amountCents)} fee
-                            </span>
-                            <form action={voidLateFee}>
-                              <input type="hidden" name="charge_id" value={existingLateFee.id} />
-                              <button className="text-xs font-medium text-pine hover:underline">Remove</button>
-                            </form>
-                          </div>
-                        ) : (
-                          <LateFeeForm
-                            residentId={r.residentId}
-                            leaseId={r.leaseId}
-                            unitId={r.unitId}
-                            overdueCents={r.overdueCents}
-                            suggestedCents={suggested}
-                            capCents={cap}
-                          />
-                        )}
+                        {/* Every unpaid fee is listed — one per month they were
+                            late — and adding this month's stays available even
+                            while an older one is still outstanding. */}
+                        <div className="space-y-1.5">
+                          {lateFees.map((f) => (
+                            <div key={f.id} className="flex items-center gap-2">
+                              <span className="whitespace-nowrap rounded-full bg-terracotta/15 px-2 py-0.5 text-xs font-medium text-terracotta-dark">
+                                {formatCents(f.amountCents)} fee
+                                {f.dueDate ? ` · ${formatDate(f.dueDate)}` : ""}
+                              </span>
+                              <form action={voidLateFee}>
+                                <input type="hidden" name="charge_id" value={f.id} />
+                                <button className="text-xs font-medium text-pine hover:underline">
+                                  Remove
+                                </button>
+                              </form>
+                            </div>
+                          ))}
+                          {r.rentOverdueCents > 0 && (
+                            <LateFeeForm
+                              residentId={r.residentId}
+                              leaseId={r.leaseId}
+                              unitId={r.unitId}
+                              overdueCents={r.rentOverdueCents}
+                              suggestedCents={suggested}
+                              capCents={cap}
+                            />
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end gap-3">
