@@ -383,6 +383,7 @@ export async function rebuildDemandDraft(form: FormData) {
       body: row.body,
       amount_cents: row.amount_cents,
       cure_by: row.cure_by,
+      rebuilt_at: new Date().toISOString(),
     })
     .eq("id", noticeId);
 

@@ -42,6 +42,8 @@ type Delinquent = {
   overdueCents: number;
   /** Rent (non-late-fee) charge ids, so rent that isn't owed can be written off. */
   rentChargeIds: string[];
+  /** What actually makes up the balance — one line per unpaid charge. */
+  items: { description: string; amountCents: number; dueDate: string }[];
   /** Nobody lives here any more — usually why the rent isn't actually owed. */
   movedOut: boolean;
   count: number;
@@ -142,6 +144,11 @@ export default async function AdminDelinquency() {
       cur.overdueCents += c.amount_cents;
       cur.count += 1;
       if (!(c.description ?? "").toLowerCase().includes("late fee")) cur.rentChargeIds.push(c.id);
+      cur.items.push({
+        description: c.description ?? "Charge",
+        amountCents: c.amount_cents,
+        dueDate: c.due_date!,
+      });
       if (c.due_date! < cur.oldestDue) cur.oldestDue = c.due_date!;
     } else {
       byUnit.set(key, {
@@ -155,6 +162,9 @@ export default async function AdminDelinquency() {
         property: c.units?.properties?.name ?? "—",
         overdueCents: c.amount_cents,
         rentChargeIds: (c.description ?? "").toLowerCase().includes("late fee") ? [] : [c.id],
+        items: [
+          { description: c.description ?? "Charge", amountCents: c.amount_cents, dueDate: c.due_date! },
+        ],
         movedOut: !!c.unit_id && !occByUnit.has(c.unit_id),
         count: 1,
         oldestDue: c.due_date!,
@@ -273,9 +283,22 @@ export default async function AdminDelinquency() {
                       </td>
                       <td className="px-5 py-3 font-semibold text-terracotta-dark">
                         {formatCents(r.overdueCents)}
-                        <span className="ml-1 text-xs font-normal text-ink-faint">
-                          ({r.count})
-                        </span>
+                        {/* A single figure hides the story when the balance spans
+                            months — an old late fee plus this month's rent reads
+                            as one big debt dated to the older one. Break it out. */}
+                        {r.items.length > 1 && (
+                          <ul className="mt-1 space-y-0.5 text-[11px] font-normal text-ink-faint">
+                            {r.items
+                              .slice()
+                              .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+                              .map((it, i) => (
+                                <li key={i}>
+                                  {formatCents(it.amountCents)} · {it.description} ·{" "}
+                                  {formatDate(it.dueDate)}
+                                </li>
+                              ))}
+                          </ul>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-ink-soft">{formatDate(r.oldestDue)}</td>
                       <td className="px-5 py-3">

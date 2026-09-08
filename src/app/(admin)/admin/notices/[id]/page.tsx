@@ -25,6 +25,7 @@ type NoticeRow = {
   served_email: string | null;
   status: string;
   created_at: string;
+  rebuilt_at: string | null;
   profiles: { full_name: string | null; email: string | null } | null;
   units: {
     label: string;
@@ -60,7 +61,7 @@ export default async function NoticeDetail({
   const { data: notice } = await supabase
     .from("notices")
     .select(
-      "id, type, title, body, unit_id, amount_cents, cure_by, served_at, served_method, served_email, status, created_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
+      "id, type, title, body, unit_id, amount_cents, cure_by, served_at, served_method, served_email, status, created_at, rebuilt_at, profiles:resident_id(full_name, email), units(label, properties(name, address_line1, city, state, postal_code))"
     )
     .eq("id", id)
     .maybeSingle()
@@ -108,6 +109,11 @@ export default async function NoticeDetail({
   const noticeDate = formatDate(notice.created_at);
   const typeLabel = NOTICE_LABELS[notice.type as NoticeType] ?? notice.type;
   const today = new Date().toISOString().slice(0, 10);
+  // "Rebuilt today" is the reassurance that the button did something, even
+  // when the regenerated figures came back the same.
+  const rebuiltOn = notice.rebuilt_at ? notice.rebuilt_at.slice(0, 10) : null;
+  const isCurrent = rebuiltOn === today;
+  const rebuiltLabel = isCurrent ? "today" : rebuiltOn ? formatDate(rebuiltOn) : "";
 
   return (
     <main className="min-h-dvh bg-cream py-10 print:bg-white print:py-0">
@@ -126,12 +132,30 @@ export default async function NoticeDetail({
         </div>
 
         {/* A draft's text is frozen at creation, so it goes stale when a
-            payment lands or a fee is added. Offer a rebuild before serving. */}
+            payment lands or a fee is added. Offer a rebuild before serving —
+            and say plainly when it was last rebuilt, since the figures often
+            come back identical and silence reads as a broken button. */}
         {notice.status === "draft" && notice.type === "pay_or_quit" && !notice.served_at && (
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-clay bg-sand/40 px-5 py-3 print:hidden">
+          <div
+            className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-3 print:hidden ${
+              isCurrent ? "border-pine/30 bg-pine/5" : "border-clay bg-sand/40"
+            }`}
+          >
             <p className="text-sm text-ink-soft">
-              This draft was written {formatDate(notice.created_at)}. If a payment has come in or a
-              late fee has changed since, rebuild it before you serve it.
+              {isCurrent ? (
+                <>
+                  <span className="font-medium text-pine">✓ Up to date</span> — rebuilt{" "}
+                  {rebuiltLabel} from this home&apos;s balance, demanding{" "}
+                  <strong className="text-ink">{formatCents(notice.amount_cents ?? 0)}</strong> by{" "}
+                  {notice.cure_by ? formatDate(notice.cure_by) : "—"}.
+                </>
+              ) : (
+                <>
+                  This draft was written {formatDate(notice.created_at)}
+                  {notice.rebuilt_at ? ` and last rebuilt ${formatDate(notice.rebuilt_at)}` : ""}. If
+                  a payment has come in or a late fee has changed since, rebuild it before serving.
+                </>
+              )}
             </p>
             <form action={rebuildDemandDraft}>
               <input type="hidden" name="notice_id" value={notice.id} />
@@ -139,7 +163,7 @@ export default async function NoticeDetail({
                 type="submit"
                 className="whitespace-nowrap rounded-lg border border-clay-deep bg-white px-3 py-1.5 text-sm font-medium text-ink hover:bg-sand"
               >
-                Rebuild from today&apos;s balance
+                {isCurrent ? "Rebuild again" : "Rebuild from today's balance"}
               </button>
             </form>
           </div>
