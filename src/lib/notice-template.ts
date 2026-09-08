@@ -36,7 +36,8 @@ export type NoticeData = {
   fullAddress?: string | null;
   city?: string | null;
   county?: string | null;
-  amount?: string | number | null; // dollars (past due)
+  amount?: string | number | null; // dollars (past due RENT — what the demand demands)
+  lateFees?: string | number | null; // dollars of late fees on the account (informational only)
   monthlyRent?: string | number | null; // dollars
   missedDates?: string | null; // e.g. "Jun 1, 2026, Jul 1, 2026"
   period?: string | null; // e.g. "July 2026"
@@ -72,6 +73,15 @@ export function buildNotice(
   const county = data.county?.trim() || "";
   const amount = money(data.amount);
   const rent = money(data.monthlyRent);
+  // Late fees are stated for the tenant's information but never demanded —
+  // see the pay_or_quit body for why.
+  const lateFeeNum = Number(data.lateFees ?? 0);
+  const hasLateFees = Number.isFinite(lateFeeNum) && lateFeeNum > 0;
+  const lateFees = money(lateFeeNum);
+  const rentNum = Number(data.amount ?? 0);
+  const accountTotal = money(
+    Number.isFinite(rentNum) && hasLateFees ? rentNum + lateFeeNum : rentNum
+  );
   const missed = data.missedDates?.trim() || "";
   const period = data.period?.trim() || "the current period";
   const due = data.dueDate?.trim() || "the due date";
@@ -117,8 +127,20 @@ The rent for the premises is ${rent} per month.
 
 GROUNDS: You are in default for non-payment of rent. Past rent due: ${amount}${missed ? `, for payment(s) due on: ${missed}` : ` for ${period}`}.
 
-NOTE — RENT ONLY: The amount demanded above is RENT only. Any late fees on your account are billed separately and are NOT included in — and are NOT required to satisfy — this demand. Under Colorado law (C.R.S. § 38-12-105), late fees cannot be grounds for eviction.
+NOTE — RENT ONLY: The amount demanded above is RENT only. Paying ${amount} in certified funds on or before ${cure} fully satisfies this notice.
+${
+  hasLateFees
+    ? `
+WHAT YOUR ACCOUNT SHOWS (for your information — NOT part of this demand):
+      Past-due rent (demanded above) ....... ${amount}
+      Late fee(s) on your account .......... ${lateFees}
+      TOTAL ACCOUNT BALANCE ................ ${accountTotal}
 
+The late fee(s) shown above are still owed to the Landlord as a debt under your lease, and paying the total balance will bring your account fully current. However, they are NOT included in — and are NOT required to satisfy — this demand. Under Colorado law (C.R.S. § 38-12-105), late fees cannot be grounds for eviction, and your right to stay in the premises depends only on paying the RENT demanded above.
+`
+    : `Any late fees on your account are billed separately and are NOT included in — and are NOT required to satisfy — this demand. Under Colorado law (C.R.S. § 38-12-105), late fees cannot be grounds for eviction.
+`
+}
 TIME TO COMPLY: Within TEN (10) DAYS after this notice is served on you — on or before ${cure} — you must either:
   (1) pay the full past-due amount stated above in certified funds, OR
   (2) move out and return possession of the premises to the Landlord.

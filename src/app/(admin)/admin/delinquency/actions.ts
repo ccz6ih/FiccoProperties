@@ -246,6 +246,12 @@ async function buildDemandForUnit(
   );
   if (overdue.length === 0) return null;
 
+  // Late fees still outstanding — shown on the notice as information so the
+  // tenant can see their whole balance, never added to what's demanded.
+  const lateFeeCents = (charges ?? [])
+    .filter((c) => (c.description ?? "").toLowerCase().includes("late fee"))
+    .reduce((s, c) => s + c.amount_cents, 0);
+
   const pastDueCents = overdue.reduce((s, c) => s + c.amount_cents, 0);
   const missedDates = overdue
     .map((c) => (c.due_date ? formatDate(c.due_date) : null))
@@ -267,6 +273,7 @@ async function buildDemandForUnit(
     city: p?.city,
     county: "Jefferson",
     amount: pastDueCents / 100,
+    lateFees: lateFeeCents / 100,
     monthlyRent: (occ?.rent_cents ?? 0) / 100,
     missedDates,
     cureBy: formatDate(cureIso),
