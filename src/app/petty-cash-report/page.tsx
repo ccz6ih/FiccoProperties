@@ -19,6 +19,7 @@ type EntryRow = {
   staff_id: string;
   kind: string;
   occurred_on: string;
+  created_at: string | null;
   store: string | null;
   description: string | null;
   category: string | null;
@@ -85,11 +86,12 @@ export default async function PettyCashReport({
       let q = db
         .from("petty_cash_entries")
         .select(
-          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
+          "id, staff_id, kind, occurred_on, created_at, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
         )
         .gte("occurred_on", from)
         .lte("occurred_on", to)
-        .order("occurred_on", { ascending: true });
+        .order("occurred_on", { ascending: true })
+        .order("created_at", { ascending: true });
       if (staffId) q = q.eq("staff_id", staffId);
       return q.returns<EntryRow[]>();
     })(),
@@ -112,11 +114,42 @@ export default async function PettyCashReport({
       const bp = placeOf(b);
       if (ap !== bp) return ap.localeCompare(bp);
     }
-    return a.occurred_on.localeCompare(b.occurred_on);
+    // Same-day entries need a tiebreak, or the order drifts between the screen,
+    // the print-out, and the CSV — which is what makes a re-export look wrong.
+    if (a.occurred_on !== b.occurred_on) return a.occurred_on.localeCompare(b.occurred_on);
+    return (a.created_at ?? "").localeCompare(b.created_at ?? "") || a.id.localeCompare(b.id);
   });
 
   const receivedCents = entries.filter((e) => e.kind === "topup").reduce((s, e) => s + e.amount_cents, 0);
   const spentCents = entries.filter((e) => e.kind === "expense").reduce((s, e) => s + e.amount_cents, 0);
+
+  // What was already in the tin when this window opened. Without it a range
+  // that starts after the last top-up reads as a pure loss — the money Lou
+  // handed over on the 2nd simply vanishes from a report starting the 3rd.
+  // Same envelope/place filters, so the balance matches what's listed.
+  const openingCents = await (async () => {
+    let q = db
+      .from("petty_cash_entries")
+      .select("kind, amount_cents, unit:unit_id(properties(name)), property:property_id(name)")
+      .lt("occurred_on", from);
+    if (staffId) q = q.eq("staff_id", staffId);
+    const { data } = await q.returns<
+      {
+        kind: string;
+        amount_cents: number;
+        unit: { properties: { name: string | null } | null } | null;
+        property: { name: string | null } | null;
+      }[]
+    >();
+    return (data ?? [])
+      .filter((e) =>
+        placeName
+          ? (e.unit?.properties?.name ?? e.property?.name ?? "Unassigned") === placeName
+          : true
+      )
+      .reduce((sum, e) => sum + (e.kind === "topup" ? e.amount_cents : -e.amount_cents), 0);
+  })();
+  const closingCents = openingCents + receivedCents - spentCents;
 
   // Sign every receipt page.
   const admin = createAdminClient();
@@ -265,10 +298,24 @@ export default async function PettyCashReport({
           </div>
 
           {/* Summary */}
-          <div className="mb-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-clay bg-clay">
+          <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-clay bg-clay sm:grid-cols-4">
+            <Summary label={`In hand ${formatDate(from)}`} value={formatCents(openingCents)} />
             <Summary label="Cash received" value={formatCents(receivedCents)} />
             <Summary label="Spent" value={formatCents(spentCents)} />
-            <Summary label="Net" value={formatCents(receivedCents - spentCents)} />
+            <Summary
+              label={closingCents < 0 ? "Owed back to envelope" : "In hand at the end"}
+              value={formatCents(Math.abs(closingCents))}
+              tone={closingCents < 0 ? "debt" : "normal"}
+            />
+          </div>
+
+          <div className="mb-6 -mt-4 text-center text-xs text-ink-faint print:mb-4">
+            {formatCents(openingCents)} in hand on {formatDate(from)} + {formatCents(receivedCents)}{" "}
+            received − {formatCents(spentCents)} spent ={" "}
+            <strong className="text-ink-soft">{formatCents(closingCents)}</strong>
+            {closingCents < 0
+              ? " — the envelope is out of pocket by this much and is owed it back."
+              : " left in the envelope."}
           </div>
 
           {/* Log */}
@@ -368,11 +415,25 @@ export default async function PettyCashReport({
   );
 }
 
-function Summary({ label, value }: { label: string; value: string }) {
+function Summary({
+  label,
+  value,
+  tone = "normal",
+}: {
+  label: string;
+  value: string;
+  tone?: "normal" | "debt";
+}) {
   return (
     <div className="bg-white p-4 text-center">
       <div className="text-xs text-ink-faint">{label}</div>
-      <div className="mt-0.5 font-display text-xl font-semibold text-ink">{value}</div>
+      <div
+        className={`mt-0.5 font-display text-xl font-semibold ${
+          tone === "debt" ? "text-terracotta-dark" : "text-ink"
+        }`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
