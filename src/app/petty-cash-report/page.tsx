@@ -281,19 +281,19 @@ export default async function PettyCashReport({
 
         <div className="rounded-2xl border border-clay bg-white p-8 print:rounded-none print:border-0 print:p-0">
           {/* Letterhead */}
-          <div className="mb-6 flex items-start justify-between border-b border-clay pb-5">
+          <div className="mb-7 flex items-start justify-between border-b-2 border-clay-deep pb-5">
             <div>
-              <div className="font-display text-2xl font-semibold text-pine">38th Ave Properties</div>
-              <div className="text-sm text-ink-soft">
+              <div className="font-display text-3xl font-semibold text-pine">38th Ave Properties</div>
+              <div className="mt-0.5 text-base text-ink-soft">
                 Petty cash report · {staffName}
                 {placeName ? ` · ${placeName}` : ""}
               </div>
             </div>
-            <div className="text-right text-sm text-ink-soft">
-              <div className="font-medium text-ink">
+            <div className="text-right text-ink-soft">
+              <div className="text-lg font-semibold text-ink">
                 {formatDate(from)} – {formatDate(to)}
               </div>
-              <div className="text-xs text-ink-faint">{entries.length} entries</div>
+              <div className="text-sm text-ink-faint">{entries.length} entries</div>
             </div>
           </div>
 
@@ -309,7 +309,7 @@ export default async function PettyCashReport({
             />
           </div>
 
-          <div className="mb-6 -mt-4 text-center text-xs text-ink-faint print:mb-4">
+          <div className="mb-7 -mt-4 text-center text-sm text-ink-soft print:mb-5">
             {formatCents(openingCents)} in hand on {formatDate(from)} + {formatCents(receivedCents)}{" "}
             received − {formatCents(spentCents)} spent ={" "}
             <strong className="text-ink-soft">{formatCents(closingCents)}</strong>
@@ -320,55 +320,87 @@ export default async function PettyCashReport({
 
           {/* Log */}
           {entries.length > 0 ? (
-            <table className="w-full text-sm">
+            <table className="w-full text-base">
               <thead>
-                <tr className="border-b border-clay text-left text-xs uppercase tracking-wide text-ink-faint">
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 pr-3 font-medium">Envelope</th>
-                  <th className="py-2 pr-3 font-medium">Details</th>
-                  <th className="py-2 pr-3 font-medium">Where</th>
-                  <th className="py-2 text-right font-medium">Amount</th>
+                <tr className="border-b-2 border-clay-deep text-left text-xs uppercase tracking-wider text-ink-soft">
+                  <th className="py-2.5 pr-3 font-semibold">Date</th>
+                  <th className="py-2.5 pr-3 font-semibold">Envelope</th>
+                  <th className="py-2.5 pr-3 font-semibold">Details</th>
+                  <th className="py-2.5 pr-3 font-semibold">Where</th>
+                  <th className="py-2.5 text-right font-semibold">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e) => {
                   const topup = e.kind === "topup";
                   return (
-                    <tr key={e.id} className="border-b border-clay/60 align-top">
-                      <td className="py-2 pr-3 text-ink-soft">{formatDate(e.occurred_on)}</td>
-                      <td className="py-2 pr-3 text-ink-soft">{e.staff?.full_name ?? "—"}</td>
-                      <td className="py-2 pr-3 text-ink">
+                    <tr key={e.id} className="border-b border-clay align-top">
+                      <td className="whitespace-nowrap py-3 pr-3 text-ink-soft">{formatDate(e.occurred_on)}</td>
+                      <td className="py-3 pr-3 text-ink-soft">{e.staff?.full_name ?? "—"}</td>
+                      <td className="py-3 pr-3 font-medium text-ink">
                         {topup ? `Cash received${e.store ? ` from ${e.store}` : ""}` : e.store ?? e.description ?? "Expense"}
-                        <div className="text-xs text-ink-faint">
+                        <div className="mt-0.5 text-sm font-normal text-ink-faint">
                           {[topup ? null : e.category, topup ? e.description : e.description,
                             e.receipt_total_cents != null && e.receipt_total_cents !== e.amount_cents
                               ? `receipt ${formatCents(e.receipt_total_cents)}` : null]
                             .filter(Boolean).join(" · ")}
                         </div>
                       </td>
-                      <td className="py-2 pr-3 text-ink-soft">{topup ? "—" : where(e)}</td>
-                      <td className={`py-2 text-right font-medium ${topup ? "text-pine" : "text-ink"}`}>
+                      <td className="py-3 pr-3 text-ink-soft">{topup ? "—" : where(e)}</td>
+                      <td className={`whitespace-nowrap py-3 text-right text-lg font-semibold tabular-nums ${topup ? "text-pine" : "text-ink"}`}>
                         {topup ? "+" : "−"}{formatCents(e.amount_cents)}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
+              {/* The page ends on the number, so a printed copy doesn't need
+                  the reader to scroll back up to the tiles. */}
+              <tfoot>
+                <tr className="border-t-2 border-clay-deep">
+                  <td colSpan={4} className="py-3 pr-3 text-right font-semibold text-ink">
+                    Received this period
+                  </td>
+                  <td className="whitespace-nowrap py-3 text-right text-lg font-semibold tabular-nums text-pine">
+                    +{formatCents(receivedCents)}
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan={4} className="py-1 pr-3 text-right font-semibold text-ink">
+                    Spent this period
+                  </td>
+                  <td className="whitespace-nowrap py-1 text-right text-lg font-semibold tabular-nums text-ink">
+                    −{formatCents(spentCents)}
+                  </td>
+                </tr>
+                <tr className="border-t border-clay">
+                  <td colSpan={4} className="py-3 pr-3 text-right font-display text-lg font-semibold text-ink">
+                    {closingCents < 0 ? "Owed back to envelope" : "Left in the envelope"}
+                  </td>
+                  <td
+                    className={`whitespace-nowrap py-3 text-right font-display text-2xl font-semibold tabular-nums ${
+                      closingCents < 0 ? "text-terracotta-dark" : "text-ink"
+                    }`}
+                  >
+                    {formatCents(Math.abs(closingCents))}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           ) : (
-            <p className="py-8 text-center text-sm text-ink-soft">No entries in this period.</p>
+            <p className="py-8 text-center text-base text-ink-soft">No entries in this period.</p>
           )}
 
           {/* Receipt images */}
           {receiptsByEntry.size > 0 && (
             <div className="mt-8 border-t border-clay pt-6">
-              <h2 className="mb-4 font-display text-lg font-semibold text-ink">Receipts</h2>
+              <h2 className="mb-4 font-display text-xl font-semibold text-ink">Receipts</h2>
               <div className="space-y-6">
                 {entries
                   .filter((e) => receiptsByEntry.has(e.id))
                   .map((e) => (
                     <div key={e.id} className="break-inside-avoid">
-                      <div className="mb-2 text-sm font-medium text-ink">
+                      <div className="mb-2 text-base font-medium text-ink">
                         {formatDate(e.occurred_on)} · {e.store ?? "Expense"} ·{" "}
                         {formatCents(e.amount_cents)}
                         <span className="text-ink-faint"> — {e.staff?.full_name ?? ""}</span>
@@ -425,10 +457,10 @@ function Summary({
   tone?: "normal" | "debt";
 }) {
   return (
-    <div className="bg-white p-4 text-center">
-      <div className="text-xs text-ink-faint">{label}</div>
+    <div className="bg-white px-4 py-5 text-center">
+      <div className="text-xs font-medium uppercase tracking-wide text-ink-faint">{label}</div>
       <div
-        className={`mt-0.5 font-display text-xl font-semibold ${
+        className={`mt-1 font-display text-2xl font-semibold tabular-nums ${
           tone === "debt" ? "text-terracotta-dark" : "text-ink"
         }`}
       >
