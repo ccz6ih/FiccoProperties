@@ -6,7 +6,7 @@ import { PrintButton } from "@/components/print-button";
 import { NoticeStatusControl } from "@/components/notice-status-control";
 import { NoticeEmailButton } from "@/components/notice-email-button";
 import { setNoticeServed } from "@/app/(admin)/admin/notices/actions";
-import { rebuildDemandDraft } from "@/app/(admin)/admin/delinquency/actions";
+import { rebuildDemandDraft, deleteNoticeDraft } from "@/app/(admin)/admin/delinquency/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NOTICE_LABELS, type NoticeType } from "@/lib/notice-template";
 import { formatCents, formatDate } from "@/lib/format";
@@ -127,6 +127,18 @@ export default async function NoticeDetail({
           </Link>
           <div className="flex items-center gap-3">
             <StatusPill value={notice.status} />
+            {notice.status === "draft" && !notice.served_at && (
+              <form action={deleteNoticeDraft}>
+                <input type="hidden" name="notice_id" value={notice.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-clay-deep px-3 py-1.5 text-sm font-medium text-ink-faint hover:border-terracotta hover:text-terracotta-dark"
+                  title="Delete this draft — served notices can never be deleted"
+                >
+                  Delete draft
+                </button>
+              </form>
+            )}
             <PrintButton />
           </div>
         </div>
@@ -135,7 +147,9 @@ export default async function NoticeDetail({
             payment lands or a fee is added. Offer a rebuild before serving —
             and say plainly when it was last rebuilt, since the figures often
             come back identical and silence reads as a broken button. */}
-        {notice.status === "draft" && notice.type === "pay_or_quit" && !notice.served_at && (
+        {notice.status === "draft" &&
+          (notice.type === "pay_or_quit" || notice.type === "no_fault_late") &&
+          !notice.served_at && (
           <div
             className={`mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-3 print:hidden ${
               isCurrent ? "border-pine/30 bg-pine/5" : "border-clay bg-sand/40"
@@ -145,9 +159,17 @@ export default async function NoticeDetail({
               {isCurrent ? (
                 <>
                   <span className="font-medium text-pine">✓ Up to date</span> — rebuilt{" "}
-                  {rebuiltLabel} from this home&apos;s balance, demanding{" "}
-                  <strong className="text-ink">{formatCents(notice.amount_cents ?? 0)}</strong> by{" "}
-                  {notice.cure_by ? formatDate(notice.cure_by) : "—"}.
+                  {rebuiltLabel} from this home&apos;s record
+                  {notice.amount_cents ? (
+                    <>
+                      , demanding{" "}
+                      <strong className="text-ink">{formatCents(notice.amount_cents)}</strong>
+                    </>
+                  ) : null}{" "}
+                  {notice.cure_by
+                    ? `· ${notice.type === "no_fault_late" ? "move out by" : "cure by"} ${formatDate(notice.cure_by)}`
+                    : ""}
+                  .
                 </>
               ) : (
                 <>

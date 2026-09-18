@@ -366,12 +366,18 @@ export async function rebuildDemandDraft(form: FormData) {
       served_at: string | null;
     }>();
   if (!notice?.unit_id) return;
-  if (notice.type !== "pay_or_quit" || notice.status !== "draft" || notice.served_at) return;
+  if (notice.status !== "draft" || notice.served_at) return;
+  if (notice.type !== "pay_or_quit" && notice.type !== "no_fault_late") return;
 
-  const row = await buildDemandForUnit(db, notice.unit_id, profile!.id, new Date());
+  const row =
+    notice.type === "no_fault_late"
+      ? await buildNoFaultForUnit(db, notice.unit_id, profile!.id, new Date())
+      : await buildDemandForUnit(db, notice.unit_id, profile!.id, new Date());
   // Nothing overdue any more — they paid, so the draft shouldn't be served.
   if (!row) {
-    await db.from("notices").update({ status: "cured" }).eq("id", noticeId);
+    if (notice.type === "pay_or_quit") {
+      await db.from("notices").update({ status: "cured" }).eq("id", noticeId);
+    }
     revalidatePath("/admin/notices");
     revalidatePath(`/admin/notices/${noticeId}`);
     return;
@@ -382,7 +388,8 @@ export async function rebuildDemandDraft(form: FormData) {
     .update({
       title: row.title,
       body: row.body,
-      amount_cents: row.amount_cents,
+      // A no-fault termination demands nothing, so it carries no amount.
+      ...("amount_cents" in row ? { amount_cents: row.amount_cents } : {}),
       cure_by: row.cure_by,
       rebuilt_at: new Date().toISOString(),
     })
@@ -390,6 +397,35 @@ export async function rebuildDemandDraft(form: FormData) {
 
   revalidatePath("/admin/notices");
   revalidatePath(`/admin/notices/${noticeId}`);
+}
+
+/**
+ * Delete a DRAFT notice. Drafts are working paper — a wrong pick, a duplicate,
+ * one built against an older template — and leaving them to clutter the list
+ * invites serving the wrong one. A notice that has been served is a legal
+ * record: those are never deleted, only marked withdrawn.
+ */
+export async function deleteNoticeDraft(form: FormData) {
+  const { profile } = await requireProfile("/admin/notices");
+  if (!isStaff(profile)) return;
+
+  const noticeId = (form.get("notice_id") as string)?.trim();
+  if (!noticeId) return;
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: notice } = await db
+    .from("notices")
+    .select("id, status, served_at")
+    .eq("id", noticeId)
+    .maybeSingle<{ id: string; status: string; served_at: string | null }>();
+  if (!notice || notice.status !== "draft" || notice.served_at) return;
+
+  await db.from("notices").delete().eq("id", noticeId);
+
+  revalidatePath("/admin/notices");
+  redirect("/admin/notices");
 }
 
 /**
@@ -609,7 +645,31 @@ export async function createNoFaultNotice(form: FormData) {
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
-  const now = new Date();
+  const row = await buildNoFaultForUnit(db, unitId, profile!.id, new Date());
+  if (!row) return;
+
+  const { data: notice, error } = await db
+    .from("notices")
+    .insert(row)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error || !notice) return;
+
+  revalidatePath("/admin/notices");
+  redirect(`/admin/notices/${notice.id}`);
+}
+
+/**
+ * Build the 90-day no-fault row for a unit. Shared by the create action and by
+ * a rebuild, so a draft regenerated later is identical to a fresh one — that
+ * is how a notice written against an older template catches up.
+ */
+async function buildNoFaultForUnit(
+  db: SupabaseClient,
+  unitId: string,
+  createdBy: string,
+  now: Date
+) {
   const todayIso = now.toISOString().slice(0, 10);
 
   const [{ data: unit }, { data: occ }, { data: demands }] = await Promise.all([
@@ -662,23 +722,14 @@ export async function createNoFaultNotice(form: FormData) {
     today: formatDate(todayIso),
   });
 
-  const { data: notice, error } = await db
-    .from("notices")
-    .insert({
-      resident_id: occ?.occupant_profile_id ?? null,
-      unit_id: unitId,
-      type: "no_fault_late",
-      title,
-      body,
-      cure_by: moveOutIso,
-      status: "draft",
-      created_by: profile!.id,
-    })
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (error || !notice) return;
-
-  revalidatePath("/admin/notices");
-  redirect(`/admin/notices/${notice.id}`);
+  return {
+    resident_id: occ?.occupant_profile_id ?? null,
+    unit_id: unitId,
+    type: "no_fault_late",
+    title,
+    body,
+    cure_by: moveOutIso,
+    status: "draft",
+    created_by: createdBy,
+  };
 }
