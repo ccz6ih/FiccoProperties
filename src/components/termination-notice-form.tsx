@@ -4,7 +4,15 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui";
 import { createTerminationNotice } from "@/app/(admin)/admin/delinquency/actions";
 
-export type TermUnit = { id: string; label: string; property: string; tenant: string };
+export type TermUnit = {
+  id: string;
+  label: string;
+  property: string;
+  tenant: string;
+  /** Whole months in the home. Omitted where tenure doesn't bear on the notice
+   *  (the violation form reuses this shape). */
+  monthsResident?: number | null;
+};
 
 const input =
   "w-full rounded-lg border border-clay-deep bg-white px-3 py-2 text-sm text-ink focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30";
@@ -30,6 +38,13 @@ export function TerminationNoticeForm({
   const [moveOut, setMoveOut] = useState(isoDaysOut(DAYS.repeat));
   const [touchedDate, setTouchedDate] = useState(false);
 
+  // C.R.S. 38-12-1302 (HB24-1098): past 12 months in the home, a tenancy can't
+  // be ended without cause outside the narrow exemptions — so say so here,
+  // against this tenant, rather than in small print at the foot of the page.
+  const chosen = units.find((u) => u.id === unitId) ?? null;
+  const months = chosen?.monthsResident ?? null;
+  const longTenured = months != null && months >= 12;
+
   const grounds = useMemo(
     () =>
       [
@@ -53,10 +68,32 @@ export function TerminationNoticeForm({
           {units.map((u) => (
             <option key={u.id} value={u.id}>
               {u.property} · {u.label} — {u.tenant}
+              {u.monthsResident != null ? ` (${u.monthsResident} mo)` : ""}
             </option>
           ))}
         </select>
+        <span className="block text-xs text-ink-faint">
+          {months == null
+            ? "No move-in date on file for this home — check the lease before relying on a notice period."
+            : `Resident ${months} month${months === 1 ? "" : "s"}.`}
+        </span>
       </label>
+
+      {ground === "nonrenewal" && longTenured && (
+        <div className="rounded-xl border-2 border-terracotta/40 bg-terracotta/5 px-4 py-3">
+          <div className="text-sm font-semibold text-terracotta-dark">
+            ⚠ This tenant has been here {months} months — a no-cause non-renewal likely isn&apos;t
+            available
+          </div>
+          <p className="mt-1 text-xs text-ink-soft">
+            Under C.R.S. § 38-12-1302 you can only end a tenancy without cause once someone has
+            lived there 12 months if the home is a short-term rental, employer-provided housing, or
+            a single-family/duplex/triplex where you live on site. None of the 38th Ave communities
+            fit that. Use the 90-day no-fault notice instead, or a violation ground above — and
+            check with your attorney before serving this.
+          </p>
+        </div>
+      )}
 
       <fieldset className="space-y-2">
         <span className="text-sm font-medium text-ink">Ground</span>

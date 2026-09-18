@@ -13,8 +13,19 @@ type OccRow = {
   unit_id: string;
   tenant_name: string | null;
   occupant_profile_id: string | null;
+  move_in_date: string | null;
   units: { label: string; properties: { name: string | null } | null } | null;
 };
+
+/** Whole months lived in the home — the C.R.S. 38-12-1302 12-month threshold. */
+function monthsResident(moveIn: string | null): number | null {
+  if (!moveIn) return null;
+  const start = new Date(`${moveIn}T00:00:00`);
+  const now = new Date();
+  let m = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) m -= 1;
+  return Math.max(0, m);
+}
 
 export default async function TerminateTenancy({
   searchParams,
@@ -30,7 +41,7 @@ export default async function TerminateTenancy({
 
   const { data: occ } = await db
     .from("unit_occupancy")
-    .select("unit_id, tenant_name, occupant_profile_id, units:unit_id(label, properties(name))")
+    .select("unit_id, tenant_name, occupant_profile_id, move_in_date, units:unit_id(label, properties(name))")
     .returns<OccRow[]>();
 
   const units: TermUnit[] = (occ ?? [])
@@ -40,6 +51,7 @@ export default async function TerminateTenancy({
       label: o.units?.label ?? "—",
       property: o.units?.properties?.name ?? "—",
       tenant: o.tenant_name ?? "—",
+      monthsResident: monthsResident(o.move_in_date),
     }))
     .sort((a, b) => a.property.localeCompare(b.property) || a.label.localeCompare(b.label, undefined, { numeric: true }));
 
