@@ -46,6 +46,16 @@ export type NoticeData = {
   moveOutDate?: string | null; // display string (move-out date) for termination notices
   demandCount?: number | null; // # of served demands on record
   demandDates?: string | null; // e.g. "May 9, 2026; Jun 9, 2026"
+  /** Month-by-month record of paying late — shown so the pattern is evidenced,
+   *  not merely asserted. */
+  lateHistory?: {
+    period: string;
+    dueDate: string;
+    paidDate: string | null;
+    daysLate: number;
+    feeCents: number;
+    stillOwed: boolean;
+  }[] | null;
   priorDemandDate?: string | null; // served date of the prior demand (repeat violation)
   reason?: string | null; // violation description / entry reason
   entryDate?: string | null;
@@ -69,6 +79,19 @@ function money(v: string | number | null | undefined): string {
     minimumFractionDigits: cents ? 2 : 0,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/** Notices are plain text, so line breaks are content, not markup. */
+const BREAK = String.fromCharCode(10);
+
+/** "Aug 14, 2026" — the form a notice reads best in. */
+function fmtDay(iso: string | null): string {
+  if (!iso) return "____________";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function buildNotice(
@@ -101,6 +124,28 @@ export function buildNotice(
   const priorDemand = data.priorDemandDate?.trim() || "____________";
   const reasonText = data.reason?.trim() || "[Describe the violation and which lease term or community rule was broken.]";
   const today = data.today?.trim() || "____________";
+
+  // A dated ledger of the months rent arrived late. Landlord-side it is the
+  // evidence behind "more than two"; tenant-side it shows exactly which months
+  // are being counted, so the claim can be checked rather than taken on trust.
+  const late = data.lateHistory ?? [];
+  const lateTable =
+    late.length > 0
+      ? `RECORD OF LATE RENT PAYMENTS (${late.length} month${late.length === 1 ? "" : "s"}):
+${late
+  .map((r) => {
+    const month = new Date(`${r.dueDate}T00:00:00`).toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+    const settled = r.stillOwed
+      ? `STILL UNPAID as of ${today} — ${r.daysLate} days past due`
+      : `paid ${fmtDay(r.paidDate)} — ${r.daysLate} days past due`;
+    const fee = r.feeCents > 0 ? `, late fee ${money(r.feeCents / 100)} charged` : "";
+    return `  • ${month}: rent due ${fmtDay(r.dueDate)}, ${settled}${fee}.`;
+  })
+  .join(BREAK)}`
+      : "";
 
   switch (type) {
     case "late_rent":
@@ -184,7 +229,7 @@ MOVE-OUT DATE: You must move out and return possession of the premises on or bef
 CAUSE — HISTORY OF LATE PAYMENTS (C.R.S. § 38-12-1303(3)(f)):
 Your tenancy is being terminated because you have been late with more than two (2) rent payments. Each of those payments was made more than ten (10) days after it was due, and for each the Landlord served you a written Demand for Compliance before this notice.
 ${demandCount ? `Demands for Compliance served: ${demandCount}${demandDates ? ` (on ${demandDates})` : ""}.` : "Demands for Compliance were served for each late payment; copies are on file."}
-
+${lateTable ? `${BREAK}${lateTable}${BREAK}` : ""}
 YOUR RIGHTS (C.R.S. § 13-40-106(2)):
 If you receive Supplemental Security Income (SSI), Social Security Disability Insurance (SSDI), or Cash Assistance through the Colorado Works Program, you may be entitled to mandatory mediation at no cost before the Landlord can file an eviction case. Notify the Landlord in writing right away if you are enrolled in one of these programs. Mediation can be scheduled at www.ColoradoODR.org.
 

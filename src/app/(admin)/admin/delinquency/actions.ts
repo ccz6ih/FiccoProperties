@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { lateFeeCapCents } from "@/lib/late-fee";
 import { buildNotice } from "@/lib/notice-template";
+import { getLateHistory } from "@/lib/late-history";
 import { formatCents, formatDate } from "@/lib/format";
 
 export type LateFeeState = { ok: boolean; error?: string; notice?: string };
@@ -646,8 +647,11 @@ export async function createNoFaultNotice(form: FormData) {
   moveOut.setDate(moveOut.getDate() + 90);
   const moveOutIso = moveOut.toISOString().slice(0, 10);
 
+  const lateHistory = await getLateHistory(db, unitId);
+
   const { title, body } = buildNotice("no_fault_late", {
     tenantName: occ?.tenant_name ?? occ?.profiles?.full_name ?? "Resident",
+    lateHistory,
     homeLabel,
     fullAddress,
     city: p?.city,
