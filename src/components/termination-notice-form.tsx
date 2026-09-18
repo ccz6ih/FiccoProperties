@@ -50,7 +50,11 @@ export function TerminationNoticeForm({
       [
         { key: "substantial" as Ground, label: "Substantial violation (criminal) — 3-day", note: "Willful endangerment, violent/drug felony, or public-nuisance crime. Not curable." },
         { key: "repeat" as Ground, label: "Repeat lease violation — 10-day", note: "Same violation recurred after a prior served demand." },
-        { key: "nonrenewal" as Ground, label: "Non-renewal", note: "Only for exempt cases or a tenant under 12 months. Otherwise use the 90-day no-fault." },
+        {
+          key: "nonrenewal" as Ground,
+          label: "Non-renewal — 21-day (month-to-month)",
+          note: "Ending a month-to-month without cause. 21 days is the notice period for a month-to-month tenancy; a longer agreement needs 28 (6–12 mo) or 91 (1 yr+) days. Only available for exempt homes or a tenant under 12 months — otherwise use the 90-day no-fault.",
+        },
       ],
     []
   );

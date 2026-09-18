@@ -477,9 +477,19 @@ export default async function AdminDelinquency() {
                               type="submit"
                               className="whitespace-nowrap text-xs font-medium text-terracotta-dark hover:underline"
                             >
-                              Prepare no-fault notice →
+                              Prepare no-fault notice (90-day) →
                             </button>
                           </form>
+                          {/* The 90-day no-fault isn't the only way to end a
+                              tenancy — the 3/10/21-day terminations live on
+                              their own page, which was reachable only from the
+                              Notices index. */}
+                          <Link
+                            href={`/admin/notices/terminate?unit=${r.unitId}`}
+                            className="whitespace-nowrap text-xs font-medium text-pine hover:text-pine-dark"
+                          >
+                            Other notices (3 / 10 / 21-day) →
+                          </Link>
                         </div>
                       </td>
                     </tr>

@@ -67,7 +67,7 @@ export default async function AdminNotices({
               href="/admin/notices/terminate"
               className="rounded-lg border border-clay-deep px-3 py-2 text-sm font-medium text-ink-soft hover:bg-sand"
             >
-              Terminate tenancy →
+              Terminate tenancy (3 / 10 / 21-day) →
             </Link>
             <ButtonLink href="/admin/notices/new" variant="primary">
               New notice
