@@ -429,6 +429,19 @@ export default async function UnitDetail({
             </p>
           )}
 
+          {/* The case file was only reachable from the late list, so it was
+              invisible for any home that isn't currently behind. */}
+          <p className="mt-1.5 text-sm text-ink-faint">
+            <Link
+              href={`/admin/case-file/${unit.id}`}
+              className="font-medium text-pine hover:text-pine-dark"
+            >
+              Open the case file
+            </Link>{" "}
+            — printable history for this home: what&apos;s owed, notices served, late payments, and
+            the full rent ledger.
+          </p>
+
           <UnitEditForm
             unit={{
               id: unit.id,
