@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Container } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { formatCents, formatDate } from "@/lib/format";
+import { getLateHistory } from "@/lib/late-history";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { NOTICE_LABELS, type NoticeType } from "@/lib/notice-template";
 import { createClient } from "@/lib/supabase/server";
@@ -98,14 +99,22 @@ export default async function CaseFile({
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
 
-  const [{ data: unit }, { data: occ }, { data: lease }, { data: charges }, { data: notices }, { data: docRows }] =
-    await Promise.all([
+  const [
+    { data: unit },
+    { data: occ },
+    { data: lease },
+    { data: charges },
+    { data: notices },
+    { data: docRows },
+    lateHistory,
+  ] = await Promise.all([
       db.from("units").select("id, label, status, properties(name, address_line1, city, state, postal_code)").eq("id", unitId).maybeSingle<UnitRow>(),
       db.from("unit_occupancy").select("tenant_name, tenant_email, occupant_profile_id, rent_cents, move_in_date, assistance_programs, assistance_disclosed_at, emergency_contact_name, emergency_contact_phone").eq("unit_id", unitId).maybeSingle<OccRow>(),
       db.from("leases").select("rent_cents, deposit_cents, start_date, end_date, status, signed_at").eq("unit_id", unitId).eq("status", "active").maybeSingle<LeaseRow>(),
       db.from("charges").select("id, amount_cents, description, due_date, status, period").eq("unit_id", unitId).neq("status", "void").order("due_date", { ascending: true }).returns<ChargeRow[]>(),
       db.from("notices").select("type, title, status, served_at, served_method, cure_by, created_at").eq("unit_id", unitId).order("created_at", { ascending: true }).returns<NoticeRow[]>(),
       db.from("lease_documents").select("id").eq("unit_id", unitId).returns<{ id: string }[]>(),
+      getLateHistory(db, unitId),
     ]);
   const leaseDocCount = docRows?.length ?? 0;
 
@@ -276,6 +285,65 @@ export default async function CaseFile({
             </table>
           ) : (
             <p className="mb-6 text-sm text-ink-faint">No notices served yet.</p>
+          )}
+
+          {/* Record of late payments — the exhibit behind a repeated-late-payment
+              ground (C.R.S. 38-12-1303(3)(f)). The ledger below shows every
+              movement; this shows only the months that ran past the grace. */}
+          <h2 className="mb-2 font-display text-base font-semibold text-ink">
+            Record of late rent payments
+          </h2>
+          {lateHistory.length > 0 ? (
+            <>
+              <table className="mb-2 w-full text-sm">
+                <thead>
+                  <tr className="border-b border-clay text-left text-[11px] uppercase tracking-wide text-ink-faint">
+                    <th className="py-1.5 pr-3 font-medium">Month</th>
+                    <th className="py-1.5 pr-3 font-medium">Rent due</th>
+                    <th className="py-1.5 pr-3 font-medium">Paid</th>
+                    <th className="py-1.5 pr-3 font-medium">Days late</th>
+                    <th className="py-1.5 text-right font-medium">Late fee</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lateHistory.map((r) => (
+                    <tr key={r.period} className="border-b border-clay/60 break-inside-avoid">
+                      <td className="py-1.5 pr-3 font-medium text-ink">
+                        {new Date(`${r.dueDate}T00:00:00`).toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="py-1.5 pr-3 text-ink-soft">{formatDate(r.dueDate)}</td>
+                      <td className="py-1.5 pr-3 text-ink-soft">
+                        {r.paidDate ? (
+                          formatDate(r.paidDate)
+                        ) : (
+                          <span className="font-medium text-terracotta-dark">Still unpaid</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-3 font-medium text-terracotta-dark">
+                        {r.daysLate} days
+                      </td>
+                      <td className="py-1.5 text-right text-ink-soft">
+                        {r.feeCents > 0 ? formatCents(r.feeCents) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mb-6 text-xs text-ink-faint">
+                {lateHistory.length} month{lateHistory.length === 1 ? "" : "s"} paid more than the
+                7-day grace past the due date
+                {lateHistory.length > 2
+                  ? " — more than two, the threshold for a repeated-late-payment ground under C.R.S. § 38-12-1303(3)(f). That ground also requires a served Demand for Compliance for each one; check the notices above."
+                  : ". A repeated-late-payment ground under C.R.S. § 38-12-1303(3)(f) needs more than two."}
+              </p>
+            </>
+          ) : (
+            <p className="mb-6 text-sm text-ink-faint">
+              No rent paid more than 7 days past due on record.
+            </p>
           )}
 
           {/* Ledger */}
