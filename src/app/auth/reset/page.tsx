@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { Container } from "@/components/ui";
 import { ResetPasswordForm } from "@/components/reset-password-form";
+import { RecoveryBridge } from "@/components/recovery-bridge";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Set a new password" };
@@ -38,12 +38,7 @@ export default async function ResetPasswordPage() {
               <ResetPasswordForm next={next} />
             </>
           ) : (
-            <p className="mt-2 text-sm text-ink-soft">
-              This reset link is invalid or has expired.{" "}
-              <Link href="/login" className="font-medium text-pine hover:text-pine-dark">
-                Request a new one →
-              </Link>
-            </p>
+            <RecoveryBridge />
           )}
         </div>
       </Container>

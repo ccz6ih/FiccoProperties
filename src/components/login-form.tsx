@@ -57,7 +57,11 @@ export function LoginForm({ next, units = [] }: { next: string; units?: SignupUn
 
     if (mode === "reset") {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent("/auth/reset")}`,
+        // Land directly on the reset page. A redirectTo carrying its own query
+        // string has to match Supabase's redirect allow-list exactly, and when
+        // it doesn't Supabase silently falls back to the Site URL — which is
+        // why these links were dropping people on the homepage.
+        redirectTo: `${window.location.origin}/auth/reset`,
       });
       setPending(false);
       if (error) {
