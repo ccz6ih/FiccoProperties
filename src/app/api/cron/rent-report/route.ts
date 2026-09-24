@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendNotification } from "@/lib/email";
 import { sendToEachOwner } from "@/lib/owners";
 import {
   renderRentReportEmail,
