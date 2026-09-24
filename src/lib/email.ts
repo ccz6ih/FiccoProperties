@@ -22,7 +22,10 @@ export async function sendNotification(opts: {
   replyTo?: string;
   /** Override the recipient. Defaults to NOTIFY_EMAIL (staff). */
   to?: string;
-  /** Optional: log this send for delivery tracking + link it to a record. */
+  /**
+   * Label the send and link it to a record. Every send is logged either way —
+   * this just names it and ties it to the thing it's about.
+   */
   meta?: { kind: string; refType?: string; refId?: string };
 }): Promise<{ sent: boolean; id?: string }> {
   const key = process.env.RESEND_API_KEY;
@@ -58,8 +61,11 @@ export async function sendNotification(opts: {
       /* body not JSON — still sent */
     }
 
-    // Record the send for delivery tracking (best-effort).
-    if (id && opts.meta) {
+    // Log EVERY send, tagged or not. Delivery tracking is only as good as its
+    // coverage: an untagged send is one the webhook can never report a bounce
+    // for, and those pass silently — the resident can't get in and has no way
+    // to tell us. Best-effort, so a logging failure never blocks the email.
+    if (id) {
       try {
         const { createAdminClient } = await import("@/lib/supabase/admin");
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,9 +73,9 @@ export async function sendNotification(opts: {
           message_id: id,
           to_email: to,
           subject: opts.subject,
-          kind: opts.meta.kind,
-          ref_type: opts.meta.refType ?? null,
-          ref_id: opts.meta.refId ?? null,
+          kind: opts.meta?.kind ?? "other",
+          ref_type: opts.meta?.refType ?? null,
+          ref_id: opts.meta?.refId ?? null,
           status: "sent",
         });
       } catch {
