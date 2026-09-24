@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
+import { sendToEachOwner } from "@/lib/owners";
 import {
   renderRentReportEmail,
   type ReportProperty,
@@ -317,13 +318,16 @@ export async function GET(req: Request) {
     .map((s) => s.trim())
     .filter(Boolean);
   const recipientList = [...new Set([...ownerEmails, ...envEmails])];
-  const recipients = recipientList.length ? recipientList.join(",") : "craigcarda2@gmail.com";
+  const recipients = recipientList.length ? recipientList : ["craigcarda2@gmail.com"];
 
-  const { sent } = await sendNotification({
-    to: recipients,
+  // One message each — see sendToEachOwner for why a four-address To: line
+  // was hurting these.
+  const { accepted, failed } = await sendToEachOwner(recipients, {
     subject,
     html,
+    meta: { kind: "rent_report" },
   });
+  const sent = accepted > 0;
 
   if (sent && !force) {
     await db.from("report_log").upsert({ kind, sent_on: todayIso });
@@ -333,7 +337,8 @@ export async function GET(req: Request) {
     ok: true,
     sent,
     period,
-    recipients: recipients.split(",").length,
+    recipients: accepted,
+    failed,
     lateCount: late.length,
     collectedCents,
   });

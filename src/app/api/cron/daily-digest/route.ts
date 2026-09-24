@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildDailyDigest } from "@/lib/daily-digest";
-import { getOwnerRecipients } from "@/lib/owners";
-import { sendNotification } from "@/lib/email";
+import { getOwnerRecipients, sendToEachOwner } from "@/lib/owners";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +58,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "no recipients" }, { status: 500 });
   }
 
-  const res = await sendNotification({
-    to: recipients.join(","),
+  const { accepted, failed } = await sendToEachOwner(recipients, {
     subject,
     html,
     meta: { kind: "daily_digest" },
   });
-  if (!res.sent) return NextResponse.json({ ok: false, error: "send failed" }, { status: 500 });
+  // Log the edition if anyone got it; a single bad address shouldn't make the
+  // whole run look failed and re-send to everyone on the next pass.
+  if (accepted === 0) {
+    return NextResponse.json({ ok: false, error: "send failed", failed }, { status: 500 });
+  }
 
   await db.from("report_log").upsert({ kind, sent_on: todayIso });
-  return NextResponse.json({ ok: true, sentTo: recipients.length });
+  return NextResponse.json({ ok: true, sentTo: accepted, failed });
 }
