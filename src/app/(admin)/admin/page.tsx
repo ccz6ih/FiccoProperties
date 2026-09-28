@@ -163,6 +163,39 @@ export default async function AdminOverview() {
       tenantName: l.tenant_name,
     });
   }
+
+  // A household's second account is linked through unit_occupants, not through
+  // unit_occupancy.occupant_profile_id — which holds only the primary. Without
+  // this a co-tenant reads "No home linked" on the dashboard however correctly
+  // they're set up, and looks like unfinished work every time you glance at it.
+  const coTenantIds = (recentResidents ?? [])
+    .map((r) => r.id)
+    .filter((id) => !homeByProfile.has(id));
+  if (coTenantIds.length > 0) {
+    const { data: coLinks } = await db
+      .from("unit_occupants")
+      .select("profile_id, units:unit_id(label, properties(name)), unit_id")
+      .in("profile_id", coTenantIds)
+      .returns<
+        {
+          profile_id: string;
+          unit_id: string;
+          units: { label: string; properties: { name: string | null } | null } | null;
+        }[]
+      >();
+    const nameByUnit = new Map(
+      (homeLinks ?? []).map((l) => [
+        `${l.units?.properties?.name} · ${l.units?.label}`,
+        l.tenant_name,
+      ])
+    );
+    for (const l of coLinks ?? []) {
+      const home = `${l.units?.properties?.name ?? "—"} · ${l.units?.label ?? "—"}`;
+      if (!homeByProfile.has(l.profile_id)) {
+        homeByProfile.set(l.profile_id, { home, tenantName: nameByUnit.get(home) ?? null });
+      }
+    }
+  }
   const newResidents = (recentResidents ?? []).map((r) => ({
     ...r,
     link: homeByProfile.get(r.id) ?? null,
@@ -369,7 +402,7 @@ export default async function AdminOverview() {
               ))}
             </ul>
           ) : (
-            <Empty>No one's waiting on a reply.</Empty>
+            <Empty>No one&apos;s waiting on a reply.</Empty>
           )}
         </DashCard>
 
@@ -437,7 +470,7 @@ export default async function AdminOverview() {
             href="/admin/delinquency"
             className="text-sm font-medium text-pine hover:text-pine-dark"
           >
-            See who's behind →
+            See who&apos;s behind →
           </Link>
         </Card>
       )}
