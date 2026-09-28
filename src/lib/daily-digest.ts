@@ -132,10 +132,10 @@ export async function buildDailyDigest(
   const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const { data: monthCharges } = await db
     .from("charges")
-    .select("id, amount_cents, due_date, unit_id, units:unit_id(label, properties(name))")
+    .select("id, amount_cents, description, due_date, unit_id, units:unit_id(label, properties(name))")
     .eq("period", period)
     .neq("status", "void")
-    .returns<{ id: string; amount_cents: number; due_date: string | null; unit_id: string | null; units: UnitJoin }[]>();
+    .returns<{ id: string; amount_cents: number; description: string | null; due_date: string | null; unit_id: string | null; units: UnitJoin }[]>();
   const chargeIds = (monthCharges ?? []).map((c) => c.id);
   const paidByCharge = new Map<string, number>();
   if (chargeIds.length > 0) {
@@ -154,18 +154,44 @@ export async function buildDailyDigest(
     .select("unit_id, tenant_name")
     .returns<{ unit_id: string; tenant_name: string | null }[]>();
   const tenantByUnit = new Map((occNames ?? []).map((o) => [o.unit_id, o.tenant_name]));
-  const owed = (monthCharges ?? [])
-    .map((c) => ({
-      home: homeOf(c.units),
-      tenant: (c.unit_id ? tenantByUnit.get(c.unit_id) : null) ?? "—",
-      remaining: Math.max(0, c.amount_cents - (paidByCharge.get(c.id) ?? 0)),
-      daysLate:
-        c.due_date && c.due_date < todayIso
-          ? Math.max(0, Math.floor((now.getTime() - new Date(`${c.due_date}T12:00:00Z`).getTime()) / 86_400_000))
-          : 0,
-    }))
-    .filter((c) => c.remaining > 0)
-    .sort((a, b) => a.home.localeCompare(b.home, undefined, { numeric: true }));
+  // Aggregate PER HOME, not per charge. A home owing rent AND a late fee is one
+  // late household, not two — listed per charge it read as "2 units" for a
+  // single tenant, which overstates how many people are behind.
+  type OwedHome = {
+    home: string;
+    tenant: string;
+    remaining: number;
+    daysLate: number;
+    parts: string[];
+  };
+  const owedByHome = new Map<string, OwedHome>();
+  for (const c of monthCharges ?? []) {
+    const remaining = Math.max(0, c.amount_cents - (paidByCharge.get(c.id) ?? 0));
+    if (remaining <= 0) continue;
+    const key = c.unit_id ?? c.id;
+    const daysLate =
+      c.due_date && c.due_date < todayIso
+        ? Math.max(0, Math.floor((now.getTime() - new Date(`${c.due_date}T12:00:00Z`).getTime()) / 86_400_000))
+        : 0;
+    const label = (c.description ?? "").toLowerCase().includes("late fee") ? "late fee" : "rent";
+    const cur = owedByHome.get(key);
+    if (cur) {
+      cur.remaining += remaining;
+      cur.daysLate = Math.max(cur.daysLate, daysLate); // oldest thing outstanding
+      if (!cur.parts.includes(label)) cur.parts.push(label);
+    } else {
+      owedByHome.set(key, {
+        home: homeOf(c.units),
+        tenant: (c.unit_id ? tenantByUnit.get(c.unit_id) : null) ?? "—",
+        remaining,
+        daysLate,
+        parts: [label],
+      });
+    }
+  }
+  const owed = [...owedByHome.values()].sort((a, b) =>
+    a.home.localeCompare(b.home, undefined, { numeric: true })
+  );
   const owedTotal = owed.reduce((s, c) => s + c.remaining, 0);
 
   // ---- yesterday ----
@@ -276,6 +302,8 @@ export async function buildDailyDigest(
   const owedItems: string[] = owed.slice(0, 15).map((c) =>
     li(
       `🏠 <strong>${esc(c.home)}</strong> — ${esc(c.tenant)} · <strong style="color:${TERRA}">${formatCents(c.remaining)}</strong>${
+        c.parts.length > 1 ? ` <span style="color:${FAINT}">(${esc(c.parts.slice().sort().reverse().join(" + "))})</span>` : ""
+      }${
         c.daysLate > 0 ? ` <span style="color:${FAINT}">(${c.daysLate} day${c.daysLate === 1 ? "" : "s"} late)</span>` : ""
       }`,
       c.daysLate > 0
@@ -284,7 +312,7 @@ export async function buildDailyDigest(
   if (owed.length > 15) owedItems.push(li(`…and ${owed.length - 15} more — see the rent board`));
   if (owed.length > 0) {
     owedItems.push(
-      li(`<strong>Total still owed: <span style="color:${TERRA}">${formatCents(owedTotal)}</span></strong> across ${owed.length} unit${owed.length === 1 ? "" : "s"}`)
+      li(`<strong>Total still owed: <span style="color:${TERRA}">${formatCents(owedTotal)}</span></strong> across ${owed.length} home${owed.length === 1 ? "" : "s"}`)
     );
   }
 
@@ -366,7 +394,7 @@ export async function buildDailyDigest(
     <tr><td style="padding:24px 28px 4px">
       <div style="font-size:16px;color:${INK};line-height:1.6;margin-bottom:20px">
         Good morning. ${payCount > 0 ? `<strong style="color:${PINE}">${formatCents(payTotal)}</strong> came in since the last digest.` : "No payments landed since the last digest."}
-        ${owed.length > 0 ? ` <strong style="color:${TERRA}">${formatCents(owedTotal)}</strong> in rent is still owed by ${owed.length} unit${owed.length === 1 ? "" : "s"}.` : ` <strong style="color:${PINE}">Every unit is paid up.</strong>`}
+        ${owed.length > 0 ? ` <strong style="color:${TERRA}">${formatCents(owedTotal)}</strong> in rent is still owed by ${owed.length} home${owed.length === 1 ? "" : "s"}.` : ` <strong style="color:${PINE}">Every unit is paid up.</strong>`}
         ${doneItems.length > 0 ? ` <strong>${doneItems.length}</strong> job${doneItems.length === 1 ? "" : "s"} got done.` : ""}
         ${attentionCount > 0 ? ` <strong style="color:${TERRA}">${attentionCount} thing${attentionCount === 1 ? "" : "s"}</strong> could use your attention today.` : ` <strong style="color:${PINE}">Nothing needs your attention today.</strong> 🎉`}
       </div>
