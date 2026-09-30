@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import { saveDepositSettlement, addDeduction, deleteDeduction } from "@/app/(admin)/admin/move-out/actions";
 import { MoveOutForm } from "@/components/move-out-form";
+import { MoveOutRecordForm } from "@/components/move-out-record-form";
+import { MOVE_OUT_CHECKS } from "@/lib/move-out-checks";
 
 export const metadata: Metadata = { title: "Move-out & deposit" };
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ type HistoryRow = {
   move_out_date: string | null;
   move_in_date: string | null;
   deposit_cents: number | null;
+  notes: string | null;
 };
 type LeaseRow = { deposit_cents: number | null };
 type SettlementRow = { deposit_cents: number; notes: string | null; status: string };
@@ -66,7 +69,7 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
       db.from("deposit_deductions").select("id, description, amount_cents").eq("unit_id", unitId).order("created_at", { ascending: true }).returns<DeductionRow[]>(),
       admin.from("unit_photos").select("id, kind, path, caption").eq("unit_id", unitId).in("kind", ["move_in", "move_out"]).order("created_at", { ascending: true }).returns<PhotoRow[]>(),
       db.from("unit_occupancy").select("tenant_name, move_in_date, rent_cents, deposit_cents").eq("unit_id", unitId).maybeSingle<LiveOccRow>(),
-      db.from("tenancy_history").select("tenant_name, forwarding_address, move_out_date, move_in_date, deposit_cents").eq("unit_id", unitId).order("move_out_date", { ascending: false }).limit(1).maybeSingle<HistoryRow>(),
+      db.from("tenancy_history").select("tenant_name, forwarding_address, move_out_date, move_in_date, deposit_cents, notes").eq("unit_id", unitId).order("move_out_date", { ascending: false }).limit(1).maybeSingle<HistoryRow>(),
     ]);
 
   if (!unit) redirect("/admin/delinquency");
@@ -75,6 +78,20 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
   // first. Once it is, the tenancy lives in the archive and reads from there.
   const stillHere = !!liveOcc?.tenant_name;
   const past = history ?? null;
+
+  // The walk-through lives in the archived notes as "[x] Label" lines; read it
+  // back so re-opening the checklist shows what was ticked last time.
+  const walkthroughState: Record<string, boolean> = {};
+  for (const line of (past?.notes ?? "").split(/\r?\n/)) {
+    const m = line.match(/^\s*\[([ x])\]\s+(.+)$/);
+    if (m) walkthroughState[m[2].trim()] = m[1] === "x";
+  }
+  const walkthroughDone = Object.keys(walkthroughState).length > 0;
+  const depositDueBy = past?.move_out_date
+    ? new Date(new Date(`${past.move_out_date}T00:00:00`).getTime() + 30 * 86_400_000)
+        .toISOString()
+        .slice(0, 10)
+    : null;
 
   const signed = await Promise.all(
     (photoRows ?? []).map((p) => admin.storage.from(CONDITION_BUCKET).createSignedUrl(p.path, 3600))
@@ -140,6 +157,30 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
               <Link href="/admin/turns" className="font-medium text-pine hover:text-pine-dark">
                 Start the turn →
               </Link>
+            </div>
+
+            {/* The deposit clock runs from the move-out date whether or not we
+                have somewhere to send it, so say plainly when we don't. */}
+            <div className="mt-3 border-t border-clay pt-3">
+              {past.forwarding_address ? (
+                <p className="mb-2 text-sm text-ink-soft">
+                  <span className="text-ink-faint">Forwarding address:</span>{" "}
+                  <strong className="text-ink">{past.forwarding_address}</strong>
+                  {walkthroughDone ? " · walk-through on file" : " · walk-through not recorded"}
+                </p>
+              ) : (
+                <p className="mb-2 text-sm font-medium text-terracotta-dark">
+                  ⚠ No forwarding address on file
+                  {depositDueBy ? ` — the deposit is due back by ${formatDate(depositDueBy)}` : ""}.
+                </p>
+              )}
+              <MoveOutRecordForm
+                unitId={unitId}
+                tenantName={past.tenant_name ?? "the resident"}
+                checks={MOVE_OUT_CHECKS}
+                done={walkthroughState}
+                forwardingAddress={past.forwarding_address}
+              />
             </div>
           </div>
         )}

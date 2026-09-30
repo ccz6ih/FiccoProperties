@@ -4,20 +4,12 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { formatCents } from "@/lib/format";
 import { recordMoveOut } from "@/app/(admin)/admin/move-out/actions";
+import { MOVE_OUT_CHECKS } from "@/lib/move-out-checks";
 
 const field =
   "w-full rounded-lg border border-clay-deep bg-white px-3 py-2 text-base text-ink focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30";
 
-/** The walk-through, in the order you'd actually do it standing in the home. */
-const CHECKS = [
-  { name: "chk_notice", label: "Proper written notice given", hint: "Month-to-month needs 21 days in Colorado." },
-  { name: "chk_keys", label: "All keys, fobs and openers returned", hint: "Including mailbox and garage." },
-  { name: "chk_empty", label: "Home emptied — nothing left behind", hint: "Including the storage unit and patio." },
-  { name: "chk_clean", label: "Cleaned to move-in standard", hint: "Normal wear is fine; filth is deductible." },
-  { name: "chk_damage", label: "No damage beyond normal wear", hint: "Photograph anything that isn't." },
-  { name: "chk_photos", label: "Move-out photos taken", hint: "The evidence behind any deduction." },
-  { name: "chk_utilities", label: "Utilities transferred out of their name", hint: "So the empty home doesn't bill them." },
-] as const;
+
 
 function SubmitButton({ tenantName }: { tenantName: string }) {
   const { pending } = useFormStatus();
@@ -125,7 +117,7 @@ export function MoveOutForm({
         <legend className="px-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
           Move-out walk-through
         </legend>
-        {CHECKS.map((c) => (
+        {MOVE_OUT_CHECKS.map((c) => (
           <label key={c.name} className="flex items-start gap-2.5">
             <input
               type="checkbox"

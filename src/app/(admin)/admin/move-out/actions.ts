@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { formatCents, formatDate } from "@/lib/format";
 import { notifyOwnersOfMoveOut } from "@/lib/move-out-email";
+import { MOVE_OUT_CHECKS } from "@/lib/move-out-checks";
 
 /** Notes are plain text; a line break is content, not markup. */
 const NL = String.fromCharCode(10);
@@ -49,16 +50,10 @@ export async function recordMoveOut(form: FormData) {
 
   // The walk-through. Unticked means "not clear" — that is what the owners see
   // flagged, and what a deposit deduction would later have to rest on.
-  const CHECKS: { name: string; label: string }[] = [
-    { name: "chk_notice", label: "Proper written notice given" },
-    { name: "chk_keys", label: "All keys, fobs and openers returned" },
-    { name: "chk_empty", label: "Home emptied — nothing left behind" },
-    { name: "chk_clean", label: "Cleaned to move-in standard" },
-    { name: "chk_damage", label: "No damage beyond normal wear" },
-    { name: "chk_photos", label: "Move-out photos taken" },
-    { name: "chk_utilities", label: "Utilities transferred out of their name" },
-  ];
-  const checklist = CHECKS.map((c) => ({ label: c.label, ok: form.get(c.name) === "on" }));
+  const checklist = MOVE_OUT_CHECKS.map((c) => ({
+    label: c.label,
+    ok: form.get(c.name) === "on",
+  }));
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
@@ -186,6 +181,121 @@ export async function recordMoveOut(form: FormData) {
   revalidatePath(`/admin/units/${unitId}`);
   revalidatePath(`/admin/case-file/${unitId}`);
   redirect(`/admin/move-out/${unitId}`);
+}
+
+const WALKTHROUGH_HEADING = "Move-out walk-through";
+
+/**
+ * Rebuild the walk-through block. Everything from a previous heading onward is
+ * dropped, so re-running the checklist replaces it instead of stacking copies.
+ */
+function withWalkthrough(
+  existingNotes: string | null,
+  recordedOn: string,
+  checklist: { label: string; ok: boolean }[],
+  noticeGivenOn: string | null,
+  note: string | null
+): string {
+  const lines = (existingNotes ?? "").split(NL);
+  const cut = lines.findIndex((l) => l.startsWith(WALKTHROUGH_HEADING));
+  const kept = (cut === -1 ? lines : lines.slice(0, cut)).join(NL).trim();
+
+  return [
+    kept || null,
+    `${WALKTHROUGH_HEADING} (recorded ${formatDate(recordedOn)}):`,
+    ...checklist.map((c) => `  ${c.ok ? "[x]" : "[ ]"} ${c.label}`),
+    noticeGivenOn ? `  Notice given: ${formatDate(noticeGivenOn)}` : "  Notice given: not recorded",
+    note ? `  Note: ${note}` : null,
+  ]
+    .filter(Boolean)
+    .join(NL);
+}
+
+/**
+ * Edit a move-out that is already on the books — fill in a forwarding address
+ * that turned up later, run the walk-through that was missed, correct the
+ * notice date. Without this the checklist only ever existed in the moment the
+ * move-out was recorded, and a home already emptied could never be completed.
+ */
+export async function updateMoveOutRecord(form: FormData) {
+  const { profile } = await requireProfile("/admin/move-out");
+  if (!isStaff(profile)) return;
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  if (!unitId) return;
+
+  const forwarding = (form.get("forwarding_address") as string)?.trim() || null;
+  const noticeGivenOn = (form.get("notice_given_on") as string)?.trim() || null;
+  const note = (form.get("walkthrough_note") as string)?.trim() || null;
+  const notifyOwners = form.get("notify_owners") === "on";
+  const checklist = MOVE_OUT_CHECKS.map((c) => ({
+    label: c.label,
+    ok: form.get(c.name) === "on",
+  }));
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const { data: past } = await db
+    .from("tenancy_history")
+    .select(
+      "id, tenant_name, move_in_date, move_out_date, rent_cents, deposit_cents, notes, move_out_reason"
+    )
+    .eq("unit_id", unitId)
+    .order("move_out_date", { ascending: false })
+    .limit(1)
+    .maybeSingle<{
+      id: string;
+      tenant_name: string | null;
+      move_in_date: string | null;
+      move_out_date: string | null;
+      rent_cents: number | null;
+      deposit_cents: number | null;
+      notes: string | null;
+      move_out_reason: string | null;
+    }>();
+  if (!past) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  await db
+    .from("tenancy_history")
+    .update({
+      forwarding_address: forwarding,
+      notes: withWalkthrough(past.notes, today, checklist, noticeGivenOn, note),
+    })
+    .eq("id", past.id);
+
+  if (notifyOwners && past.move_out_date) {
+    const { data: unitRow } = await db
+      .from("units")
+      .select("label, properties(name)")
+      .eq("id", unitId)
+      .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+    const home = `${unitRow?.properties?.name ? `${unitRow.properties.name} · ` : ""}${
+      unitRow?.label ?? ""
+    }`;
+    try {
+      await notifyOwnersOfMoveOut({
+        unitId,
+        home: home || "a home",
+        tenantName: past.tenant_name ?? "The resident",
+        moveInDate: past.move_in_date,
+        moveOutDate: past.move_out_date,
+        rentCents: past.rent_cents,
+        depositCents: past.deposit_cents,
+        forwardingAddress: forwarding,
+        reason: past.move_out_reason,
+        noticeGivenOn,
+        checklist: note ? [...checklist, { label: "Note", ok: true, note }] : checklist,
+        voidedCharges: 0,
+      });
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  revalidatePath(`/admin/move-out/${unitId}`);
+  revalidatePath(`/admin/units/${unitId}`);
 }
 
 /** Save the deposit amount + notes/status for a unit's move-out settlement. */
