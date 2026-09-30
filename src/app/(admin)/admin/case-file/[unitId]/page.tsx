@@ -162,6 +162,79 @@ export default async function CaseFile({
   const dailyAccrualCents = monthlyRentCents ? Math.round(monthlyRentCents / 30) : 0;
 
   const servedNotices = (notices ?? []).filter((n) => n.served_at);
+
+  // What happened AFTER each notice was served. A demand only means something
+  // if you can show the deadline it set and whether they met it — "served the
+  // 8th, had until the 18th, paid the 23rd, five days over" is the sentence a
+  // court wants, and it is the sentence this table now writes.
+  const allPayDates = rows
+    .map((r) => r.pay?.created_at?.slice(0, 10) ?? null)
+    .filter((d): d is string => !!d)
+    .sort();
+
+    // The statutory minimum each notice has to give, counted from SERVICE — the
+  // cure date is fixed when the draft is written, so serving it days later
+  // silently shortens it. A demand that gave 9 days instead of 10 is defective
+  // and gets the case thrown out, so the case file has to show it.
+  const MIN_DAYS: Record<string, number> = {
+    pay_or_quit: 10,
+    lease_violation: 10,
+    terminate_substantial: 3,
+    terminate_repeat: 10,
+    terminate_nonrenewal: 21,
+    no_fault_late: 90,
+  };
+
+  const servedByType = new Map<string, number>();
+  const noticeHistory = servedNotices
+    .slice()
+    .sort((a, b) => (a.served_at ?? "").localeCompare(b.served_at ?? ""))
+    .map((n) => {
+      const seq = (servedByType.get(n.type) ?? 0) + 1;
+      servedByType.set(n.type, seq);
+
+      const served = n.served_at ?? null;
+      const deadline = n.cure_by ?? null;
+      // First money in after service — what would have cured it.
+      const paidAfter = served ? allPayDates.find((d) => d >= served) ?? null : null;
+
+      let outcome: string;
+      let tone: "ok" | "late" | "open";
+      if (!deadline) {
+        outcome = paidAfter ? `Paid ${formatDate(paidAfter)}` : "No deadline recorded";
+        tone = "open";
+      } else if (paidAfter && paidAfter <= deadline) {
+        outcome = `Cured ${formatDate(paidAfter)} — ${daysBetween(paidAfter, deadline)} day(s) to spare`;
+        tone = "ok";
+      } else if (paidAfter) {
+        outcome = `Paid ${formatDate(paidAfter)} — ${daysBetween(deadline, paidAfter)} day(s) past the deadline`;
+        tone = "late";
+      } else if (deadline < todayIso) {
+        outcome = `Not cured — ${daysBetween(deadline, todayIso)} day(s) past the deadline`;
+        tone = "late";
+      } else {
+        outcome = `${daysBetween(todayIso, deadline)} day(s) left to comply`;
+        tone = "open";
+      }
+
+      const daysAllowed = served && deadline ? daysBetween(served, deadline) : null;
+      const minDays = MIN_DAYS[n.type] ?? null;
+
+      return {
+        seq,
+        label: NOTICE_LABELS[n.type as NoticeType] ?? n.type,
+        served,
+        method: methodLabel(n.served_method),
+        deadline,
+        daysAllowed,
+        minDays,
+        short: daysAllowed != null && minDays != null && daysAllowed < minDays,
+        outcome,
+        tone,
+      };
+    })
+    .reverse(); // newest first
+
   const servedDemands = servedNotices.filter((n) => n.type === "pay_or_quit");
   const lastServed = servedNotices[servedNotices.length - 1] ?? null;
 
@@ -262,23 +335,51 @@ export default async function CaseFile({
 
           {/* Notices served */}
           <h2 className="mb-2 font-display text-base font-semibold text-ink">Notices served</h2>
-          {servedNotices.length > 0 ? (
+          {noticeHistory.length > 0 ? (
             <table className="mb-6 w-full text-sm">
               <thead>
                 <tr className="border-b border-clay text-left text-[11px] uppercase tracking-wide text-ink-faint">
+                  <th className="py-1.5 pr-3 font-medium">#</th>
                   <th className="py-1.5 pr-3 font-medium">Notice</th>
                   <th className="py-1.5 pr-3 font-medium">Served</th>
-                  <th className="py-1.5 pr-3 font-medium">Method</th>
-                  <th className="py-1.5 font-medium">Cure / move-out</th>
+                  <th className="py-1.5 pr-3 font-medium">How</th>
+                  <th className="py-1.5 pr-3 font-medium">Had until</th>
+                  <th className="py-1.5 font-medium">What happened</th>
                 </tr>
               </thead>
               <tbody>
-                {servedNotices.map((n, i) => (
-                  <tr key={i} className="border-b border-clay/60 break-inside-avoid">
-                    <td className="py-1.5 pr-3 text-ink">{NOTICE_LABELS[n.type as NoticeType] ?? n.type}</td>
-                    <td className="py-1.5 pr-3 text-ink-soft">{n.served_at ? formatDate(n.served_at) : "—"}</td>
-                    <td className="py-1.5 pr-3 text-ink-soft">{methodLabel(n.served_method)}</td>
-                    <td className="py-1.5 text-ink-soft">{n.cure_by ? formatDate(n.cure_by) : "—"}</td>
+                {noticeHistory.map((n, i) => (
+                  <tr key={i} className="border-b border-clay/60 align-top break-inside-avoid">
+                    <td className="whitespace-nowrap py-2 pr-3 font-medium text-ink-faint">#{n.seq}</td>
+                    <td className="py-2 pr-3 text-ink">{n.label}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-ink-soft">
+                      {n.served ? formatDate(n.served) : "—"}
+                    </td>
+                    <td className="py-2 pr-3 text-ink-soft">{n.method}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-ink-soft">
+                      {n.deadline ? formatDate(n.deadline) : "—"}
+                      {n.daysAllowed != null && (
+                        <span
+                          className={`block text-[11px] ${
+                            n.short ? "font-semibold text-terracotta-dark" : "text-ink-faint"
+                          }`}
+                        >
+                          {n.daysAllowed} days given
+                          {n.short ? ` ⚠ needs ${n.minDays}` : ""}
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className={`py-2 ${
+                        n.tone === "late"
+                          ? "font-medium text-terracotta-dark"
+                          : n.tone === "ok"
+                            ? "text-pine"
+                            : "text-ink-soft"
+                      }`}
+                    >
+                      {n.outcome}
+                    </td>
                   </tr>
                 ))}
               </tbody>

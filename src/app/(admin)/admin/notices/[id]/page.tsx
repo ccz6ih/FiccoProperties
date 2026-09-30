@@ -115,6 +115,29 @@ export default async function NoticeDetail({
   const isCurrent = rebuiltOn === today;
   const rebuiltLabel = isCurrent ? "today" : rebuiltOn ? formatDate(rebuiltOn) : "";
 
+  // The cure date is baked in when the draft is written. Serve it two days
+  // later and the tenant gets two days fewer than the statute requires — a
+  // short notice is defective and loses the case, so check before it goes out.
+  const MIN_DAYS: Record<string, number> = {
+    pay_or_quit: 10,
+    lease_violation: 10,
+    terminate_substantial: 3,
+    terminate_repeat: 10,
+    terminate_nonrenewal: 21,
+    no_fault_late: 90,
+  };
+  const minDays = MIN_DAYS[notice.type] ?? null;
+  const asOf = notice.served_at ?? today;
+  const daysGiven =
+    notice.cure_by
+      ? Math.round(
+          (new Date(`${notice.cure_by}T00:00:00`).getTime() -
+            new Date(`${asOf}T00:00:00`).getTime()) /
+            86_400_000
+        )
+      : null;
+  const shortNotice = minDays != null && daysGiven != null && daysGiven < minDays;
+
   return (
     <main className="min-h-dvh bg-cream py-10 print:bg-white print:py-0">
       <Container className="max-w-3xl">
@@ -255,6 +278,24 @@ export default async function NoticeDetail({
             </div>
           </div>
         </div>
+
+        {shortNotice && (
+          <div className="mb-5 rounded-2xl border-2 border-terracotta/45 bg-terracotta/5 px-5 py-4 print:hidden">
+            <div className="text-sm font-semibold text-terracotta-dark">
+              ⚠ This notice gives {daysGiven} day{daysGiven === 1 ? "" : "s"} — it needs {minDays}
+            </div>
+            <p className="mt-1 text-xs text-ink-soft">
+              The deadline printed on it ({notice.cure_by ? formatDate(notice.cure_by) : "—"}) was
+              worked out when the draft was written, not when it was{" "}
+              {notice.served_at ? "served" : "being served"}. Counting from{" "}
+              {notice.served_at ? formatDate(notice.served_at) : "today"} it falls short, and a
+              notice that gives less than the statute requires can be thrown out.
+              {notice.served_at
+                ? " Consider re-serving a fresh one with a correct deadline."
+                : " Rebuild it above before serving so the deadline is measured from today."}
+            </p>
+          </div>
+        )}
 
         {/* Service + status controls (not printed) */}
         <div className="mt-6 space-y-6 print:hidden">
