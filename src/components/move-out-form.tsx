@@ -8,6 +8,17 @@ import { recordMoveOut } from "@/app/(admin)/admin/move-out/actions";
 const field =
   "w-full rounded-lg border border-clay-deep bg-white px-3 py-2 text-base text-ink focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/30";
 
+/** The walk-through, in the order you'd actually do it standing in the home. */
+const CHECKS = [
+  { name: "chk_notice", label: "Proper written notice given", hint: "Month-to-month needs 21 days in Colorado." },
+  { name: "chk_keys", label: "All keys, fobs and openers returned", hint: "Including mailbox and garage." },
+  { name: "chk_empty", label: "Home emptied — nothing left behind", hint: "Including the storage unit and patio." },
+  { name: "chk_clean", label: "Cleaned to move-in standard", hint: "Normal wear is fine; filth is deductible." },
+  { name: "chk_damage", label: "No damage beyond normal wear", hint: "Photograph anything that isn't." },
+  { name: "chk_photos", label: "Move-out photos taken", hint: "The evidence behind any deduction." },
+  { name: "chk_utilities", label: "Utilities transferred out of their name", hint: "So the empty home doesn't bill them." },
+] as const;
+
 function SubmitButton({ tenantName }: { tenantName: string }) {
   const { pending } = useFormStatus();
   return (
@@ -31,11 +42,13 @@ export function MoveOutForm({
   tenantName,
   moveInDate,
   rentCents,
+  depositCents,
 }: {
   unitId: string;
   tenantName: string;
   moveInDate: string | null;
   rentCents: number | null;
+  depositCents?: number | null;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [moveOut, setMoveOut] = useState(today);
@@ -81,17 +94,58 @@ export function MoveOutForm({
 
       <label className="block space-y-1">
         <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
-          Forwarding address (optional)
+          Forwarding address
         </span>
-        <input
+        <textarea
           name="forwarding_address"
-          placeholder="Where the deposit check goes"
+          rows={2}
+          placeholder="5090 Ellis St, Golden, CO 80403"
           className={field}
         />
         <span className="block text-[11px] text-ink-faint">
-          Colorado gives you 30 days to return the deposit — you can add this later.
+          Where the deposit check goes. Colorado gives you 30 days from the move-out
+          {depositCents ? ` to return the ${formatCents(depositCents)} held` : " to return the deposit"} or
+          send an itemised list of deductions — chase this now if you don&apos;t have it.
         </span>
       </label>
+
+      <label className="block space-y-1">
+        <span className="text-xs font-medium uppercase tracking-wide text-ink-faint">
+          Date they gave notice (optional)
+        </span>
+        <input type="date" name="notice_given_on" max={moveOut} className={field} />
+        <span className="block text-[11px] text-ink-faint">
+          Proper notice matters if the deposit is ever argued over.
+        </span>
+      </label>
+
+      {/* The walk-through. Everything defaults to "fine" because most move-outs
+          are — unticking a box is what flags it to the owners. */}
+      <fieldset className="space-y-2 rounded-xl border border-clay bg-sand/30 p-4">
+        <legend className="px-1 text-xs font-medium uppercase tracking-wide text-ink-faint">
+          Move-out walk-through
+        </legend>
+        {CHECKS.map((c) => (
+          <label key={c.name} className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              name={c.name}
+              defaultChecked
+              className="mt-0.5 h-4 w-4 rounded border-clay-deep accent-pine"
+            />
+            <span className="text-sm text-ink-soft">
+              <strong className="text-ink">{c.label}</strong>
+              <span className="block text-[11px] text-ink-faint">{c.hint}</span>
+            </span>
+          </label>
+        ))}
+        <label className="block space-y-1 pt-1">
+          <span className="text-[11px] text-ink-faint">
+            Anything to note — damage, what&apos;s left behind, meter readings
+          </span>
+          <input name="walkthrough_note" placeholder="Optional" className={field} />
+        </label>
+      </fieldset>
 
       <label className="flex items-start gap-2.5 rounded-xl border border-clay bg-sand/40 px-3.5 py-3">
         <input
@@ -113,6 +167,7 @@ export function MoveOutForm({
           <li>· Takes {firstName} off the rent board and out of next month&apos;s billing</li>
           <li>· Files the tenancy in this home&apos;s history — dates, rent, deposit, all of it</li>
           <li>· Ends the lease and sets the home to make-ready</li>
+          <li>· Emails Lou, Tony and Chris the checklist, the forwarding address and the deposit deadline</li>
           <li>· Stops rent reminders, notices, and the owner report from counting them</li>
           {rentCents ? (
             <li>· The home shows vacant at {formatCents(rentCents)}/mo until someone new is set up</li>

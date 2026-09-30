@@ -125,6 +125,7 @@ export default async function MoveOutDeposit({ params }: { params: Promise<{ uni
               tenantName={liveOcc?.tenant_name ?? "the tenant"}
               moveInDate={liveOcc?.move_in_date ?? null}
               rentCents={liveOcc?.rent_cents ?? null}
+              depositCents={liveOcc?.deposit_cents ?? null}
             />
           </div>
         )}

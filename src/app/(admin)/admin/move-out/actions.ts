@@ -6,6 +6,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { formatCents, formatDate } from "@/lib/format";
+import { notifyOwnersOfMoveOut } from "@/lib/move-out-email";
+
+/** Notes are plain text; a line break is content, not markup. */
+const NL = String.fromCharCode(10);
 
 type OccupancySnapshot = {
   occupant_profile_id: string | null;
@@ -40,6 +44,21 @@ export async function recordMoveOut(form: FormData) {
   const forwarding = (form.get("forwarding_address") as string)?.trim() || null;
   const reason = (form.get("move_out_reason") as string)?.trim() || null;
   const voidFuture = form.get("void_future_charges") === "on";
+  const noticeGivenOn = (form.get("notice_given_on") as string)?.trim() || null;
+  const walkthroughNote = (form.get("walkthrough_note") as string)?.trim() || null;
+
+  // The walk-through. Unticked means "not clear" — that is what the owners see
+  // flagged, and what a deposit deduction would later have to rest on.
+  const CHECKS: { name: string; label: string }[] = [
+    { name: "chk_notice", label: "Proper written notice given" },
+    { name: "chk_keys", label: "All keys, fobs and openers returned" },
+    { name: "chk_empty", label: "Home emptied — nothing left behind" },
+    { name: "chk_clean", label: "Cleaned to move-in standard" },
+    { name: "chk_damage", label: "No damage beyond normal wear" },
+    { name: "chk_photos", label: "Move-out photos taken" },
+    { name: "chk_utilities", label: "Utilities transferred out of their name" },
+  ];
+  const checklist = CHECKS.map((c) => ({ label: c.label, ok: form.get(c.name) === "on" }));
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
@@ -67,7 +86,15 @@ export async function recordMoveOut(form: FormData) {
     lease_start_date: occ.lease_start_date,
     lease_end_date: occ.lease_end_date,
     forwarding_address: forwarding,
-    notes: occ.notes,
+    notes: [
+      occ.notes,
+      `Move-out walk-through (${formatDate(moveOutDate)}):`,
+      ...checklist.map((c) => `  ${c.ok ? "[x]" : "[ ]"} ${c.label}`),
+      noticeGivenOn ? `  Notice given: ${formatDate(noticeGivenOn)}` : "  Notice given: not recorded",
+      walkthroughNote ? `  Note: ${walkthroughNote}` : null,
+    ]
+      .filter(Boolean)
+      .join(NL),
     move_out_reason: reason,
     ended_by: profile!.id,
   });
@@ -121,6 +148,37 @@ export async function recordMoveOut(form: FormData) {
     performed_on: moveOutDate,
     author_id: profile!.id,
   });
+
+  // 6. Tell the owners. A move-out starts a 30-day deposit clock, so Lou and
+  //    Tony hear about it when it happens rather than when someone remembers.
+  const { data: unitRow } = await db
+    .from("units")
+    .select("label, properties(name)")
+    .eq("id", unitId)
+    .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+  const home = `${unitRow?.properties?.name ? `${unitRow.properties.name} · ` : ""}${
+    unitRow?.label ?? ""
+  }`;
+  try {
+    await notifyOwnersOfMoveOut({
+      unitId,
+      home: home || "a home",
+      tenantName: occ.tenant_name ?? "The resident",
+      moveInDate: occ.move_in_date,
+      moveOutDate,
+      rentCents: occ.rent_cents,
+      depositCents: occ.deposit_cents,
+      forwardingAddress: forwarding,
+      reason,
+      noticeGivenOn,
+      checklist: walkthroughNote
+        ? [...checklist, { label: "Note", ok: true, note: walkthroughNote }]
+        : checklist,
+      voidedCharges: voided,
+    });
+  } catch {
+    /* the move-out itself is recorded; the email is best-effort */
+  }
 
   revalidatePath("/admin/rent-board");
   revalidatePath("/admin/delinquency");
