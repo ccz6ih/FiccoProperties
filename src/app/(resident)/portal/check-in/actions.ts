@@ -9,6 +9,9 @@ import { CONDITION_BUCKET } from "@/lib/unit-photos";
 
 export type CheckInState = { ok: boolean; error?: string; notice?: string };
 
+/** Supabase's condition bucket caps uploads at 25 MB; stop a big one earlier. */
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
+
 const IMAGE_TYPES = new Set([
   "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
 ]);
@@ -76,29 +79,53 @@ async function uploadPhoto(
   const unitId = await residentUnitId(user.id);
   if (!unitId) return { ok: false, error: "No home is on file for your account yet." };
 
-  const file = form.get("file");
+  // Documenting a whole home is a dozen photos, not one — taking them one at a
+  // time is why residents gave up on this. Accept the lot in a single pick.
+  const files = form.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
   const caption = (form.get("caption") as string)?.trim() || null;
-  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose a photo to upload." };
-  if (!IMAGE_TYPES.has(file.type)) return { ok: false, error: "Upload a photo (JPG, PNG, HEIC…)." };
+  if (files.length === 0) return { ok: false, error: "Choose at least one photo to upload." };
 
   const admin = createAdminClient();
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${unitId}/${kind}/${crypto.randomUUID()}.${ext}`;
-  const { error: upErr } = await admin.storage
-    .from(CONDITION_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
-  if (upErr) return { ok: false, error: "Upload failed. Please try again." };
+  const rows: { unit_id: string; kind: string; path: string; caption: string | null; created_by: string }[] = [];
+  const rejected: string[] = [];
 
-  await (admin as unknown as SupabaseClient).from("unit_photos").insert({
-    unit_id: unitId,
-    kind,
-    path,
-    caption,
-    created_by: user.id,
-  });
+  for (const file of files) {
+    if (!IMAGE_TYPES.has(file.type)) {
+      rejected.push(`${file.name} isn't a photo`);
+      continue;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      rejected.push(`${file.name} is too large`);
+      continue;
+    }
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${unitId}/${kind}/${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await admin.storage
+      .from(CONDITION_BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (upErr) {
+      rejected.push(`${file.name} failed to upload`);
+      continue;
+    }
+    rows.push({ unit_id: unitId, kind, path, caption, created_by: user.id });
+  }
+
+  // One bad photo out of twenty shouldn't lose the other nineteen, so save what
+  // worked and name what didn't.
+  if (rows.length > 0) {
+    await (admin as unknown as SupabaseClient).from("unit_photos").insert(rows);
+  }
 
   revalidatePath(redirectPath);
-  return { ok: true, notice: "Photo added." };
+
+  if (rows.length === 0) {
+    return { ok: false, error: rejected[0] ?? "Upload failed. Please try again." };
+  }
+  const added = `${rows.length} photo${rows.length === 1 ? "" : "s"} added.`;
+  return {
+    ok: true,
+    notice: rejected.length > 0 ? `${added} ${rejected.length} skipped — ${rejected[0]}.` : added,
+  };
 }
 
 export async function uploadMoveInPhoto(_prev: CheckInState, form: FormData) {

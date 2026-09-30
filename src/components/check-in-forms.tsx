@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui";
 import {
   discloseAssistance,
@@ -54,36 +54,60 @@ export function AssistanceDisclosureForm({ selected }: { selected: string[] }) {
   );
 }
 
+/**
+ * The file input plus its submit button, owning the "how many did you pick"
+ * count. Kept as its own component so a successful upload can remount it —
+ * which clears the chosen files and the count together, with no effect
+ * reaching in to reset state after the fact.
+ */
+function PhotoPicker({ pending }: { pending: boolean }) {
+  const [picked, setPicked] = useState(0);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {/* `multiple` lets them pick a whole room at once. No `capture` — on a
+          phone that forces the camera and allows only one shot at a time,
+          which is what made documenting a home so tedious. */}
+      <input
+        type="file"
+        name="file"
+        accept="image/*"
+        multiple
+        required
+        onChange={(e) => setPicked(e.currentTarget.files?.length ?? 0)}
+        className="text-xs text-ink-soft file:mr-2 file:rounded-lg file:border file:border-clay-deep file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-soft"
+      />
+      <Button type="submit" variant="outline" size="md" disabled={pending}>
+        {pending
+          ? `Uploading${picked > 1 ? ` ${picked} photos` : ""}…`
+          : picked > 1
+            ? `Add ${picked} photos`
+            : "Add photos"}
+      </Button>
+    </div>
+  );
+}
+
 export function PhotoUploader({ action }: { action: Action }) {
   const [state, formAction, pending] = useActionState(action, initial);
-  const formRef = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    if (state.ok) formRef.current?.reset();
-  }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="space-y-3">
+    <form action={formAction} className="space-y-3">
       <input
         type="text"
         name="caption"
-        placeholder="Caption (e.g. living room wall, kitchen floor)"
+        placeholder="Caption for this batch (e.g. living room, kitchen)"
         className={inputClass}
+        key={state.ok ? `caption-${state.notice}` : "caption"}
       />
+      <PhotoPicker key={state.ok ? `picker-${state.notice}` : "picker"} pending={pending} />
       <div className="flex flex-wrap items-center gap-3">
-        <input
-          type="file"
-          name="file"
-          accept="image/*"
-          capture="environment"
-          required
-          className="text-xs text-ink-soft file:mr-2 file:rounded-lg file:border file:border-clay-deep file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-soft"
-        />
-        <Button type="submit" variant="outline" size="md" disabled={pending}>
-          {pending ? "Uploading…" : "Add photo"}
-        </Button>
         {state.ok && state.notice && <span className="text-sm text-pine">{state.notice}</span>}
         {state.error && <span className="text-sm text-terracotta-dark">{state.error}</span>}
       </div>
+      <p className="text-xs text-ink-faint">
+        Pick as many as you like in one go — on a phone, choose from your library to select several,
+        or use the camera button to take a new one. Large batches take a moment.
+      </p>
     </form>
   );
 }
