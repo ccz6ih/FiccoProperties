@@ -27,6 +27,9 @@ export type PaymentRow = {
   status: string;
 };
 
+/** Today, for defaulting and capping the "date received" field. */
+const TODAY = new Date().toISOString().slice(0, 10);
+
 const initial: AdminPaymentsState = { ok: false };
 
 const remainingOf = (c: PaymentRow) => Math.max(0, c.amountCents - c.paidCents);
@@ -375,6 +378,16 @@ function RecordPaymentForm({
       <label className="space-y-1">
         <span className="block text-xs font-medium text-ink-soft">Check / MO #</span>
         <input name="reference" placeholder="Optional" className={`${inputSm} w-36`} />
+      </label>
+      <label className="space-y-1">
+        <span className="block text-xs font-medium text-ink-soft">Date received</span>
+        <input
+          type="date"
+          name="received_on"
+          defaultValue={TODAY}
+          max={TODAY}
+          className={inputSm}
+        />
       </label>
       <label className="flex items-center gap-1.5 pb-2 text-xs text-ink-soft">
         <input type="checkbox" name="email_receipt" value="on" defaultChecked className="h-4 w-4 rounded border-clay-deep accent-pine" />

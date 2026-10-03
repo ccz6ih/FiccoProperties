@@ -279,6 +279,22 @@ export async function generateMonthlyCharges(
  * payments + negative ledger entries and flips the charges to paid — all
  * server-side. Charges already paid/void are silently skipped.
  */
+/**
+ * When the money actually arrived, which is often not when it gets entered — a
+ * check that came Monday and is keyed on Thursday is three days less late than
+ * the clock would say. Everything downstream reads this: the days-late figures
+ * on the case file, the receipt, the owner reports.
+ *
+ * A future date is ignored rather than accepted. A bare date is anchored at
+ * midday UTC so no timezone can shunt it onto the day before or after.
+ */
+function parseReceivedOn(raw: FormDataEntryValue | null): string | null {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const at = new Date(`${value}T12:00:00Z`);
+  return at.getTime() <= Date.now() ? at.toISOString() : null;
+}
+
 export async function recordOfflinePayments(
   _prev: AdminPaymentsState,
   form: FormData
@@ -292,6 +308,8 @@ export async function recordOfflinePayments(
     .filter(Boolean);
   if (ids.length === 0) return { ok: false, error: "No charges selected." };
   const emailReceipt = form.get("email_receipt") === "on";
+
+  const receivedAt = parseReceivedOn(form.get("received_on"));
 
   // Optional payment method + check/money-order number for the record.
   const method = (form.get("method") as string)?.trim() || null;
@@ -332,6 +350,7 @@ export async function recordOfflinePayments(
       amount_cents: remaining,
       method_id: null,
       provider_ref: providerRef,
+      ...(receivedAt ? { created_at: receivedAt } : {}),
       status: "succeeded",
     }))
   );
@@ -477,6 +496,7 @@ export async function recordManualPayment(
   const refLabel = [method, reference].filter(Boolean).join(" ");
   const providerRef = refLabel || "offline";
   const emailReceipt = form.get("email_receipt") === "on";
+  const receivedAt = parseReceivedOn(form.get("received_on"));
 
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
@@ -498,6 +518,7 @@ export async function recordManualPayment(
     amount_cents: amountCents,
     method_id: null,
     provider_ref: providerRef,
+    ...(receivedAt ? { created_at: receivedAt } : {}),
     status: "succeeded",
   });
   if (payErr) return { ok: false, error: "Could not record the payment." };
