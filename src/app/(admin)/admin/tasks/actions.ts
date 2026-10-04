@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { notifyWorkLogged } from "@/lib/work-notify";
 
 export type TaskState = { ok: boolean; error?: string };
 
@@ -36,20 +37,62 @@ export async function createTask(
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
-  const { error } = await db.from("tasks").insert({
-    title,
-    details: str(form.get("details")),
-    category: CATEGORIES.has(category) ? category : "other",
-    priority: PRIORITIES.has(priority) ? priority : "normal",
-    assignee_id: str(form.get("assignee_id")),
-    property_id: str(form.get("property_id")),
-    unit_id: str(form.get("unit_id")),
-    due_date: str(form.get("due_date")),
-    created_by: user.id,
-  });
-  if (error) return { ok: false, error: "Could not create the task." };
+  const assigneeId = str(form.get("assignee_id"));
+  const unitId = str(form.get("unit_id"));
+  const propertyId = str(form.get("property_id"));
+  const dueDate = str(form.get("due_date"));
+  const details = str(form.get("details"));
+  const finalCategory = CATEGORIES.has(category) ? category : "other";
+  const finalPriority = PRIORITIES.has(priority) ? priority : "normal";
+
+  const { data: created, error } = await db
+    .from("tasks")
+    .insert({
+      title,
+      details,
+      category: finalCategory,
+      priority: finalPriority,
+      assignee_id: assigneeId,
+      property_id: propertyId,
+      unit_id: unitId,
+      due_date: dueDate,
+      created_by: user.id,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error || !created) return { ok: false, error: "Could not create the task." };
+
+  // Tasks used to notify nobody, so one assigned to someone lived only on a
+  // board they had to remember to open. Best-effort — the task is already saved.
+  try {
+    const [assignee, property] = await Promise.all([
+      assigneeId
+        ? db.from("profiles").select("full_name, email").eq("id", assigneeId)
+            .maybeSingle<{ full_name: string | null; email: string | null }>()
+        : Promise.resolve({ data: null }),
+      propertyId && !unitId
+        ? db.from("properties").select("name").eq("id", propertyId)
+            .maybeSingle<{ name: string | null }>()
+        : Promise.resolve({ data: null }),
+    ]);
+    await notifyWorkLogged({
+      kind: "task",
+      id: created.id,
+      title,
+      details,
+      category: finalCategory,
+      priority: finalPriority,
+      unitId,
+      propertyName: property.data?.name ?? null,
+      dueDate,
+      assigneeName: assignee.data?.full_name ?? assignee.data?.email ?? null,
+    });
+  } catch {
+    /* the task is saved; the alert is best-effort */
+  }
 
   revalidatePath("/admin/tasks");
+  revalidatePath("/admin/work");
   return { ok: true };
 }
 

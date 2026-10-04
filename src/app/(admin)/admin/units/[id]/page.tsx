@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
+import { LogWorkForm } from "@/components/log-work-form";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
 import { UnitLogForm } from "@/components/unit-log-form";
 import {
@@ -451,6 +452,10 @@ export default async function UnitDetail({
             </Link>{" "}
             — maintenance and office work for this home in one list, searchable by date.
           </p>
+
+          <div className="mt-3">
+            <LogWorkForm unitId={unit.id} />
+          </div>
 
           <UnitEditForm
             unit={{

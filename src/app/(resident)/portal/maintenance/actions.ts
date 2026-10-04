@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification, notificationHtml } from "@/lib/email";
-import { getOwnerRecipients } from "@/lib/owners";
-import { getUnitContact } from "@/lib/unit-contact";
+import { notifyWorkLogged } from "@/lib/work-notify";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -87,39 +86,25 @@ export async function createMaintenanceRequest(
     photoCount++;
   }
 
-  // Alert — emergencies go straight to every owner; the rest to the staff inbox.
-  // Lead with who and where: an alert that names only the request means looking
-  // the resident up before you can arrange anything, and that's the step that
-  // gets skipped. Everything needed to pick up the phone travels with it.
-  const contact = await getUnitContact(unitId);
-  const rows: [string, string][] = [
-    ["Home", contact.home ?? "—"],
-    ["Address", contact.address ?? "—"],
-    ["Resident", contact.tenantName ?? "—"],
-    ["Phone", contact.phone ?? "No phone on file"],
-    ["Email", contact.emails.length > 0 ? contact.emails.join(", ") : "No email on file"],
-    ["Request", title],
-    ["Details", description || "No additional details provided."],
-    ["Priority", priority],
-    ["Category", category],
-    ["Photos", photoCount > 0 ? String(photoCount) : "None"],
-    ["Open request", `https://38thaveproperties.com/admin/maintenance/${inserted.id}`],
-  ];
-  if (priority === "emergency") {
-    const owners = await getOwnerRecipients();
-    await sendNotification({
-      to: owners.length > 0 ? owners.join(",") : undefined,
-      subject: `🚨 EMERGENCY maintenance — ${contact.home ?? "a home"} — ${title}`,
-      html: notificationHtml("Emergency maintenance request", rows),
-      meta: { kind: "maintenance_emergency", refType: "maintenance", refId: inserted.id },
-    });
-  } else {
-    await sendNotification({
-      subject: `New maintenance request — ${contact.home ?? "a home"} — ${title}`,
-      html: notificationHtml("New maintenance request", rows),
-      meta: { kind: "maintenance_new", refType: "maintenance", refId: inserted.id },
-    });
-  }
+  // One alert shape for everything logged, so a request and a task read the
+  // same in the inbox and both carry who to call.
+  const { data: me } = await (supabase as unknown as SupabaseClient)
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", user.id)
+    .maybeSingle<{ full_name: string | null; email: string | null }>();
+
+  await notifyWorkLogged({
+    kind: "maintenance",
+    id: inserted.id,
+    title,
+    details: description || null,
+    category,
+    priority,
+    unitId,
+    reportedBy: me?.full_name ?? me?.email ?? null,
+    photoCount,
+  });
 
   revalidatePath("/portal/maintenance");
   revalidatePath("/portal");
