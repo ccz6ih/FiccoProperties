@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, EmptyState } from "@/components/dashboard-ui";
 import { IncidentRequestForm, type ResidentOpt } from "@/components/incident-request-form";
+import { IncidentOfficeFileForm } from "@/components/incident-office-file-form";
 import { formatDate } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -36,7 +37,7 @@ export default async function AdminIncidents({
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
-  const [{ data: reports }, { data: photoRows }, { data: residentRows }, { data: occRows }] =
+  const [{ data: reports }, { data: photoRows }, { data: residentRows }, { data: occRows }, { data: allUnits }] =
     await Promise.all([
       db
         .from("incident_reports")
@@ -58,7 +59,20 @@ export default async function AdminIncidents({
         .select("occupant_profile_id, units:unit_id(label, properties(name))")
         .not("occupant_profile_id", "is", null)
         .returns<{ occupant_profile_id: string; units: { label: string; properties: { name: string | null } | null } | null }[]>(),
+      // Every home, not only those with a portal account — the office can file
+      // about any of them.
+      db
+        .from("units")
+        .select("id, label, properties(name)")
+        .returns<{ id: string; label: string; properties: { name: string | null } | null }[]>(),
     ]);
+
+  const incidentUnits = (allUnits ?? [])
+    .map((u) => ({
+      id: u.id,
+      label: `${u.properties?.name ? `${u.properties.name} · ` : ""}${u.label}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
   const photoCount = new Map<string, number>();
   for (const p of photoRows ?? []) photoCount.set(p.report_id, (photoCount.get(p.report_id) ?? 0) + 1);
@@ -92,8 +106,15 @@ export default async function AdminIncidents({
     <div className="mx-auto max-w-5xl">
       <PageHeader
         title="Incident reports"
-        subtitle="Resident-filed reports of safety events, disputes, or damage — kept on file."
+        subtitle="Safety events, disputes and damage — filed by residents or recorded by the office."
       />
+
+      {/* The office hears things second-hand — a neighbour's account, a police
+          visit. Without somewhere to put it, that ends up as a note on someone
+          else's report, which is the wrong shape for a file that may matter. */}
+      <div className="mb-6">
+        <IncidentOfficeFileForm units={incidentUnits} />
+      </div>
 
       {residents.length > 0 && (
         <Card className="mb-6 p-5">

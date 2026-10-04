@@ -121,3 +121,74 @@ export async function addIncidentNote(
   revalidatePath(`/admin/incidents/${incidentId}`);
   return { ok: true };
 }
+
+
+/** Narratives are plain text; a line break is content. */
+const NL = String.fromCharCode(10);
+
+export type OfficeIncidentState = { ok: boolean; error?: string; notice?: string };
+
+/**
+ * File an incident report from the office.
+ *
+ * Only residents could file one, so anything the office learned another way —
+ * what neighbours said, what staff saw, a police visit — had nowhere to go
+ * except a note on somebody else's report. For a file that may end up
+ * supporting an eviction, that is the wrong shape: it needs its own dated,
+ * numbered record saying plainly where the account came from.
+ *
+ * Marked office-filed rather than dressed up as a resident submission — the
+ * record has to be honest about its source to be worth anything.
+ */
+export async function fileOfficeIncident(
+  _prev: OfficeIncidentState,
+  form: FormData
+): Promise<OfficeIncidentState> {
+  const { user, profile } = await requireProfile("/admin/incidents");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const str = (k: string) => (form.get(k) as string)?.trim() || null;
+
+  const unitId = str("unit_id");
+  const occurredOn = str("occurred_on");
+  const narrative = str("narrative");
+  if (!occurredOn) return { ok: false, error: "When did it happen?" };
+  if (!narrative) return { ok: false, error: "Describe what was reported." };
+
+  const supabase = await createClient();
+  const db = supabase as unknown as SupabaseClient;
+
+  const toldBy = str("told_by");
+  const { data, error } = await db
+    .from("incident_reports")
+    .insert({
+      reporter_id: user.id,
+      unit_id: unitId,
+      reporter_name: `Office — recorded by ${profile!.full_name ?? "staff"}`,
+      occurred_on: occurredOn,
+      occurred_time: str("occurred_time"),
+      location: str("location"),
+      involved: str("involved"),
+      // Say where the account came from inside the narrative itself, so the
+      // source travels with the text wherever it is read or printed.
+      narrative: toldBy
+        ? [`Recorded by the office from ${toldBy}.`, "", narrative].join(NL)
+        : ["Recorded by the office.", "", narrative].join(NL),
+      anyone_hurt: str("anyone_hurt") ?? "no",
+      police_called: str("police_called") ?? "unknown",
+      police_ref: str("police_ref"),
+      happened_before: str("happened_before") ?? "no",
+      before_when: str("before_when"),
+      additional: str("additional"),
+      status: "reviewed",
+      received_by: profile!.full_name ?? null,
+    })
+    .select("id, log_number")
+    .maybeSingle<{ id: string; log_number: string | null }>();
+
+  if (error || !data) return { ok: false, error: "Could not file it." };
+
+  revalidatePath("/admin/incidents");
+  if (unitId) revalidatePath(`/admin/units/${unitId}`);
+  return { ok: true, notice: `Filed as ${data.log_number ?? "a new report"}.` };
+}
