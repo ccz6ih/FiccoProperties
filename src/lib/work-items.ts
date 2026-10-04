@@ -10,6 +10,7 @@
  * What the two share is what you actually search by: what, where, who, when.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { matchesTerms, splitTerms } from "@/lib/search-match";
 
 export type WorkSource = "maintenance" | "task";
 
@@ -161,7 +162,7 @@ export type WorkFilters = {
  * this size ("what's waiting on me" and "what did we do on this home").
  */
 export function filterWork(items: WorkItem[], f: WorkFilters): WorkItem[] {
-  const q = f.q?.trim().toLowerCase() ?? "";
+  const terms = splitTerms(f.q ?? "");
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const out = items.filter((w) => {
@@ -185,12 +186,11 @@ export function filterWork(items: WorkItem[], f: WorkFilters): WorkItem[] {
     if (f.from && when < f.from) return false;
     if (f.to && when > f.to) return false;
 
-    if (q) {
+    if (terms.length > 0) {
       const hay = [w.title, w.details, w.propertyName, w.unitLabel, w.assigneeName, w.category]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      if (!hay.includes(q)) return false;
+        .join(" ");
+      if (!matchesTerms(hay, terms)) return false;
     }
     return true;
   });

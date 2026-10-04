@@ -442,6 +442,16 @@ export default async function UnitDetail({
             the full rent ledger.
           </p>
 
+          <p className="mt-1.5 text-sm text-ink-faint">
+            <Link
+              href={`/admin/work?unit=${unit.id}&state=all`}
+              className="font-medium text-pine hover:text-pine-dark"
+            >
+              Every repair and task here
+            </Link>{" "}
+            — maintenance and office work for this home in one list, searchable by date.
+          </p>
+
           <UnitEditForm
             unit={{
               id: unit.id,

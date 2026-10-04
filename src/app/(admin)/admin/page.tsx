@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card, Eyebrow } from "@/components/ui";
 import { PageHeader, StatCard, StatusPill } from "@/components/dashboard-ui";
 import { TenantSearch } from "@/components/tenant-search";
-import { loadSearchItems } from "@/lib/admin-search";
+import { loadSearchItems, loadWorkSearchItems } from "@/lib/admin-search";
 import { annivInfo } from "@/lib/anniversary";
 import { formatDate, formatCents } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -73,6 +73,7 @@ export default async function AdminOverview() {
 
   const [
     searchItems,
+    workSearchItems,
     { count: unitCount },
     { data: units },
     { count: newApps },
@@ -88,6 +89,7 @@ export default async function AdminOverview() {
     { data: leaseEvents },
   ] = await Promise.all([
     loadSearchItems(),
+    loadWorkSearchItems(),
     supabase.from("units").select("*", { count: "exact", head: true }),
     supabase.from("units").select("status"),
     supabase
@@ -239,7 +241,7 @@ export default async function AdminOverview() {
       <PageHeader title="Overview" subtitle="The whole portfolio at a glance." />
 
       <Card className="mb-8 p-5">
-        <TenantSearch items={searchItems} limit={8} />
+        <TenantSearch items={searchItems} work={workSearchItems} limit={8} />
       </Card>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
