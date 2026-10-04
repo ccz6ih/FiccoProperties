@@ -57,6 +57,10 @@ export type NoticeData = {
     stillOwed: boolean;
   }[] | null;
   priorDemandDate?: string | null; // served date of the prior demand (repeat violation)
+  /** What happened before, in the office's words — "verbal warning Aug 5, incident IR-00002". */
+  priorIncident?: string | null;
+  /** Someone not on the lease whose conduct is at issue, named so the warning bites. */
+  guestName?: string | null;
   reason?: string | null; // violation description / entry reason
   entryDate?: string | null;
   entryTime?: string | null;
@@ -122,6 +126,8 @@ export function buildNotice(
   const demandCount = data.demandCount ?? 0;
   const demandDates = data.demandDates?.trim() || "";
   const priorDemand = data.priorDemandDate?.trim() || "____________";
+  const priorIncident = data.priorIncident?.trim() || "";
+  const guestName = data.guestName?.trim() || "";
   const reasonText = data.reason?.trim() || "[Describe the violation and which lease term or community rule was broken.]";
   const today = data.today?.trim() || "____________";
 
@@ -332,10 +338,26 @@ Premises: ${addr}${city ? `, ${city}` : ""}, Colorado${county ? ` — ${county} 
 GROUNDS: You are in violation of your Residential Lease Agreement and/or the Community Rules:
 
 ${reasonText}
+${
+  priorIncident
+    ? `
+PRIOR MATTER ON RECORD: ${priorIncident}
 
+This is not the first time this has been raised with you. This notice is a formal written demand and is kept on file.
+`
+    : ""
+}${
+  guestName
+    ? `
+PERSON NOT ON THE LEASE: ${guestName} is not a party to your lease. You are responsible under your lease for the conduct of everyone you allow onto the property, including guests and occupants. If this conduct continues, the Landlord may withdraw permission for ${guestName} to be on the property and may notify them in writing that they are barred from it; remaining or returning after that notice can be treated as trespass and reported to the Wheat Ridge Police Department. That step concerns ${guestName} only and is separate from your tenancy.
+`
+    : ""
+}
 TIME TO COMPLY: On or before ${cure} — the compliance deadline stated in this notice — you must EITHER:
   (1) fully correct the violation described above and comply with the lease, OR
   (2) move out and deliver possession of the premises to the Landlord.
+
+WHAT HAPPENS IF IT CONTINUES: If this conduct happens again after this notice is served, the Landlord may serve a Notice to Terminate Tenancy for a repeat violation under C.R.S. § 13-40-104(1)(e.5), which gives TEN (10) DAYS to move out and is not curable by correcting the behaviour, and may then file an eviction case. Everyone on the lease is affected by that, not only the person whose conduct caused it.
 
 If you do not do one of these by the date above, the Landlord may begin a court eviction case (Forcible Entry and Detainer, C.R.S. § 13-40-101 et seq.) to recover possession of the premises and the costs allowed by law. Any cost the Landlord incurs to cure the violation may be charged as additional rent; eviction for non-payment, however, applies only to rent, not to fees.
 

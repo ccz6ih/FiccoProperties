@@ -66,6 +66,34 @@ export function LeaseViolationForm({
         ))}
       </div>
 
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-ink">
+          What happened before <span className="font-normal text-ink-faint">(optional)</span>
+        </span>
+        <textarea
+          name="prior_incident"
+          rows={2}
+          className={input}
+          placeholder="Verbal warning given Aug 5, 2026; incident report IR-00002 of Jul 29, 2026 on file."
+        />
+        <span className="block text-xs text-ink-faint">
+          Naming the earlier matter is what makes this a documented second warning — and a served
+          demand is what the 10-day repeat-violation notice later has to point back to.
+        </span>
+      </label>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-ink">
+          Person not on the lease <span className="font-normal text-ink-faint">(optional)</span>
+        </span>
+        <input name="guest_name" className={input} placeholder="e.g. Matt" />
+        <span className="block text-xs text-ink-faint">
+          Adds a paragraph saying permission for them to be on the property may be withdrawn in
+          writing, and that returning afterwards can be treated as trespass — separate from the
+          tenancy itself.
+        </span>
+      </label>
+
       <label className="block max-w-[200px] space-y-1.5">
         <span className="text-sm font-medium text-ink">Days to correct</span>
         <input name="cure_days" type="number" min={1} max={60} defaultValue={10} className={input} />

@@ -467,6 +467,8 @@ export async function createLeaseViolationForUnit(form: FormData) {
     city: p?.city,
     county: "Jefferson",
     reason,
+    priorIncident: (form.get("prior_incident") as string)?.trim() || null,
+    guestName: (form.get("guest_name") as string)?.trim() || null,
     cureBy: formatDate(cureIso),
     today: formatDate(todayIso),
   });
