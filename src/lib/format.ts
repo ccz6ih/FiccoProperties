@@ -42,3 +42,17 @@ export function humanize(value: string): string {
   const s = value.replace(/_/g, ' ')
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
+
+/**
+ * "(303) 505-1014" from whatever shape the number was typed in. Phones reach
+ * us as bare digits, with dashes, or with a +1 — a US 10-digit number reads
+ * properly, and anything else is handed back untouched rather than mangled.
+ */
+export function formatPhone(raw: string | null | undefined): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  const ten = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (ten.length !== 10) return value;
+  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
+}

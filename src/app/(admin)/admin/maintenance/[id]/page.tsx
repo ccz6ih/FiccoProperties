@@ -15,6 +15,7 @@ import {
   setMaintenanceAssignee,
 } from "@/app/(admin)/admin/maintenance/actions";
 import { formatDate, humanize } from "@/lib/format";
+import { getUnitContact } from "@/lib/unit-contact";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CONDITION_BUCKET } from "@/lib/unit-photos";
@@ -29,6 +30,7 @@ type RequestRow = {
   status: string;
   assigned_to: string | null;
   created_at: string;
+  unit_id: string | null;
   units: { label: string; properties: { name: string | null } | null } | null;
   profiles: { full_name: string | null; email: string | null } | null;
 };
@@ -59,13 +61,15 @@ export default async function MaintenanceDetail({
   const { data: request } = await supabase
     .from("maintenance_requests")
     .select(
-      "id, title, description, category, priority, status, assigned_to, created_at, units(label, properties(name)), profiles!maintenance_requests_created_by_fkey(full_name, email)"
+      "id, title, description, category, priority, status, assigned_to, created_at, unit_id, units(label, properties(name)), profiles!maintenance_requests_created_by_fkey(full_name, email)"
     )
     .eq("id", id)
     .maybeSingle()
     .returns<RequestRow>();
 
   if (!request) notFound();
+
+  const contact = await getUnitContact(request.unit_id);
 
   const { data: comments } = await db
     .from("maintenance_comments")
@@ -144,6 +148,53 @@ export default async function MaintenanceDetail({
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
+          {/* Who to call and where to go — the first thing you need and the
+              thing that used to mean looking the resident up elsewhere. */}
+          <Card className="p-5">
+            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
+              Who lives here
+            </div>
+            <div className="font-display text-lg font-semibold text-ink">
+              {contact.tenantName ?? "No tenancy on file"}
+            </div>
+            {contact.address && (
+              <div className="mt-0.5 text-sm text-ink-soft">{contact.address}</div>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              {contact.phone ? (
+                <a
+                  href={`tel:${contact.phone.replace(/[^0-9+]/g, "")}`}
+                  className="font-medium text-pine hover:text-pine-dark"
+                >
+                  📞 {contact.phone}
+                </a>
+              ) : (
+                <span className="text-ink-faint">No phone on file</span>
+              )}
+              {contact.emails.length > 0 ? (
+                contact.emails.map((e) => (
+                  <a
+                    key={e}
+                    href={`mailto:${e}`}
+                    className="font-medium text-pine hover:text-pine-dark"
+                  >
+                    ✉ {e}
+                  </a>
+                ))
+              ) : (
+                <span className="text-ink-faint">No email on file</span>
+              )}
+              {request.unit_id && (
+                <Link
+                  href={`/admin/units/${request.unit_id}`}
+                  className="text-ink-soft hover:text-ink"
+                >
+                  Open the home →
+                </Link>
+              )}
+            </div>
+          </Card>
+
           <Card className="space-y-4 p-6">
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink-faint">
               <span>{humanize(request.category)}</span>
