@@ -42,6 +42,7 @@ export default async function AdminLayout({
     { href: "/admin/tasks", label: "Tasks", icon: navIcons.tasks },
     { href: "/admin/recurring", label: "Recurring work", icon: navIcons.calendar },
     { href: "/admin/petty-cash", label: "Petty cash", icon: navIcons.receipt },
+    { href: "/admin/costs", label: "Cost per home", icon: navIcons.card },
     { href: "/admin/financials", label: "Financials", icon: navIcons.card },
     { href: "/admin/anniversaries", label: "Anniversaries", icon: navIcons.calendar },
   ];
