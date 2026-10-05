@@ -2,6 +2,8 @@
 
 export type CsvRow = {
   date: string;
+  /** When it was keyed in, which is often not the receipt's date. */
+  entered: string;
   envelope: string;
   type: string;
   store: string;
@@ -10,6 +12,10 @@ export type CsvRow = {
   where: string;
   receiptTotal: string;
   amount: string;
+  /** "Yes" / "On paper" / "Missing" — so a spreadsheet can be sorted by it. */
+  receipt: string;
+  /** Envelope balance after this entry, in order. */
+  balance: string;
 };
 
 function escape(v: string) {
@@ -19,13 +25,14 @@ function escape(v: string) {
 export function PettyCashCsv({ rows, filename }: { rows: CsvRow[]; filename: string }) {
   function download() {
     const header = [
-      "Date", "Envelope", "Type", "Store", "Details", "Category", "Where",
-      "Receipt total", "Amount",
+      "Date on receipt", "Date entered", "Envelope", "Type", "Store", "Details",
+      "Category", "Where", "Receipt total", "Amount", "Receipt", "Balance after",
     ];
     const lines = [header.join(",")];
     for (const r of rows) {
       lines.push(
-        [r.date, r.envelope, r.type, r.store, r.details, r.category, r.where, r.receiptTotal, r.amount]
+        [r.date, r.entered, r.envelope, r.type, r.store, r.details, r.category,
+         r.where, r.receiptTotal, r.amount, r.receipt, r.balance]
           .map((v) => escape(v ?? ""))
           .join(",")
       );

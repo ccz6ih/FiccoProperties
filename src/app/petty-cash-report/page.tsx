@@ -97,6 +97,23 @@ export default async function PettyCashReport({
     })(),
   ]);
 
+  // Which entries had their receipt handed over on paper. Fetched on its own
+  // and allowed to fail so the report still renders before migration 0059 is
+  // run — a missing column shouldn't take the whole page down.
+  const onPaper = new Set<string>();
+  try {
+    const { data: paperRows } = await db
+      .from("petty_cash_entries")
+      .select("id")
+      .eq("receipt_on_paper", true)
+      .gte("occurred_on", from)
+      .lte("occurred_on", to)
+      .returns<{ id: string }[]>();
+    for (const r of paperRows ?? []) onPaper.add(r.id);
+  } catch {
+    /* column not there yet */
+  }
+
   const placeOf = (e: EntryRow) =>
     e.unit?.properties?.name ?? e.property?.name ?? "Unassigned";
 
@@ -164,7 +181,7 @@ export default async function PettyCashReport({
   };
 
   const hasReceipt = (e: EntryRow) =>
-    !!e.receipt_path || (e.receipt_paths?.length ?? 0) > 0;
+    !!e.receipt_path || (e.receipt_paths?.length ?? 0) > 0 || onPaper.has(e.id);
   const undocumented = entries.filter((e) => e.kind === "expense" && !hasReceipt(e));
   const undocumentedCents = undocumented.reduce((sum, e) => sum + e.amount_cents, 0);
 
@@ -194,8 +211,28 @@ export default async function PettyCashReport({
     ? staff?.find((s) => s.id === staffId)?.full_name ?? "Staff"
     : "All envelopes";
 
+  // Running balance down the list, starting from what was already in hand. This
+  // is what shows a load being spent down — "$600 in on the 14th, and here is
+  // where it went" — rather than a flat list of unrelated amounts.
+  let running = openingCents;
+  const balanceAfter = new Map<string, number>();
+  for (const e of entries) {
+    running += e.kind === "topup" ? e.amount_cents : -e.amount_cents;
+    balanceAfter.set(e.id, running);
+  }
+
+  const receiptLabel = (e: EntryRow) =>
+    e.kind === "topup"
+      ? ""
+      : onPaper.has(e.id)
+        ? "On paper"
+        : hasReceipt(e)
+          ? "Yes"
+          : "Missing";
+
   const csvRows: CsvRow[] = entries.map((e) => ({
     date: e.occurred_on,
+    entered: e.created_at ? e.created_at.slice(0, 10) : "",
     envelope: e.staff?.full_name ?? "—",
     type: e.kind === "topup" ? "Cash received" : "Expense",
     store: e.store ?? "",
@@ -204,6 +241,8 @@ export default async function PettyCashReport({
     where: e.kind === "topup" ? "" : where(e),
     receiptTotal: e.receipt_total_cents != null ? (e.receipt_total_cents / 100).toFixed(2) : "",
     amount: ((e.kind === "topup" ? 1 : -1) * e.amount_cents / 100).toFixed(2),
+    receipt: receiptLabel(e),
+    balance: ((balanceAfter.get(e.id) ?? 0) / 100).toFixed(2),
   }));
 
   const current = {
@@ -358,13 +397,17 @@ export default async function PettyCashReport({
                   <th className="py-2.5 pr-3 font-semibold">Details</th>
                   <th className="py-2.5 pr-3 font-semibold">Where</th>
                   <th className="py-2.5 text-right font-semibold">Amount</th>
+                  <th className="py-2.5 text-right font-semibold">Balance</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e) => {
                   const topup = e.kind === "topup";
                   return (
-                    <tr key={e.id} className="border-b border-clay align-top">
+                    <tr
+                      key={e.id}
+                      className={`border-b border-clay align-top ${topup ? "bg-pine/5" : ""}`}
+                    >
                       <td className="whitespace-nowrap py-3 pr-3 text-ink-soft">
                         {formatDate(e.occurred_on)}
                         {/* When a purchase was entered days later the two dates
@@ -388,6 +431,11 @@ export default async function PettyCashReport({
                       </td>
                       <td className="py-3 pr-3 text-ink-soft">
                         {topup ? "—" : where(e)}
+                        {!topup && onPaper.has(e.id) && (
+                          <span className="mt-0.5 block text-xs text-ink-faint">
+                            receipt on paper
+                          </span>
+                        )}
                         {!topup && !hasReceipt(e) && (
                           <span className="mt-0.5 block text-xs font-medium text-terracotta-dark">
                             no receipt
@@ -397,6 +445,15 @@ export default async function PettyCashReport({
                       <td className={`whitespace-nowrap py-3 text-right text-lg font-semibold tabular-nums ${topup ? "text-pine" : "text-ink"}`}>
                         {topup ? "+" : "−"}{formatCents(e.amount_cents)}
                       </td>
+                      {/* Running balance: what was left in the envelope after
+                          this entry, so a load can be followed as it's spent. */}
+                      <td
+                        className={`whitespace-nowrap py-3 text-right tabular-nums ${
+                          (balanceAfter.get(e.id) ?? 0) < 0 ? "text-terracotta-dark" : "text-ink-faint"
+                        }`}
+                      >
+                        {formatCents(balanceAfter.get(e.id) ?? 0)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -405,7 +462,7 @@ export default async function PettyCashReport({
                   the reader to scroll back up to the tiles. */}
               <tfoot>
                 <tr className="border-t-2 border-clay-deep">
-                  <td colSpan={4} className="py-3 pr-3 text-right font-semibold text-ink">
+                  <td colSpan={5} className="py-3 pr-3 text-right font-semibold text-ink">
                     Received this period
                   </td>
                   <td className="whitespace-nowrap py-3 text-right text-lg font-semibold tabular-nums text-pine">
@@ -413,7 +470,7 @@ export default async function PettyCashReport({
                   </td>
                 </tr>
                 <tr>
-                  <td colSpan={4} className="py-1 pr-3 text-right font-semibold text-ink">
+                  <td colSpan={5} className="py-1 pr-3 text-right font-semibold text-ink">
                     Spent this period
                   </td>
                   <td className="whitespace-nowrap py-1 text-right text-lg font-semibold tabular-nums text-ink">
@@ -421,7 +478,7 @@ export default async function PettyCashReport({
                   </td>
                 </tr>
                 <tr className="border-t border-clay">
-                  <td colSpan={4} className="py-3 pr-3 text-right font-display text-lg font-semibold text-ink">
+                  <td colSpan={5} className="py-3 pr-3 text-right font-display text-lg font-semibold text-ink">
                     {closingCents < 0 ? "Owed back to envelope" : "Left in the envelope"}
                   </td>
                   <td

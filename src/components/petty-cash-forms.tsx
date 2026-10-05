@@ -73,6 +73,57 @@ function Tab({ active, onClick, label }: { active: boolean; onClick: () => void;
   );
 }
 
+/**
+ * The receipt total and the business portion, plus the "this much is personal"
+ * line they imply. Its own component so a successful save can remount it —
+ * which clears both boxes without an effect writing state after render.
+ */
+function AmountFields() {
+  const [total, setTotal] = useState("");
+  const [amount, setAmount] = useState("");
+
+  const t = parseFloat(total);
+  const a = parseFloat(amount);
+  const personal =
+    Number.isFinite(t) && Number.isFinite(a) && t > a ? Math.round((t - a) * 100) : null;
+
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={lbl}>
+          Receipt total ($)
+          <input
+            inputMode="decimal"
+            name="receipt_total"
+            value={total}
+            onChange={(e) => setTotal(e.target.value)}
+            placeholder="47.83"
+            className={field}
+          />
+        </label>
+        <label className={lbl}>
+          From petty cash ($) — business portion
+          <input
+            inputMode="decimal"
+            name="amount"
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="22.10"
+            className={field}
+          />
+        </label>
+      </div>
+
+      {personal != null && (
+        <p className="rounded-lg bg-sand/60 px-3 py-2 text-xs text-ink-soft">
+          {formatCents(personal)} of this receipt is personal (not from the envelope).
+        </p>
+      )}
+    </>
+  );
+}
+
 function ExpenseForm({
   staff,
   properties,
@@ -85,18 +136,17 @@ function ExpenseForm({
   defaultStaffId: string;
 }) {
   const [state, action, pending] = useActionState(addExpense, initial);
-  const [total, setTotal] = useState("");
-  const [amount, setAmount] = useState("");
   const [converting, setConverting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
 
+  // Only the form reset and the refresh belong here. The amount boxes clear by
+  // remounting (see AmountFields' key) rather than an effect reaching in to set
+  // their state after render.
   useEffect(() => {
     if (state.ok) {
       formRef.current?.reset();
-      setTotal("");
-      setAmount("");
       router.refresh();
     }
   }, [state, router]);
@@ -132,11 +182,6 @@ function ExpenseForm({
     }
     startTransition(() => action(fd));
   }
-
-  const t = parseFloat(total);
-  const a = parseFloat(amount);
-  const personal =
-    Number.isFinite(t) && Number.isFinite(a) && t > a ? Math.round((t - a) * 100) : null;
 
   const byProperty = new Map<string, UnitOpt[]>();
   for (const u of units) {
@@ -180,37 +225,7 @@ function ExpenseForm({
         </label>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className={lbl}>
-          Receipt total ($)
-          <input
-            inputMode="decimal"
-            name="receipt_total"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            placeholder="47.83"
-            className={field}
-          />
-        </label>
-        <label className={lbl}>
-          From petty cash ($) — business portion
-          <input
-            inputMode="decimal"
-            name="amount"
-            required
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="22.10"
-            className={field}
-          />
-        </label>
-      </div>
-
-      {personal != null && (
-        <p className="rounded-lg bg-sand/60 px-3 py-2 text-xs text-ink-soft">
-          {formatCents(personal)} of this receipt is personal (not from the envelope).
-        </p>
-      )}
+      <AmountFields key={state.ok ? "amounts-saved" : "amounts"} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={lbl}>
@@ -254,6 +269,20 @@ function ExpenseForm({
         <span className="mt-1 block text-[11px] text-ink-faint">
           Multi-page receipt? Attach the PDF (we&apos;ll split it into pages) or snap
           a photo of each page and select them all.
+        </span>
+      </label>
+
+      {/* Handed over on paper counts as documented — otherwise the report calls
+          it missing, which isn't true and looks careless to whoever reads it. */}
+      <label className="flex items-start gap-2.5 rounded-xl border border-clay bg-sand/40 px-3.5 py-3">
+        <input
+          type="checkbox"
+          name="receipt_on_paper"
+          className="mt-0.5 h-4 w-4 rounded border-clay-deep accent-pine"
+        />
+        <span className="text-sm text-ink-soft">
+          <strong className="text-ink">Paper receipt handed over</strong> — no photo here, but
+          the receipt itself has gone to the bookkeeper.
         </span>
       </label>
 

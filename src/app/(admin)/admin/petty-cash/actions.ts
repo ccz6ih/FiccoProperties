@@ -79,6 +79,8 @@ export async function addExpense(
     property_id: str(form.get("property_id")),
     unit_id: str(form.get("unit_id")),
     receipt_total_cents: receiptTotal,
+    // Handed over by hand rather than uploaded — documented, just not scanned.
+    receipt_on_paper: form.get("receipt_on_paper") === "on",
     amount_cents: amount,
     receipt_path: receiptPaths[0] ?? null,
     receipt_paths: receiptPaths.length > 0 ? receiptPaths : null,
