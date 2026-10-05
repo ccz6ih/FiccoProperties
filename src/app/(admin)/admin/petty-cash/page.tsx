@@ -28,7 +28,6 @@ type EntryRow = {
   amount_cents: number;
   receipt_path: string | null;
   receipt_paths: string[] | null;
-  receipt_on_paper?: boolean | null;
   property_id: string | null;
   unit_id: string | null;
   staff: { full_name: string | null } | null;
@@ -59,7 +58,7 @@ export default async function AdminPettyCash({
       db
         .from("petty_cash_entries")
         .select(
-          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, receipt_on_paper, property_id, unit_id, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
+          "id, staff_id, kind, occurred_on, store, description, category, receipt_total_cents, amount_cents, receipt_path, receipt_paths, property_id, unit_id, staff:staff_id(full_name), unit:unit_id(label, properties(name)), property:property_id(name)"
         )
         .order("occurred_on", { ascending: false })
         .order("created_at", { ascending: false })
@@ -75,6 +74,22 @@ export default async function AdminPettyCash({
     id: s.id,
     name: s.full_name ?? "Staff",
   }));
+  // receipt_on_paper arrives with migration 0059. Fetched on its own and
+  // allowed to fail, because a column this page merely annotates with must
+  // never be able to empty the whole list — which is exactly what selecting it
+  // inline did before the migration was run.
+  const onPaper = new Set<string>();
+  try {
+    const { data: paperRows } = await db
+      .from("petty_cash_entries")
+      .select("id")
+      .eq("receipt_on_paper", true)
+      .returns<{ id: string }[]>();
+    for (const r of paperRows ?? []) onPaper.add(r.id);
+  } catch {
+    /* not migrated yet */
+  }
+
   const propOpts: PropOpt[] = properties ?? [];
   const unitOpts: UnitOpt[] = (units ?? []).map((u) => ({
     id: u.id,
@@ -311,7 +326,7 @@ export default async function AdminPettyCash({
                               unitId: e.unit_id,
                               receiptCount:
                                 e.receipt_paths?.length ?? (e.receipt_path ? 1 : 0),
-                              receiptOnPaper: !!e.receipt_on_paper,
+                              receiptOnPaper: onPaper.has(e.id),
                               amountDollars: (e.amount_cents / 100).toString(),
                               receiptTotalDollars:
                                 e.receipt_total_cents != null
