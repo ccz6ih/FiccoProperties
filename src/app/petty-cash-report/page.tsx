@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Container } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { PettyCashCsv, type CsvRow } from "@/components/petty-cash-csv";
-import { formatCents, formatDate } from "@/lib/format";
+import { formatCents, formatDate, humanize } from "@/lib/format";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -527,10 +527,32 @@ export default async function PettyCashReport({
                   .filter((e) => receiptsByEntry.has(e.id))
                   .map((e) => (
                     <div key={e.id} className="break-inside-avoid">
-                      <div className="mb-2 text-base font-medium text-ink">
-                        {formatDate(e.occurred_on)} · {e.store ?? "Expense"} ·{" "}
-                        {formatCents(e.amount_cents)}
-                        <span className="text-ink-faint"> — {e.staff?.full_name ?? ""}</span>
+                      {/* A receipt image on its own tells a bookkeeper nothing
+                          about what it was for or which home it belongs to, so
+                          each one is captioned with the whole entry. */}
+                      <div className="mb-2 border-l-4 border-clay-deep pl-3">
+                        <div className="font-display text-lg font-semibold text-ink">
+                          {e.store ?? "Expense"} · {formatCents(e.amount_cents)}
+                        </div>
+                        <div className="text-sm text-ink-soft">
+                          {formatDate(e.occurred_on)}
+                          {e.description ? ` · ${e.description}` : ""}
+                        </div>
+                        <div className="text-xs text-ink-faint">
+                          {[
+                            where(e),
+                            e.category ? humanize(e.category) : null,
+                            e.staff?.full_name ?? null,
+                            e.receipt_total_cents != null &&
+                            e.receipt_total_cents !== e.amount_cents
+                              ? `receipt total ${formatCents(e.receipt_total_cents)}, ${formatCents(
+                                  e.amount_cents
+                                )} from the envelope`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-3">
                         {receiptsByEntry.get(e.id)!.map((r, i) =>
@@ -543,15 +565,26 @@ export default async function PettyCashReport({
                               className="max-h-80 rounded-lg border border-clay"
                             />
                           ) : (
-                            <a
+                            <div
                               key={i}
-                              href={r.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg border border-clay bg-sand/40 px-3 py-2 text-xs font-medium text-pine print:hidden"
+                              className="rounded-lg border border-clay bg-sand/40 px-3 py-2 text-xs"
                             >
-                              Receipt PDF (page {i + 1}) →
-                            </a>
+                              <a
+                                href={r.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-pine print:text-ink"
+                              >
+                                Receipt held as a PDF — open it →
+                              </a>
+                              {/* Printed, a link is just blue text, so say
+                                  plainly that the file exists and isn't here. */}
+                              <span className="hidden text-ink-faint print:inline">
+                                {" "}
+                                (the file is on the entry in the system; it could not be printed
+                                here)
+                              </span>
+                            </div>
                           )
                         )}
                       </div>

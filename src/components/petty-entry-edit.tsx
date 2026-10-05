@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui";
 import { editPettyEntry, type CashState } from "@/app/(admin)/admin/petty-cash/actions";
+import { pdfToImages } from "@/lib/pdf-to-images";
 
 const initial: CashState = { ok: false };
 const field =
@@ -43,8 +44,44 @@ export function PettyEntryEdit({
 }) {
   const [state, action, pending] = useActionState(editPettyEntry, initial);
   const [open, setOpen] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [, startTransition] = useTransition();
   const isTopup = entry.kind === "topup";
   const router = useRouter();
+
+  /**
+   * Convert PDF receipts to page images before uploading, exactly as the add
+   * form does. A PDF can only be linked to in the report, and a link prints as
+   * nothing — which is why the Home Depot receipt appeared to vanish.
+   */
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    const files = fd.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+    fd.delete("file");
+
+    if (files.length > 0) setConverting(true);
+    try {
+      for (const f of files) {
+        if (f.type === "application/pdf") {
+          try {
+            const imgs = await pdfToImages(f);
+            imgs.forEach((img) => fd.append("file", img));
+          } catch {
+            fd.append("file", f); // keep the PDF rather than lose the receipt
+          }
+        } else {
+          fd.append("file", f);
+        }
+      }
+    } finally {
+      setConverting(false);
+    }
+    startTransition(() => action(fd));
+  }
 
   const unitsByProperty = new Map<string, UnitOpt[]>();
   for (const u of units) {
@@ -100,7 +137,7 @@ export function PettyEntryEdit({
           </button>
         </div>
 
-        <form action={action} className="space-y-3">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
           <input type="hidden" name="id" value={entry.id} />
           <input type="hidden" name="kind" value={entry.kind} />
 
@@ -224,8 +261,8 @@ export function PettyEntryEdit({
             <p className="text-xs font-medium text-pine">Saved ✓</p>
           )}
           <div className="flex items-center gap-3">
-            <Button type="submit" variant="primary" disabled={pending}>
-              {pending ? "Saving…" : "Save"}
+            <Button type="submit" variant="primary" disabled={pending || converting}>
+              {converting ? "Reading the PDF…" : pending ? "Saving…" : "Save"}
             </Button>
             <button
               type="button"
