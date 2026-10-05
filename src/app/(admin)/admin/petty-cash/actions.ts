@@ -154,6 +154,43 @@ export async function editPettyEntry(
     updates.unit_id = str(form.get("unit_id"));
   }
 
+  // Receipts can be added to an entry that was keyed in without one — which is
+  // most of them, since the purchase gets entered long before the paperwork is
+  // sorted. New files are APPENDED, so adding page two never loses page one.
+  const files = form
+    .getAll("file")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length > 0) {
+    const { data: existing } = await db
+      .from("petty_cash_entries")
+      .select("staff_id, receipt_path, receipt_paths")
+      .eq("id", id)
+      .maybeSingle<{ staff_id: string; receipt_path: string | null; receipt_paths: string[] | null }>();
+
+    const admin = createAdminClient();
+    const added: string[] = [];
+    for (const file of files) {
+      if (!DOC_TYPES.has(file.type)) {
+        return { ok: false, error: "Receipts must be PDFs or images." };
+      }
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${existing?.staff_id ?? "unknown"}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await admin.storage
+        .from(RECEIPT_BUCKET)
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) return { ok: false, error: "Receipt upload failed." };
+      added.push(path);
+    }
+
+    const current =
+      existing?.receipt_paths ?? (existing?.receipt_path ? [existing.receipt_path] : []);
+    updates.receipt_paths = [...current, ...added];
+    // A receipt is now on file, so it is no longer only-on-paper.
+    updates.receipt_on_paper = false;
+  } else if (form.get("receipt_on_paper") !== null) {
+    updates.receipt_on_paper = form.get("receipt_on_paper") === "on";
+  }
+
   const { error } = await db.from("petty_cash_entries").update(updates).eq("id", id);
   if (error) return { ok: false, error: "Could not save changes." };
 

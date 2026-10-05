@@ -216,7 +216,9 @@ export default async function PettyCashReport({
   // where it went" — rather than a flat list of unrelated amounts.
   let running = openingCents;
   const balanceAfter = new Map<string, number>();
+  const balanceBefore = new Map<string, number>();
   for (const e of entries) {
+    balanceBefore.set(e.id, running);
     running += e.kind === "topup" ? e.amount_cents : -e.amount_cents;
     balanceAfter.set(e.id, running);
   }
@@ -356,7 +358,14 @@ export default async function PettyCashReport({
 
           {/* Summary */}
           <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-clay bg-clay sm:grid-cols-5">
-            <Summary label={`In hand ${formatDate(from)}`} value={formatCents(openingCents)} />
+            {/* A negative opening isn't "in hand" — it's money already laid
+                out and not yet repaid. Labelling it honestly is half the
+                confusion gone. */}
+            <Summary
+              label={openingCents < 0 ? `Owed on ${formatDate(from)}` : `In hand ${formatDate(from)}`}
+              value={formatCents(Math.abs(openingCents))}
+              tone={openingCents < 0 ? "debt" : "normal"}
+            />
             <Summary label="Cash received" value={formatCents(receivedCents)} />
             <Summary label="Spent" value={formatCents(spentCents)} />
             <Summary
@@ -372,8 +381,9 @@ export default async function PettyCashReport({
           </div>
 
           <div className="mb-7 -mt-4 text-center text-sm text-ink-soft print:mb-5">
-            {formatCents(openingCents)} in hand on {formatDate(from)} + {formatCents(receivedCents)}{" "}
-            received − {formatCents(spentCents)} spent ={" "}
+            {formatCents(openingCents)} in hand on {formatDate(from)}
+            {openingCents < 0 ? " (already out of pocket from earlier purchases)" : ""} +{" "}
+            {formatCents(receivedCents)} received − {formatCents(spentCents)} spent ={" "}
             <strong className="text-ink-soft">{formatCents(closingCents)}</strong>
             {closingCents < 0
               ? " — the envelope is out of pocket by this much and is owed it back."
@@ -422,6 +432,19 @@ export default async function PettyCashReport({
                       <td className="py-3 pr-3 text-ink-soft">{e.staff?.full_name ?? "—"}</td>
                       <td className="py-3 pr-3 font-medium text-ink">
                         {topup ? `Cash received${e.store ? ` from ${e.store}` : ""}` : e.store ?? e.description ?? "Expense"}
+                        {/* Most of a top-up often repays money already laid
+                            out, so say what it cleared and what was actually
+                            left to spend — otherwise "$600 in, $203 out, still
+                            negative" reads as a mistake. */}
+                        {topup && (balanceBefore.get(e.id) ?? 0) < 0 && (
+                          <div className="mt-0.5 text-sm font-normal text-ink-soft">
+                            {formatCents(Math.min(e.amount_cents, -(balanceBefore.get(e.id) ?? 0)))} of
+                            this repaid what was already owed
+                            {(balanceAfter.get(e.id) ?? 0) > 0
+                              ? `, leaving ${formatCents(balanceAfter.get(e.id) ?? 0)} in the envelope.`
+                              : " — the envelope was still short afterwards."}
+                          </div>
+                        )}
                         <div className="mt-0.5 text-sm font-normal text-ink-faint">
                           {[topup ? null : e.category, topup ? e.description : e.description,
                             e.receipt_total_cents != null && e.receipt_total_cents !== e.amount_cents

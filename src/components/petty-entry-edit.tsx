@@ -23,6 +23,10 @@ export type PettyEntry = {
   unitId: string | null;
   amountDollars: string;
   receiptTotalDollars: string;
+  /** How many receipt files are already attached. */
+  receiptCount: number;
+  /** The paper receipt was handed over rather than uploaded. */
+  receiptOnPaper: boolean;
 };
 
 type PropOpt = { id: string; name: string };
@@ -39,7 +43,6 @@ export function PettyEntryEdit({
 }) {
   const [state, action, pending] = useActionState(editPettyEntry, initial);
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const isTopup = entry.kind === "topup";
   const router = useRouter();
 
@@ -50,18 +53,18 @@ export function PettyEntryEdit({
     unitsByProperty.set(u.property, arr);
   }
 
-  useEffect(() => setMounted(true), []);
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [open]);
+  // Refresh the list behind the dialog, but leave it open and say it saved.
+  // Closing from inside an effect meant setting state after render, and for
+  // adding receipts staying open is better anyway — you can see it took, and
+  // add the next page without reopening.
   useEffect(() => {
-    if (state.ok) {
-      setOpen(false);
-      router.refresh();
-    }
+    if (state.ok) router.refresh();
   }, [state, router]);
 
   const trigger = (
@@ -180,7 +183,46 @@ export function PettyEntryEdit({
             <input name="description" defaultValue={entry.description ?? ""} className={field} />
           </label>
 
+          {/* Receipts get added long after the purchase is keyed in, so the
+              edit dialog has to accept them — it couldn't, which left every
+              entry logged without one stuck that way. */}
+          {!isTopup && (
+            <>
+              <label className={lbl}>
+                {entry.receiptCount > 0 ? "Add more receipt pages" : "Add a receipt"}
+                <input
+                  type="file"
+                  name="file"
+                  accept="application/pdf,image/*"
+                  multiple
+                  className="mt-1 block text-xs text-ink-soft file:mr-2 file:rounded-lg file:border file:border-clay-deep file:bg-sand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink-soft"
+                />
+                <span className="mt-1 block text-[11px] text-ink-faint">
+                  {entry.receiptCount > 0
+                    ? `${entry.receiptCount} already attached — anything you add here joins them.`
+                    : "Photo or PDF. Nothing attached to this one yet."}
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2.5 rounded-xl border border-clay bg-sand/40 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  name="receipt_on_paper"
+                  defaultChecked={entry.receiptOnPaper}
+                  className="mt-0.5 h-4 w-4 rounded border-clay-deep accent-pine"
+                />
+                <span className="text-xs text-ink-soft">
+                  <strong className="text-ink">Paper receipt handed over</strong> — counts as
+                  documented even with no photo here.
+                </span>
+              </label>
+            </>
+          )}
+
           {state.error && <p className="text-xs text-terracotta-dark">{state.error}</p>}
+          {state.ok && (
+            <p className="text-xs font-medium text-pine">Saved ✓</p>
+          )}
           <div className="flex items-center gap-3">
             <Button type="submit" variant="primary" disabled={pending}>
               {pending ? "Saving…" : "Save"}
@@ -190,7 +232,7 @@ export function PettyEntryEdit({
               onClick={() => setOpen(false)}
               className="text-sm font-medium text-ink-soft hover:text-ink"
             >
-              Cancel
+              {state.ok ? "Done" : "Cancel"}
             </button>
           </div>
         </form>
@@ -201,7 +243,10 @@ export function PettyEntryEdit({
   return (
     <>
       {trigger}
-      {open && mounted && createPortal(dialog, document.body)}
+      {/* The dialog only exists once someone has clicked Edit, which can only
+          happen on the client — so no mounted flag is needed to keep document
+          out of the server render. */}
+      {open && typeof document !== "undefined" && createPortal(dialog, document.body)}
     </>
   );
 }
