@@ -151,6 +151,24 @@ export default async function PettyCashReport({
   })();
   const closingCents = openingCents + receivedCents - spentCents;
 
+  // Spend with no receipt attached is the thing that makes one of these reports
+  // hard to read: an owner can't tell what's evidenced from what's just typed
+  // in. Count it plainly rather than leaving them to guess.
+  // Two days' slack: entering yesterday's receipt this morning is normal and
+  // doesn't need pointing out.
+  const enteredLate = (e: EntryRow) => {
+    if (!e.created_at) return false;
+    const bought = new Date(`${e.occurred_on}T00:00:00Z`).getTime();
+    const typed = new Date(`${e.created_at.slice(0, 10)}T00:00:00Z`).getTime();
+    return Math.abs(typed - bought) / 86_400_000 >= 2;
+  };
+
+  const hasReceipt = (e: EntryRow) =>
+    !!e.receipt_path || (e.receipt_paths?.length ?? 0) > 0;
+  const undocumented = entries.filter((e) => e.kind === "expense" && !hasReceipt(e));
+  const undocumentedCents = undocumented.reduce((sum, e) => sum + e.amount_cents, 0);
+
+
   // Sign every receipt page.
   const admin = createAdminClient();
   const flat = entries.flatMap((e) => {
@@ -298,7 +316,7 @@ export default async function PettyCashReport({
           </div>
 
           {/* Summary */}
-          <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-clay bg-clay sm:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-clay bg-clay sm:grid-cols-5">
             <Summary label={`In hand ${formatDate(from)}`} value={formatCents(openingCents)} />
             <Summary label="Cash received" value={formatCents(receivedCents)} />
             <Summary label="Spent" value={formatCents(spentCents)} />
@@ -306,6 +324,11 @@ export default async function PettyCashReport({
               label={closingCents < 0 ? "Owed back to envelope" : "In hand at the end"}
               value={formatCents(Math.abs(closingCents))}
               tone={closingCents < 0 ? "debt" : "normal"}
+            />
+            <Summary
+              label={undocumented.length > 0 ? "Missing a receipt" : "All receipted"}
+              value={undocumented.length > 0 ? formatCents(undocumentedCents) : "✓"}
+              tone={undocumented.length > 0 ? "debt" : "normal"}
             />
           </div>
 
@@ -316,6 +339,13 @@ export default async function PettyCashReport({
             {closingCents < 0
               ? " — the envelope is out of pocket by this much and is owed it back."
               : " left in the envelope."}
+            {undocumented.length > 0 && (
+              <div className="mt-1.5 text-terracotta-dark">
+                {undocumented.length} of the {entries.filter((e) => e.kind === "expense").length}{" "}
+                purchases below have no receipt attached, {formatCents(undocumentedCents)} in all.
+                They&apos;re included in the totals — the receipts just haven&apos;t been added yet.
+              </div>
+            )}
           </div>
 
           {/* Log */}
@@ -335,7 +365,17 @@ export default async function PettyCashReport({
                   const topup = e.kind === "topup";
                   return (
                     <tr key={e.id} className="border-b border-clay align-top">
-                      <td className="whitespace-nowrap py-3 pr-3 text-ink-soft">{formatDate(e.occurred_on)}</td>
+                      <td className="whitespace-nowrap py-3 pr-3 text-ink-soft">
+                        {formatDate(e.occurred_on)}
+                        {/* When a purchase was entered days later the two dates
+                            tell different stories, so show both rather than let
+                            a reader assume the one on screen is the receipt's. */}
+                        {enteredLate(e) && (
+                          <span className="mt-0.5 block text-[11px] text-ink-faint">
+                            entered {formatDate(e.created_at)}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 pr-3 text-ink-soft">{e.staff?.full_name ?? "—"}</td>
                       <td className="py-3 pr-3 font-medium text-ink">
                         {topup ? `Cash received${e.store ? ` from ${e.store}` : ""}` : e.store ?? e.description ?? "Expense"}
@@ -346,7 +386,14 @@ export default async function PettyCashReport({
                             .filter(Boolean).join(" · ")}
                         </div>
                       </td>
-                      <td className="py-3 pr-3 text-ink-soft">{topup ? "—" : where(e)}</td>
+                      <td className="py-3 pr-3 text-ink-soft">
+                        {topup ? "—" : where(e)}
+                        {!topup && !hasReceipt(e) && (
+                          <span className="mt-0.5 block text-xs font-medium text-terracotta-dark">
+                            no receipt
+                          </span>
+                        )}
+                      </td>
                       <td className={`whitespace-nowrap py-3 text-right text-lg font-semibold tabular-nums ${topup ? "text-pine" : "text-ink"}`}>
                         {topup ? "+" : "−"}{formatCents(e.amount_cents)}
                       </td>

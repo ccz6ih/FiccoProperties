@@ -157,8 +157,11 @@ function ExpenseForm({
           </select>
         </label>
         <label className={lbl}>
-          Date
+          Date on the receipt
           <input type="date" name="occurred_on" defaultValue={today()} className={field} />
+          <span className="mt-0.5 block text-[11px] font-normal text-ink-faint">
+            The day it was bought, not the day you&apos;re entering it.
+          </span>
         </label>
       </div>
 
