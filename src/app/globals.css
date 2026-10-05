@@ -97,4 +97,23 @@
   .break-inside-avoid {
     break-inside: avoid;
   }
+
+  /* Receipts are evidence, so they have to be readable on paper. On screen
+     they're thumbnails in a row; printed, each page gets the full width of the
+     sheet and the set starts on a fresh page, because a receipt shrunk to a
+     third of a column can't be read and defeats the point of attaching it. */
+  .receipt-sheet {
+    break-before: page;
+  }
+  .receipt-pages {
+    display: block !important;
+  }
+  .receipt-pages img {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    margin: 0 0 10mm;
+    break-inside: avoid;
+  }
 }

@@ -526,7 +526,7 @@ export default async function PettyCashReport({
                 {entries
                   .filter((e) => receiptsByEntry.has(e.id))
                   .map((e) => (
-                    <div key={e.id} className="break-inside-avoid">
+                    <div key={e.id} className="receipt-sheet break-inside-avoid">
                       {/* A receipt image on its own tells a bookkeeper nothing
                           about what it was for or which home it belongs to, so
                           each one is captioned with the whole entry. */}
@@ -554,7 +554,7 @@ export default async function PettyCashReport({
                             .join(" · ")}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-3">
+                      <div className="receipt-pages flex flex-wrap gap-3">
                         {receiptsByEntry.get(e.id)!.map((r, i) =>
                           r.image ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -562,7 +562,7 @@ export default async function PettyCashReport({
                               key={i}
                               src={r.url}
                               alt={`Receipt page ${i + 1}`}
-                              className="max-h-80 rounded-lg border border-clay"
+                              className="max-h-80 rounded-lg border border-clay print:max-h-none print:rounded-none"
                             />
                           ) : (
                             <div
@@ -577,6 +577,12 @@ export default async function PettyCashReport({
                               >
                                 Receipt held as a PDF — open it →
                               </a>
+                              {/* Say it here, on screen, rather than letting it
+                                  be discovered at the printer. */}
+                              <span className="block text-ink-faint print:hidden">
+                                PDFs can&apos;t be printed with the report. Open the entry, upload
+                                this receipt again, and it&apos;ll be converted to pages that print.
+                              </span>
                               {/* Printed, a link is just blue text, so say
                                   plainly that the file exists and isn't here. */}
                               <span className="hidden text-ink-faint print:inline">
