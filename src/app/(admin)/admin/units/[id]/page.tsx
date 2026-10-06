@@ -4,6 +4,8 @@ import { Card } from "@/components/ui";
 import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
 import { LogWorkForm } from "@/components/log-work-form";
+import { RentHistory } from "@/components/rent-history";
+import { getRentHistory } from "@/lib/rent-history";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
 import { UnitLogForm } from "@/components/unit-log-form";
 import {
@@ -189,6 +191,8 @@ export default async function UnitDetail({
       .eq("kind", "expense")
       .returns<PettyForUnitRow[]>(),
   ]);
+  const rentHistory = await getRentHistory(db, id);
+
   const costs = costRows ?? [];
   const pettyForUnit = pettyRows ?? [];
   const costById = new Map(costs.map((c) => [c.id, c]));
@@ -560,6 +564,9 @@ export default async function UnitDetail({
             moveOut={moveOutPhotos}
           />
         </div>
+
+        {/* "Have they been paying, and were they on time?" asked from the home. */}
+        <RentHistory history={rentHistory} unitId={unit.id} />
 
         <Card className="space-y-5 p-6">
           <div>

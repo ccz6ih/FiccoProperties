@@ -13,6 +13,8 @@ import {
   matchClaimedUnit,
 } from "@/app/(admin)/admin/residents/actions";
 import { formatCents, formatDate, humanize } from "@/lib/format";
+import { RentHistory } from "@/components/rent-history";
+import { getRentHistory } from "@/lib/rent-history";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -226,6 +228,12 @@ export default async function ResidentDetailPage({
       occupancy = coOcc ?? null;
     }
   }
+
+  // Rent history hangs off the home, not the account — charges always carry a
+  // unit, and a co-tenant's own resident_id is on few or none of them.
+  const rentHistory = occupancy?.unit_id
+    ? await getRentHistory(supabase as unknown as SupabaseClient, occupancy.unit_id)
+    : null;
 
   const balanceCents = (ledger ?? []).reduce((sum, e) => sum + e.amount_cents, 0);
   const property = occupancy?.units?.properties ?? null;
@@ -724,6 +732,12 @@ export default async function ResidentDetailPage({
             <p className="px-6 py-6 text-sm text-ink-soft">No open charges.</p>
           )}
         </Card>
+
+        {/* The open charges above say what's outstanding; this says whether
+            they pay, and when — which is the question actually being asked. */}
+        {rentHistory && occupancy?.unit_id && (
+          <RentHistory history={rentHistory} unitId={occupancy.unit_id} />
+        )}
 
         {/* Leases */}
         {leases && leases.length > 0 && (
