@@ -338,6 +338,95 @@ export function PaymentsTable({ charges }: { charges: PaymentRow[] }) {
 }
 
 /** Inline recorder for a single charge — supports short/partial and overpayment. */
+/**
+ * One row per money order — number and amount.
+ *
+ * Rent here usually arrives as two money orders, because that's how the store
+ * sells them, and both numbers were being typed into a single reference box
+ * with no amounts attached. Capturing each separately means the amounts add up
+ * on their own, each number stays traceable, and the running total can be
+ * checked against what's due before anything is saved.
+ */
+function TenderFields({ method, remaining }: { method: string; remaining: number }) {
+  const [rows, setRows] = useState([{ ref: "", amount: (remaining / 100).toFixed(2) }]);
+  const itemised = method === "Money order" || method === "Check";
+  const label = method === "Check" ? "Check" : "Money order";
+
+  const totalCents = Math.round(
+    rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0) * 100
+  );
+  const diff = totalCents - remaining;
+
+  const update = (i: number, key: "ref" | "amount", value: string) =>
+    setRows((cur) => cur.map((r, n) => (n === i ? { ...r, [key]: value } : r)));
+
+  if (!itemised) {
+    return (
+      <label className="space-y-1">
+        <span className="block text-xs font-medium text-ink-soft">Reference</span>
+        <input name="reference" placeholder="Optional" className={`${inputSm} w-36`} />
+      </label>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <span className="block text-xs font-medium text-ink-soft">{label} — one row each</span>
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input
+            name="mo_ref"
+            value={r.ref}
+            onChange={(e) => update(i, "ref", e.target.value)}
+            placeholder={`${label} number`}
+            className={`${inputSm} w-40`}
+          />
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-ink-faint">
+              $
+            </span>
+            <input
+              name="mo_amount"
+              inputMode="decimal"
+              value={r.amount}
+              onChange={(e) => update(i, "amount", e.target.value)}
+              className={`${inputSm} w-24 pl-5`}
+            />
+          </div>
+          {rows.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setRows((cur) => cur.filter((_, n) => n !== i))}
+              className="text-xs text-ink-faint hover:text-terracotta-dark"
+              title="Remove"
+            >
+              &times;
+            </button>
+          )}
+        </div>
+      ))}
+      <div className="flex items-center gap-2 text-[11px]">
+        <button
+          type="button"
+          onClick={() => setRows((cur) => [...cur, { ref: "", amount: "" }])}
+          className="font-medium text-pine hover:underline"
+        >
+          + Another {label.toLowerCase()}
+        </button>
+        {(rows.length > 1 || diff !== 0) && (
+          <span className={diff === 0 ? "text-pine" : "text-terracotta-dark"}>
+            {diff === 0
+              ? `✓ ${formatCents(totalCents)} — matches what's due`
+              : diff > 0
+                ? `${formatCents(totalCents)} — ${formatCents(diff)} over`
+                : `${formatCents(totalCents)} — ${formatCents(-diff)} short`}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RecordPaymentForm({
   charge,
   remaining,
@@ -346,6 +435,8 @@ function RecordPaymentForm({
   remaining: number;
 }) {
   const [state, action, pending] = useActionState(recordManualPayment, initial);
+  // Money order first: it is how about two thirds of the rent here arrives.
+  const [method, setMethod] = useState("Money order");
 
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
@@ -368,17 +459,19 @@ function RecordPaymentForm({
       </label>
       <label className="space-y-1">
         <span className="block text-xs font-medium text-ink-soft">Method</span>
-        <select name="method" defaultValue="Check" className={inputSm}>
-          <option value="Check">Check</option>
+        <select
+          name="method"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+          className={inputSm}
+        >
           <option value="Money order">Money order</option>
+          <option value="Check">Check</option>
           <option value="Cash">Cash</option>
           <option value="Other">Other</option>
         </select>
       </label>
-      <label className="space-y-1">
-        <span className="block text-xs font-medium text-ink-soft">Check / MO #</span>
-        <input name="reference" placeholder="Optional" className={`${inputSm} w-36`} />
-      </label>
+      <TenderFields method={method} remaining={remaining} />
       <label className="space-y-1">
         <span className="block text-xs font-medium text-ink-soft">Date received</span>
         <input

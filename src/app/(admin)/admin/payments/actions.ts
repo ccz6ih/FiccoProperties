@@ -313,6 +313,7 @@ export async function recordOfflinePayments(
 
   // Optional payment method + check/money-order number for the record.
   const method = (form.get("method") as string)?.trim() || null;
+
   const reference = (form.get("reference") as string)?.trim() || null;
   const refLabel = [method, reference].filter(Boolean).join(" ");
   const providerRef = refLabel || "offline";
@@ -492,8 +493,28 @@ export async function recordManualPayment(
   const amountCents = Math.round(amountDollars * 100);
 
   const method = (form.get("method") as string)?.trim() || null;
+  // Most rent here arrives as TWO money orders, because that is how the store
+  // sells them — and both numbers were being typed into one reference box, so
+  // neither amount was recorded and nothing reconciled. Each one is captured
+  // separately now: its own number, its own amount, its own payment row.
+  const moRefs = form.getAll("mo_ref").map((v) => String(v).trim());
+  const moAmounts = form.getAll("mo_amount").map((v) => Number(v));
+  const tenders: { ref: string | null; cents: number }[] = [];
+  for (let i = 0; i < Math.max(moRefs.length, moAmounts.length); i++) {
+    const cents = Math.round((moAmounts[i] || 0) * 100);
+    if (cents > 0) tenders.push({ ref: moRefs[i] || null, cents });
+  }
+
+  // Nothing itemised — fall back to the single amount and reference.
   const reference = (form.get("reference") as string)?.trim() || null;
-  const refLabel = [method, reference].filter(Boolean).join(" ");
+  if (tenders.length === 0) tenders.push({ ref: reference, cents: amountCents });
+
+  const refLabel = [
+    method,
+    tenders.map((t) => t.ref).filter(Boolean).join(" & ") || reference,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const providerRef = refLabel || "offline";
   const emailReceipt = form.get("email_receipt") === "on";
   const receivedAt = parseReceivedOn(form.get("received_on"));
@@ -510,17 +531,22 @@ export async function recordManualPayment(
   if (charge.status === "void") return { ok: false, error: "Charge has been voided." };
 
   const prior = (await paidByCharge(db, [charge.id])).get(charge.id) ?? 0;
+  const tendered = tenders.reduce((sum, t) => sum + t.cents, 0);
 
-  const { error: payErr } = await db.from("payments").insert({
-    charge_id: charge.id,
-    resident_id: charge.resident_id,
-    unit_id: charge.unit_id,
-    amount_cents: amountCents,
-    method_id: null,
-    provider_ref: providerRef,
-    ...(receivedAt ? { created_at: receivedAt } : {}),
-    status: "succeeded",
-  });
+  // One payment row per money order, so each number carries its own amount and
+  // can be traced on its own rather than living in a shared text label.
+  const { error: payErr } = await db.from("payments").insert(
+    tenders.map((t) => ({
+      charge_id: charge.id,
+      resident_id: charge.resident_id,
+      unit_id: charge.unit_id,
+      amount_cents: t.cents,
+      method_id: null,
+      provider_ref: [method, t.ref].filter(Boolean).join(" ") || "offline",
+      ...(receivedAt ? { created_at: receivedAt } : {}),
+      status: "succeeded",
+    }))
+  );
   if (payErr) return { ok: false, error: "Could not record the payment." };
 
   if (charge.resident_id) {
@@ -529,13 +555,13 @@ export async function recordManualPayment(
       lease_id: charge.lease_id,
       unit_id: charge.unit_id,
       kind: "payment",
-      amount_cents: -amountCents,
+      amount_cents: -tendered,
       ref_id: charge.id,
       memo: `Offline payment${refLabel ? ` — ${refLabel}` : ""} — ${charge.description ?? charge.period ?? "charge"}`,
     });
   }
 
-  const totalPaid = prior + amountCents;
+  const totalPaid = prior + tendered;
   if (totalPaid >= charge.amount_cents) {
     await db.from("charges").update({ status: "paid" }).eq("id", charge.id);
   }
