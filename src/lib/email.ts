@@ -16,6 +16,40 @@ export function ownerReplyTo(): string {
   return process.env.OWNER_REPLY_TO || "hello@38thaveproperties.com";
 }
 
+/**
+ * Record the attempt, however it went. Best-effort: a logging failure must
+ * never stop or mask the email itself.
+ */
+async function logAttempt(row: {
+  message_id: string | null;
+  to_email: string;
+  subject: string;
+  kind: string;
+  ref_type: string | null;
+  ref_id: string | null;
+  status: string;
+  error?: string | null;
+}): Promise<void> {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (createAdminClient() as any).from("email_log").insert({
+      message_id: row.message_id,
+      to_email: row.to_email,
+      // The reason rides along in the subject so it is visible without a
+      // schema change — a failure nobody can see is how a dead API key went
+      // unnoticed for two days.
+      subject: row.error ? `${row.subject} — FAILED: ${row.error}` : row.subject,
+      kind: row.kind,
+      ref_type: row.ref_type,
+      ref_id: row.ref_id,
+      status: row.status,
+    });
+  } catch {
+    /* logging is best-effort */
+  }
+}
+
 export async function sendNotification(opts: {
   subject: string;
   html: string;
@@ -34,7 +68,21 @@ export async function sendNotification(opts: {
     process.env.EMAIL_FROM ||
     '"Craig Carda · 38th Ave Properties" <notifications@38thaveproperties.com>';
 
-  if (!key || !to) return { sent: false };
+  if (!key || !to) {
+    if (to) {
+      await logAttempt({
+        message_id: null,
+        to_email: to,
+        subject: opts.subject,
+        kind: opts.meta?.kind ?? "other",
+        ref_type: opts.meta?.refType ?? null,
+        ref_id: opts.meta?.refId ?? null,
+        status: "failed",
+        error: "no RESEND_API_KEY set",
+      });
+    }
+    return { sent: false };
+  }
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -51,7 +99,28 @@ export async function sendNotification(opts: {
         reply_to: opts.replyTo ?? ownerReplyTo(),
       }),
     });
-    if (!res.ok) return { sent: false };
+    if (!res.ok) {
+      // Read why — "API key is invalid" after a rotation is the common one, and
+      // it is worth having in the log rather than a bare failure.
+      let reason = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body?.message) reason = body.message;
+      } catch {
+        /* not JSON */
+      }
+      await logAttempt({
+        message_id: null,
+        to_email: to,
+        subject: opts.subject,
+        kind: opts.meta?.kind ?? "other",
+        ref_type: opts.meta?.refType ?? null,
+        ref_id: opts.meta?.refId ?? null,
+        status: "failed",
+        error: reason,
+      });
+      return { sent: false };
+    }
 
     let id: string | undefined;
     try {
@@ -66,25 +135,29 @@ export async function sendNotification(opts: {
     // for, and those pass silently — the resident can't get in and has no way
     // to tell us. Best-effort, so a logging failure never blocks the email.
     if (id) {
-      try {
-        const { createAdminClient } = await import("@/lib/supabase/admin");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (createAdminClient() as any).from("email_log").insert({
-          message_id: id,
-          to_email: to,
-          subject: opts.subject,
-          kind: opts.meta?.kind ?? "other",
-          ref_type: opts.meta?.refType ?? null,
-          ref_id: opts.meta?.refId ?? null,
-          status: "sent",
-        });
-      } catch {
-        /* logging is best-effort */
-      }
+      await logAttempt({
+        message_id: id,
+        to_email: to,
+        subject: opts.subject,
+        kind: opts.meta?.kind ?? "other",
+        ref_type: opts.meta?.refType ?? null,
+        ref_id: opts.meta?.refId ?? null,
+        status: "sent",
+      });
     }
 
     return { sent: true, id };
-  } catch {
+  } catch (err) {
+    await logAttempt({
+      message_id: null,
+      to_email: to,
+      subject: opts.subject,
+      kind: opts.meta?.kind ?? "other",
+      ref_type: opts.meta?.refType ?? null,
+      ref_id: opts.meta?.refId ?? null,
+      status: "failed",
+      error: err instanceof Error ? err.message : "network error",
+    });
     return { sent: false };
   }
 }
