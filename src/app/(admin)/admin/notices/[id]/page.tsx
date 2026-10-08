@@ -69,15 +69,20 @@ export default async function NoticeDetail({
 
   if (!notice) notFound();
 
-  // Recipient email — profile first, then the tenancy email for record-only tenants.
+  // Recipient — the portal account first, then the tenancy for record-only
+  // tenants. The NAME needed this fallback as much as the address did: most
+  // long-standing residents have no account, so the header read "—" while the
+  // notice body named them correctly from the same tenancy record.
   let recipientEmail = notice.profiles?.email ?? null;
-  if (!recipientEmail && notice.unit_id) {
+  let recipientName = notice.profiles?.full_name ?? null;
+  if ((!recipientEmail || !recipientName) && notice.unit_id) {
     const { data: occ } = await (supabase as unknown as SupabaseClient)
       .from("unit_occupancy")
-      .select("tenant_email")
+      .select("tenant_name, tenant_email")
       .eq("unit_id", notice.unit_id)
-      .maybeSingle<{ tenant_email: string | null }>();
-    recipientEmail = occ?.tenant_email ?? null;
+      .maybeSingle<{ tenant_name: string | null; tenant_email: string | null }>();
+    recipientEmail = recipientEmail ?? occ?.tenant_email ?? null;
+    recipientName = recipientName ?? occ?.tenant_name ?? null;
   }
 
   // Latest delivery status for this notice's email (from the Resend webhook).
@@ -182,7 +187,7 @@ export default async function NoticeDetail({
               {isCurrent ? (
                 <>
                   <span className="font-medium text-pine">✓ Up to date</span> — rebuilt{" "}
-                  {rebuiltLabel} from this home&apos;s record
+                  {rebuiltLabel}{" "}from this home&apos;s record
                   {notice.amount_cents ? (
                     <>
                       , demanding{" "}
@@ -238,13 +243,9 @@ export default async function NoticeDetail({
               <div className="text-xs uppercase tracking-wide text-ink-faint">
                 Recipient
               </div>
-              <div className="font-medium text-ink">
-                {notice.profiles?.full_name ?? "—"}
-              </div>
-              {notice.profiles?.email && (
-                <div className="text-sm text-ink-soft">
-                  {notice.profiles.email}
-                </div>
+              <div className="font-medium text-ink">{recipientName ?? "—"}</div>
+              {recipientEmail && (
+                <div className="text-sm text-ink-soft">{recipientEmail}</div>
               )}
             </div>
             <div>
