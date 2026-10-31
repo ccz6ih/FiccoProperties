@@ -236,6 +236,52 @@ export default async function AdminOverview() {
 
   const outstandingCents = (charges ?? []).reduce((s, c) => s + c.amount_cents, 0);
 
+  // Homes with notice given but not yet empty. Its own query, and tolerant of
+  // the column not existing, so the whole dashboard can't be taken down by it.
+  type UpcomingMoveOut = {
+    unitId: string;
+    home: string;
+    tenantName: string | null;
+    leavingOn: string;
+    reason: string | null;
+    daysAway: number;
+  };
+  let upcomingMoveOuts: UpcomingMoveOut[] = [];
+  try {
+    const { data: noticed } = await db
+      .from("unit_occupancy")
+      .select(
+        "unit_id, tenant_name, notice_move_out_on, notice_reason, units:unit_id(label, properties(name))"
+      )
+      .not("notice_move_out_on", "is", null)
+      .order("notice_move_out_on", { ascending: true })
+      .returns<
+        {
+          unit_id: string;
+          tenant_name: string | null;
+          notice_move_out_on: string;
+          notice_reason: string | null;
+          units: { label: string; properties: { name: string | null } | null } | null;
+        }[]
+      >();
+
+    const todayMs = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00").getTime();
+    upcomingMoveOuts = (noticed ?? []).map((n) => ({
+      unitId: n.unit_id,
+      home: n.units
+        ? `${n.units.properties?.name ? `${n.units.properties.name} · ` : ""}${n.units.label}`
+        : "—",
+      tenantName: n.tenant_name,
+      leavingOn: n.notice_move_out_on,
+      reason: n.notice_reason,
+      daysAway: Math.round(
+        (new Date(`${n.notice_move_out_on}T00:00:00`).getTime() - todayMs) / 86_400_000
+      ),
+    }));
+  } catch {
+    upcomingMoveOuts = [];
+  }
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader title="Overview" subtitle="The whole portfolio at a glance." />
@@ -243,6 +289,92 @@ export default async function AdminOverview() {
       <Card className="mb-8 p-5">
         <TenantSearch items={searchItems} work={workSearchItems} limit={8} />
       </Card>
+
+      {/* The turn, start to finish. These are the three things that actually
+          begin a piece of work rather than report on one, and they were all
+          buried a page or two deep. */}
+      <div className="mb-8">
+        <Eyebrow>Start something</Eyebrow>
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              href: "/admin/applications/import",
+              icon: "🔑",
+              title: "New resident from Zillow",
+              body: "Bring an approved applicant across without making them apply again.",
+            },
+            {
+              href: "/admin/move-out",
+              icon: "📦",
+              title: "Someone gave notice",
+              body: "Record the date they're leaving and plan the turn around it.",
+            },
+            {
+              href: "/admin/work",
+              icon: "🔧",
+              title: "Log work on a home",
+              body: "Maintenance and tasks, across every community.",
+            },
+          ].map((a) => (
+            <Link
+              key={a.href}
+              href={a.href}
+              className="group rounded-2xl border border-clay bg-white/70 p-5 transition hover:border-pine/50 hover:bg-pine/5"
+            >
+              <div className="text-2xl" aria-hidden>
+                {a.icon}
+              </div>
+              <div className="mt-2 font-display text-base font-semibold text-ink group-hover:text-pine">
+                {a.title} →
+              </div>
+              <div className="mt-0.5 text-sm text-ink-soft">{a.body}</div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {upcomingMoveOuts.length > 0 && (
+        <Card className="mb-8 overflow-hidden border-terracotta/30 p-0">
+          <div className="border-b border-clay bg-terracotta/5 px-5 py-3.5">
+            <h2 className="font-display text-lg font-semibold text-ink">
+              Homes coming empty
+            </h2>
+            <p className="mt-0.5 text-xs text-ink-soft">
+              Notice given. Plan the make-ready and get the listing up before they go.
+            </p>
+          </div>
+          <ul className="divide-y divide-clay">
+            {upcomingMoveOuts.map((m) => (
+              <li key={m.unitId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <Link
+                    href={`/admin/units/${m.unitId}`}
+                    className="font-medium text-ink hover:text-pine hover:underline"
+                  >
+                    {m.home}
+                  </Link>
+                  <div className="text-xs text-ink-faint">
+                    {m.tenantName ?? "—"}
+                    {m.reason ? ` · ${m.reason}` : ""}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-terracotta-dark">
+                    {formatDate(m.leavingOn)}
+                  </div>
+                  <div className="text-xs text-ink-faint">
+                    {m.daysAway < 0
+                      ? `${Math.abs(m.daysAway)} days ago`
+                      : m.daysAway === 0
+                        ? "today"
+                        : `in ${m.daysAway} days`}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total homes" value={total} hint={`${properties?.length ?? 0} communities`} />

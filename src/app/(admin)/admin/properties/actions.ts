@@ -85,6 +85,65 @@ function dollarsToCents(value: FormDataEntryValue | null): number | null {
   return d == null ? null : Math.round(d * 100);
 }
 
+export type WelcomeState = { ok: boolean; error?: string; notice?: string };
+
+/**
+ * Save the community's orientation content for new residents.
+ *
+ * Facts come in as one per line, "Label: value" — a textarea rather than a row
+ * of add/remove inputs, because the person filling this in is typing what they
+ * already say on the phone, and a plain list is faster than a widget.
+ */
+export async function savePropertyWelcome(
+  _prev: WelcomeState,
+  form: FormData
+): Promise<WelcomeState> {
+  const { profile } = await requireProfile("/admin/properties");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const propertyId = (form.get("property_id") as string)?.trim();
+  if (!propertyId) return { ok: false, error: "Which community?" };
+
+  const note = ((form.get("welcome_note") as string) ?? "").trim();
+  const factLines = ((form.get("welcome_facts") as string) ?? "").split(/\r?\n/);
+
+  const facts: { label: string; value: string }[] = [];
+  const malformed: string[] = [];
+  for (const line of factLines) {
+    const text = line.trim();
+    if (!text) continue;
+    const at = text.indexOf(":");
+    // No colon means we can't tell the label from the value — say which line
+    // rather than silently dropping it.
+    if (at < 1 || at === text.length - 1) {
+      malformed.push(text.slice(0, 40));
+      continue;
+    }
+    facts.push({ label: text.slice(0, at).trim(), value: text.slice(at + 1).trim() });
+  }
+
+  if (malformed.length > 0) {
+    return {
+      ok: false,
+      error: `Each line needs a label and a colon, like "Laundry: hookups in the basement". Check: ${malformed.join("; ")}`,
+    };
+  }
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+  const { error } = await db
+    .from("properties")
+    .update({ welcome_note: note || null, welcome_facts: facts })
+    .eq("id", propertyId);
+  if (error) return { ok: false, error: "Could not save that. Please try again." };
+
+  revalidatePath("/admin/properties/[slug]", "page");
+  revalidatePath("/portal/welcome");
+  return {
+    ok: true,
+    notice: `Saved — ${facts.length} fact${facts.length === 1 ? "" : "s"} new residents will see.`,
+  };
+}
+
 export async function setUnitStatus(form: FormData) {
   const id = form.get("id") as string;
   const status = form.get("status") as string;

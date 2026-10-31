@@ -4,6 +4,7 @@ import { PageHeader, StatCard, StatusPill } from "@/components/dashboard-ui";
 import { PortalAnnouncements } from "@/components/portal-announcements";
 import { formatCents, formatDate } from "@/lib/format";
 import { getResidentUnitId } from "@/lib/occupancy";
+import { needsOnboarding } from "@/lib/onboarding";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/types/database";
@@ -39,6 +40,7 @@ function tenureLabel(startIso: string | null | undefined): string | undefined {
 
 export default async function PortalHome() {
   const { user, profile } = await requireProfile("/portal");
+  const onboarding = await needsOnboarding(user.id);
   const supabase = await createClient();
 
   const [{ data: occupancy }, { data: leases }, { data: maintenance }] = await Promise.all([
@@ -117,7 +119,28 @@ export default async function PortalHome() {
 
       <PortalAnnouncements userId={user.id} />
 
-      {hasHome && !checkinComplete && (
+      {/* Still pre-lease: the welcome steps come first, and showing the
+          move-in checklist alongside them would be two checklists competing
+          for the same person's attention. */}
+      {onboarding && (
+        <Card className="mb-8 overflow-hidden border-pine/30 p-0">
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-pine/5 px-6 py-5">
+            <div className="min-w-0">
+              <h3 className="font-display text-lg font-semibold text-ink">
+                Finish setting up your tenancy
+              </h3>
+              <p className="mt-0.5 text-sm text-ink-soft">
+                How you&apos;ll pay rent, the day you&apos;re moving in, and your lease.
+              </p>
+            </div>
+            <ButtonLink href="/portal/welcome" variant="primary">
+              Pick up where I left off →
+            </ButtonLink>
+          </div>
+        </Card>
+      )}
+
+      {hasHome && !onboarding && !checkinComplete && (
         <Card className="mb-8 border-pine/30 bg-pine/5 p-6">
           <div className="flex items-center gap-2">
             <span aria-hidden className="text-xl">🎉</span>

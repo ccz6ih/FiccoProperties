@@ -5,6 +5,10 @@ import { PageHeader, StatusPill, EmptyState } from "@/components/dashboard-ui";
 import { MakereadyStartForm } from "@/components/makeready-start-form";
 import { LogWorkForm } from "@/components/log-work-form";
 import { RentHistory } from "@/components/rent-history";
+import { PastResidents, type PastTenancy } from "@/components/past-residents";
+import { NoticeToVacateForm } from "@/components/notice-to-vacate-form";
+import { MoveInMoneyForm } from "@/components/move-in-money-form";
+import { prorateFirstMonth, moveInTotal } from "@/lib/prorate";
 import { getRentHistory } from "@/lib/rent-history";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
 import { UnitLogForm } from "@/components/unit-log-form";
@@ -21,6 +25,9 @@ import {
   deleteUnitCost,
   linkResidentAccount,
   unlinkResidentAccount,
+  sendWelcomeOnboarding,
+  announceNewTenant,
+  clearNoticeToVacate,
   useResidentNames,
 } from "@/app/(admin)/admin/units/actions";
 
@@ -192,6 +199,114 @@ export default async function UnitDetail({
       .returns<PettyForUnitRow[]>(),
   ]);
   const rentHistory = await getRentHistory(db, id);
+
+  // Move-in money: what's due before the keys, and what's landed. Shown only
+  // while a tenancy is still being set up — once they're in, the rent history
+  // below is the right place to look.
+  const { data: moveInRow } = await db
+    .from("unit_occupancy")
+    .select(
+      "move_in_date, move_in_confirmed_at, rent_cents, deposit_cents, deposit_received_cents, onboarding_completed_at"
+    )
+    .eq("unit_id", id)
+    .maybeSingle<{
+      move_in_date: string | null;
+      move_in_confirmed_at: string | null;
+      rent_cents: number | null;
+      deposit_cents: number | null;
+      deposit_received_cents: number | null;
+      onboarding_completed_at: string | null;
+    }>();
+
+  const proration =
+    moveInRow?.move_in_date && moveInRow.rent_cents
+      ? prorateFirstMonth(moveInRow.move_in_date, moveInRow.rent_cents)
+      : null;
+  const moveInDue = moveInTotal(
+    proration,
+    moveInRow?.rent_cents ?? null,
+    moveInRow?.deposit_cents ?? null
+  );
+
+  let moveInRentPaid = 0;
+  if (proration) {
+    const { data: c } = await db
+      .from("charges")
+      .select("id")
+      .eq("unit_id", id)
+      .eq("period", proration.period)
+      .neq("status", "void")
+      .limit(1)
+      .maybeSingle<{ id: string }>();
+    if (c) {
+      const { data: paid } = await db
+        .from("payments")
+        .select("amount_cents")
+        .eq("charge_id", c.id)
+        .eq("status", "succeeded")
+        .returns<{ amount_cents: number }[]>();
+      moveInRentPaid = (paid ?? []).reduce((s, p) => s + p.amount_cents, 0);
+    }
+  }
+  const depositIn = moveInRow?.deposit_received_cents ?? 0;
+  const moveInSettled =
+    moveInDue.totalCents > 0 && moveInRentPaid + depositIn >= moveInDue.totalCents;
+  // Worth showing while they're still moving in, or while money is outstanding.
+  const showMoveInMoney =
+    Boolean(moveInRow?.move_in_confirmed_at) &&
+    moveInDue.totalCents > 0 &&
+    (!moveInSettled || moveInRow?.onboarding_completed_at == null);
+
+  // Any notice to vacate standing on this home. Its own query so the page
+  // survives the column not being there yet.
+  const { data: noticeRow } = await db
+    .from("unit_occupancy")
+    .select("notice_given_on, notice_move_out_on, notice_reason")
+    .eq("unit_id", id)
+    .maybeSingle<{
+      notice_given_on: string | null;
+      notice_move_out_on: string | null;
+      notice_reason: string | null;
+    }>();
+
+  // Past tenancies on this home. Fetched on its own rather than joined so an
+  // archive problem can never take the home's page down with it.
+  const { data: pastRows } = await db
+    .from("tenancy_history")
+    .select(
+      "id, tenant_name, tenant_email, tenant_phone, move_in_date, move_out_date, rent_cents, deposit_cents, forwarding_address, move_out_reason, notes"
+    )
+    .eq("unit_id", id)
+    .order("move_out_date", { ascending: false })
+    .returns<
+      {
+        id: string;
+        tenant_name: string | null;
+        tenant_email: string | null;
+        tenant_phone: string | null;
+        move_in_date: string | null;
+        move_out_date: string | null;
+        rent_cents: number | null;
+        deposit_cents: number | null;
+        forwarding_address: string | null;
+        move_out_reason: string | null;
+        notes: string | null;
+      }[]
+    >();
+
+  const pastResidents: PastTenancy[] = (pastRows ?? []).map((r) => ({
+    id: r.id,
+    tenantName: r.tenant_name,
+    tenantEmail: r.tenant_email,
+    tenantPhone: r.tenant_phone,
+    moveInDate: r.move_in_date,
+    moveOutDate: r.move_out_date,
+    rentCents: r.rent_cents,
+    depositCents: r.deposit_cents,
+    forwardingAddress: r.forwarding_address,
+    moveOutReason: r.move_out_reason,
+    notes: r.notes,
+  }));
 
   const costs = costRows ?? [];
   const pettyForUnit = pettyRows ?? [];
@@ -477,6 +592,48 @@ export default async function UnitDetail({
             propertySlug={unit.properties?.slug ?? ""}
           />
 
+          {/* Notice to vacate — only meaningful while someone lives here. */}
+          {occ?.tenant_name && (
+            <div className="border-t border-clay pt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                Notice to vacate
+              </h3>
+              {noticeRow?.notice_move_out_on ? (
+                <div className="mt-2 rounded-xl border border-terracotta/40 bg-terracotta/5 p-3">
+                  <div className="text-sm font-semibold text-terracotta-dark">
+                    Leaving {formatDate(noticeRow.notice_move_out_on)}
+                  </div>
+                  <div className="mt-0.5 text-xs text-ink-soft">
+                    Told us{" "}
+                    {noticeRow.notice_given_on
+                      ? formatDate(noticeRow.notice_given_on)
+                      : "—"}
+                    {noticeRow.notice_reason ? ` · ${noticeRow.notice_reason}` : ""}
+                  </div>
+                  <form action={clearNoticeToVacate} className="mt-2">
+                    <input type="hidden" name="unit_id" value={unit.id} />
+                    <button className="text-xs font-medium text-ink-faint hover:text-pine">
+                      They&apos;re staying — clear it
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <p className="mt-1 text-[11px] text-ink-faint">
+                  Record it the day they tell you, so the make-ready can be planned and the
+                  listing can go up before the home is empty.
+                </p>
+              )}
+              <div className="mt-3">
+                <NoticeToVacateForm
+                  unitId={unit.id}
+                  givenOn={noticeRow?.notice_given_on ?? null}
+                  leavingOn={noticeRow?.notice_move_out_on ?? null}
+                  reason={noticeRow?.notice_reason ?? null}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Resident accounts (co-tenants) */}
           <div className="border-t border-clay pt-4">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
@@ -517,6 +674,30 @@ export default async function UnitDetail({
               </ul>
             ) : (
               <p className="mt-2 text-sm text-ink-faint">No portal accounts linked yet.</p>
+            )}
+            {(occupants ?? []).length > 0 && (
+              <form action={sendWelcomeOnboarding} className="mt-3">
+                <input type="hidden" name="unit_id" value={unit.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg bg-pine px-3 py-1.5 text-xs font-medium text-cream hover:bg-pine-dark"
+                  title="Emails the primary resident the welcome: how they'll pay, their move-in day, then the lease. Reopens their welcome steps unless the lease is already signed."
+                >
+                  Send the welcome &amp; onboarding invite
+                </button>
+              </form>
+            )}
+            {(occupants ?? []).length > 0 && (
+              <form action={announceNewTenant} className="mt-2">
+                <input type="hidden" name="unit_id" value={unit.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-sand"
+                  title="Emails Lou, Tony and the admins that this home is rented — who's moving in, the rent compared to the last resident, and what paperwork is still outstanding"
+                >
+                  Tell the owners it&apos;s rented
+                </button>
+              </form>
             )}
             {(occupants ?? []).length > 0 && (
               <form action={useResidentNames} className="mt-3">
@@ -564,6 +745,50 @@ export default async function UnitDetail({
             moveOut={moveOutPhotos}
           />
         </div>
+
+        {/* The money that changes hands at the signing. */}
+        {showMoveInMoney && (
+          <Card className="overflow-hidden p-0">
+            <div className="border-b border-clay bg-sand/50 px-5 py-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="font-display text-lg font-semibold text-ink">Move-in money</h2>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    moveInSettled
+                      ? "bg-pine/10 text-pine"
+                      : "bg-terracotta/15 text-terracotta-dark"
+                  }`}
+                >
+                  {moveInSettled
+                    ? "All received ✓"
+                    : `${formatCents(
+                        moveInDue.totalCents - moveInRentPaid - depositIn
+                      )} still due`}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-ink-soft">
+                {proration && !proration.isWholeMonth
+                  ? `${formatCents(moveInDue.rentCents)} rent (${proration.description}) + ${formatCents(moveInDue.depositCents)} deposit`
+                  : `${formatCents(moveInDue.rentCents)} rent + ${formatCents(moveInDue.depositCents)} deposit`}
+                {moveInRow?.move_in_date
+                  ? ` · moving in ${formatDate(moveInRow.move_in_date)}`
+                  : ""}
+              </p>
+            </div>
+            <div className="px-5 py-4">
+              <MoveInMoneyForm
+                unitId={unit.id}
+                rentDueCents={moveInDue.rentCents}
+                depositDueCents={moveInDue.depositCents}
+                rentPaidCents={moveInRentPaid}
+                depositReceivedCents={depositIn}
+              />
+            </div>
+          </Card>
+        )}
+
+        {/* Who was here before — named right above the ledger that covers them. */}
+        <PastResidents rows={pastResidents} />
 
         {/* "Have they been paying, and were they on time?" asked from the home. */}
         <RentHistory history={rentHistory} unitId={unit.id} />

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Card } from "@/components/ui";
 import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
+import { PropertyWelcomeForm } from "@/components/property-welcome-form";
 import { UnitStatusControl } from "@/components/unit-status-control";
 import {
   UnitEditForm,
@@ -23,6 +24,8 @@ type PropertyRow = {
   city: string | null;
   state: string | null;
   hero_image: string | null;
+  welcome_note: string | null;
+  welcome_facts: { label: string; value: string }[] | null;
 };
 
 type UnitRow = {
@@ -84,7 +87,9 @@ export default async function PropertyDetail({
 
   const { data: property } = await supabase
     .from("properties")
-    .select("id, name, slug, type, address_line1, city, state, hero_image")
+    .select(
+      "id, name, slug, type, address_line1, city, state, hero_image, welcome_note, welcome_facts"
+    )
     .eq("slug", slug)
     .maybeSingle()
     .returns<PropertyRow>();
@@ -229,6 +234,25 @@ export default async function PropertyDetail({
           </Link>
         </div>
       )}
+
+      <Card className="mb-8 overflow-hidden p-0">
+        <div className="border-b border-clay bg-sand/50 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-ink">
+            What new residents read
+          </h2>
+          <p className="mt-0.5 text-sm text-ink-soft">
+            Shown on the welcome page of anyone moving into {property.name}, alongside their
+            lease and move-in steps.
+          </p>
+        </div>
+        <div className="px-6 py-5">
+          <PropertyWelcomeForm
+            propertyId={property.id}
+            note={property.welcome_note}
+            facts={Array.isArray(property.welcome_facts) ? property.welcome_facts : []}
+          />
+        </div>
+      </Card>
 
       {displayList.length > 0 ? (
         <Card className="overflow-hidden">

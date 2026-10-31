@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/email";
+import { prorateFirstMonth } from "@/lib/prorate";
 import type { EmailActionState } from "@/lib/action-state";
 
 export type LeaseFormState = { ok: boolean; error?: string };
@@ -287,12 +288,11 @@ export async function createProratedCharge(form: FormData) {
     .maybeSingle<{ resident_id: string; rent_cents: number; unit_id: string | null }>();
   if (!lease) return;
 
-  const [y, m, d] = moveIn.split("-").map(Number);
-  if (!y || !m || !d) return;
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const daysRemaining = Math.max(1, daysInMonth - d + 1);
-  const amount = Math.round((lease.rent_cents * daysRemaining) / daysInMonth);
-  const period = `${y}-${String(m).padStart(2, "0")}`;
+  // Shared with the resident's welcome page, so the figure they were quoted
+  // when they picked their move-in day is the figure they get billed.
+  const p = prorateFirstMonth(moveIn, lease.rent_cents);
+  if (!p) return;
+  const { amountCents: amount, period } = p;
 
   // Loose handle: unit_id isn't in the generated charge/ledger types yet.
   const db = supabase as unknown as SupabaseClient;
@@ -304,7 +304,7 @@ export async function createProratedCharge(form: FormData) {
       resident_id: lease.resident_id,
       unit_id: lease.unit_id,
       amount_cents: amount,
-      description: `Prorated rent (${daysRemaining}/${daysInMonth} days)`,
+      description: p.description,
       due_date: moveIn,
       status: "open",
       period,

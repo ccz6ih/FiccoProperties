@@ -1,6 +1,7 @@
 import { DashboardShell, type NavItem } from "@/components/dashboard-shell";
 import { navIcons } from "@/components/icons";
 import { requireProfile, isStaff } from "@/lib/auth";
+import { needsOnboarding } from "@/lib/onboarding";
 
 export default async function PortalLayout({
   children,
@@ -8,8 +9,14 @@ export default async function PortalLayout({
   children: React.ReactNode;
 }) {
   const { user, profile } = await requireProfile("/portal");
+  const onboarding = await needsOnboarding(user.id);
 
   const nav: NavItem[] = [
+    // Only while there are still welcome steps left — it disappears once
+    // they're done rather than sitting there as a dead link forever.
+    ...(onboarding
+      ? [{ href: "/portal/welcome", label: "Welcome", icon: navIcons.home }]
+      : []),
     { href: "/portal", label: "My home", icon: navIcons.home },
     { href: "/portal/tenancy", label: "My tenancy", icon: navIcons.calendar },
     { href: "/portal/maintenance", label: "Maintenance", icon: navIcons.wrench },
