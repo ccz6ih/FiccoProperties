@@ -252,6 +252,33 @@ export default async function UnitDetail({
   const depositIn = moveInRow?.deposit_received_cents ?? 0;
   const moveInSettled =
     moveInDue.totalCents > 0 && moveInRentPaid + depositIn >= moveInDue.totalCents;
+  // What has already been emailed for this tenancy. Answers the question that
+  // follows every send — "did that go?" — without a trip to the email log.
+  type SentMail = { created_at: string; status: string };
+  let inviteSent: SentMail | null = null;
+  let ownersTold: SentMail | null = null;
+  try {
+    const { data: mails } = await db
+      .from("email_log")
+      .select("subject, kind, status, created_at")
+      .in("kind", ["onboarding_invite", "new_tenant"])
+      .order("created_at", { ascending: false })
+      .limit(60)
+      .returns<{ subject: string; kind: string; status: string; created_at: string }[]>();
+    const label = `${unit.properties?.name ? `${unit.properties.name} · ` : ""}${unit.label}`;
+    for (const m of mails ?? []) {
+      if (!m.subject?.includes(label)) continue;
+      if (m.kind === "onboarding_invite" && !inviteSent) {
+        inviteSent = { created_at: m.created_at, status: m.status };
+      }
+      if (m.kind === "new_tenant" && !ownersTold) {
+        ownersTold = { created_at: m.created_at, status: m.status };
+      }
+    }
+  } catch {
+    /* the indicator is a nicety; never let it cost the page */
+  }
+
   // A tenancy still being set up: the date and the money both belong here.
   const settlingIn =
     moveInRow?.onboarding_completed_at == null && Boolean(occ?.tenant_name);
@@ -680,30 +707,6 @@ export default async function UnitDetail({
               <p className="mt-2 text-sm text-ink-faint">No portal accounts linked yet.</p>
             )}
             {(occupants ?? []).length > 0 && (
-              <form action={sendWelcomeOnboarding} className="mt-3">
-                <input type="hidden" name="unit_id" value={unit.id} />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-pine px-3 py-1.5 text-xs font-medium text-cream hover:bg-pine-dark"
-                  title="Emails the primary resident the welcome: how they'll pay, their move-in day, then the lease. Reopens their welcome steps unless the lease is already signed."
-                >
-                  Send the welcome &amp; onboarding invite
-                </button>
-              </form>
-            )}
-            {(occupants ?? []).length > 0 && (
-              <form action={announceNewTenant} className="mt-2">
-                <input type="hidden" name="unit_id" value={unit.id} />
-                <button
-                  type="submit"
-                  className="rounded-lg border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-sand"
-                  title="Emails Lou, Tony and the admins that this home is rented — who's moving in, the rent compared to the last resident, and what paperwork is still outstanding"
-                >
-                  Tell the owners it&apos;s rented
-                </button>
-              </form>
-            )}
-            {(occupants ?? []).length > 0 && (
               <form action={useResidentNames} className="mt-3">
                 <input type="hidden" name="unit_id" value={unit.id} />
                 <button
@@ -805,6 +808,69 @@ export default async function UnitDetail({
                   />
                 </div>
               )}
+
+              {/* The two emails this tenancy needs, with what already went.
+                  They used to live in the sidebar under the account list,
+                  which is three sections from where you'd look for them. */}
+              <div className="space-y-3 border-t border-clay pt-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                  Letting people know
+                </h3>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <form action={sendWelcomeOnboarding}>
+                    <input type="hidden" name="unit_id" value={unit.id} />
+                    <button
+                      type="submit"
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                        inviteSent
+                          ? "border border-clay-deep text-ink-soft hover:bg-sand"
+                          : "bg-pine text-cream hover:bg-pine-dark"
+                      }`}
+                    >
+                      {inviteSent ? "Send the welcome again" : "Send the welcome & onboarding invite"}
+                    </button>
+                  </form>
+                  <span className="text-xs text-ink-faint">
+                    {inviteSent ? (
+                      <>
+                        <span className="font-medium text-pine">✓ Sent</span>{" "}
+                        {formatDate(inviteSent.created_at)}
+                        {inviteSent.status === "delivered" ? " · delivered" : ` · ${inviteSent.status}`}
+                      </>
+                    ) : (
+                      "Not sent yet — this is what reaches the resident."
+                    )}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <form action={announceNewTenant}>
+                    <input type="hidden" name="unit_id" value={unit.id} />
+                    <button
+                      type="submit"
+                      className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                        ownersTold
+                          ? "border border-clay-deep text-ink-soft hover:bg-sand"
+                          : "bg-pine text-cream hover:bg-pine-dark"
+                      }`}
+                    >
+                      {ownersTold ? "Tell the owners again" : "Tell Lou & Tony it's rented"}
+                    </button>
+                  </form>
+                  <span className="text-xs text-ink-faint">
+                    {ownersTold ? (
+                      <>
+                        <span className="font-medium text-pine">✓ Sent</span>{" "}
+                        {formatDate(ownersTold.created_at)}
+                        {ownersTold.status === "delivered" ? " · delivered" : ` · ${ownersTold.status}`}
+                      </>
+                    ) : (
+                      "The rent, who's moving in, and what paperwork is still open."
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
           </Card>
         )}
