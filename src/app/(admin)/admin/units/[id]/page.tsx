@@ -8,6 +8,7 @@ import { RentHistory } from "@/components/rent-history";
 import { PastResidents, type PastTenancy } from "@/components/past-residents";
 import { NoticeToVacateForm } from "@/components/notice-to-vacate-form";
 import { MoveInMoneyForm } from "@/components/move-in-money-form";
+import { MoveInDateForm } from "@/components/move-in-date-form";
 import { prorateFirstMonth, moveInTotal } from "@/lib/prorate";
 import { getRentHistory } from "@/lib/rent-history";
 import { UnitPhotosManager } from "@/components/unit-photos-manager";
@@ -251,11 +252,14 @@ export default async function UnitDetail({
   const depositIn = moveInRow?.deposit_received_cents ?? 0;
   const moveInSettled =
     moveInDue.totalCents > 0 && moveInRentPaid + depositIn >= moveInDue.totalCents;
-  // Worth showing while they're still moving in, or while money is outstanding.
+  // A tenancy still being set up: the date and the money both belong here.
+  const settlingIn =
+    moveInRow?.onboarding_completed_at == null && Boolean(occ?.tenant_name);
   const showMoveInMoney =
     Boolean(moveInRow?.move_in_confirmed_at) &&
     moveInDue.totalCents > 0 &&
     (!moveInSettled || moveInRow?.onboarding_completed_at == null);
+  const showSettlingIn = settlingIn || showMoveInMoney;
 
   // Any notice to vacate standing on this home. Its own query so the page
   // survives the column not being there yet.
@@ -747,42 +751,60 @@ export default async function UnitDetail({
         </div>
 
         {/* The money that changes hands at the signing. */}
-        {showMoveInMoney && (
+        {showSettlingIn && (
           <Card className="overflow-hidden p-0">
             <div className="border-b border-clay bg-sand/50 px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="font-display text-lg font-semibold text-ink">Move-in money</h2>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                    moveInSettled
-                      ? "bg-pine/10 text-pine"
-                      : "bg-terracotta/15 text-terracotta-dark"
-                  }`}
-                >
-                  {moveInSettled
-                    ? "All received ✓"
-                    : `${formatCents(
-                        moveInDue.totalCents - moveInRentPaid - depositIn
-                      )} still due`}
-                </span>
+                <h2 className="font-display text-lg font-semibold text-ink">Moving in</h2>
+                {/* Only meaningful once there's a date — before that the
+                    first month hasn't been prorated and any total is a guess. */}
+                {showMoveInMoney && (
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      moveInSettled
+                        ? "bg-pine/10 text-pine"
+                        : "bg-terracotta/15 text-terracotta-dark"
+                    }`}
+                  >
+                    {moveInSettled
+                      ? "All received ✓"
+                      : `${formatCents(
+                          moveInDue.totalCents - moveInRentPaid - depositIn
+                        )} still due`}
+                  </span>
+                )}
               </div>
               <p className="mt-0.5 text-xs text-ink-soft">
-                {proration && !proration.isWholeMonth
-                  ? `${formatCents(moveInDue.rentCents)} rent (${proration.description}) + ${formatCents(moveInDue.depositCents)} deposit`
-                  : `${formatCents(moveInDue.rentCents)} rent + ${formatCents(moveInDue.depositCents)} deposit`}
-                {moveInRow?.move_in_date
-                  ? ` · moving in ${formatDate(moveInRow.move_in_date)}`
-                  : ""}
+                {showMoveInMoney
+                  ? `${formatCents(moveInDue.rentCents)} rent${
+                      proration && !proration.isWholeMonth ? ` (${proration.description})` : ""
+                    } + ${formatCents(moveInDue.depositCents)} deposit · moving in ${formatDate(
+                      moveInRow!.move_in_date!
+                    )}`
+                  : "No move-in day yet. Set it here if they tell you by phone — it works out the first month and tells them what to bring."}
               </p>
             </div>
-            <div className="px-5 py-4">
-              <MoveInMoneyForm
+            <div className="space-y-5 px-5 py-4">
+              {/* Taken by phone as often as through the portal. */}
+              <MoveInDateForm
                 unitId={unit.id}
-                rentDueCents={moveInDue.rentCents}
-                depositDueCents={moveInDue.depositCents}
-                rentPaidCents={moveInRentPaid}
-                depositReceivedCents={depositIn}
+                current={moveInRow?.move_in_date ?? null}
+                hasEmail={Boolean(occ?.tenant_email)}
               />
+              {showMoveInMoney && (
+                <div className="border-t border-clay pt-5">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+                    What they&apos;ve handed over
+                  </h3>
+                  <MoveInMoneyForm
+                    unitId={unit.id}
+                    rentDueCents={moveInDue.rentCents}
+                    depositDueCents={moveInDue.depositCents}
+                    rentPaidCents={moveInRentPaid}
+                    depositReceivedCents={depositIn}
+                  />
+                </div>
+              )}
             </div>
           </Card>
         )}

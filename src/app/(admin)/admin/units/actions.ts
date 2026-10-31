@@ -11,6 +11,8 @@ import {
   sendOnboardingInvite,
 } from "@/lib/portal-invite";
 import { notifyOwnersOfNewTenant } from "@/lib/new-tenant-email";
+import { sendMoveInStatement } from "@/lib/portal-invite";
+import { prorateFirstMonth, moveInTotal } from "@/lib/prorate";
 import { sendNotification, notificationHtml } from "@/lib/email";
 
 /**
@@ -341,6 +343,174 @@ export async function announceNewTenant(form: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/units/${unitId}`);
+}
+
+export type MoveInDateState = { ok: boolean; error?: string; notice?: string };
+
+/**
+ * Record a move-in date that was given over the phone.
+ *
+ * The welcome flow asks the resident, which is the right default — but plenty
+ * of them will ring instead, and until now taking it by phone meant typing the
+ * date into the tenancy, where nothing else happens: no prorated charge, no
+ * statement, and a resident who still doesn't know what to bring.
+ *
+ * Does exactly what the resident confirming it does, so both routes end in the
+ * same place.
+ */
+export async function recordMoveInByPhone(
+  _prev: MoveInDateState,
+  form: FormData
+): Promise<MoveInDateState> {
+  const { profile } = await requireProfile("/admin/units");
+  if (!isStaff(profile)) return { ok: false, error: "Staff only." };
+
+  const unitId = (form.get("unit_id") as string)?.trim();
+  const moveIn = (form.get("move_in_date") as string)?.trim();
+  const tellThem = form.get("tell_them") === "on";
+  if (!unitId) return { ok: false, error: "Which home?" };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(moveIn)) {
+    return { ok: false, error: "Pick the day they're moving in." };
+  }
+
+  const db = createAdminClient() as unknown as SupabaseClient;
+
+  const { data: occ } = await db
+    .from("unit_occupancy")
+    .select("rent_cents, deposit_cents, occupant_profile_id, tenant_name")
+    .eq("unit_id", unitId)
+    .maybeSingle<{
+      rent_cents: number | null;
+      deposit_cents: number | null;
+      occupant_profile_id: string | null;
+      tenant_name: string | null;
+    }>();
+
+  // The home knows the price even when the tenancy doesn't.
+  let rentCents = occ?.rent_cents ?? null;
+  if (!rentCents) {
+    const { data: unit } = await db
+      .from("units")
+      .select("rent_cents")
+      .eq("id", unitId)
+      .maybeSingle<{ rent_cents: number | null }>();
+    rentCents = unit?.rent_cents ?? null;
+    if (rentCents) {
+      await db.from("unit_occupancy").update({ rent_cents: rentCents }).eq("unit_id", unitId);
+    }
+  }
+
+  await db
+    .from("unit_occupancy")
+    .update({ move_in_date: moveIn, move_in_confirmed_at: new Date().toISOString() })
+    .eq("unit_id", unitId);
+
+  const p = rentCents ? prorateFirstMonth(moveIn, rentCents) : null;
+  const due = moveInTotal(p, rentCents, occ?.deposit_cents ?? null);
+
+  if (p) {
+    // Replace anything raised against an earlier date, unless money has
+    // already landed on it — then it's for a person to untangle, not a button.
+    const { data: existing } = await db
+      .from("charges")
+      .select("id, amount_cents, description")
+      .eq("unit_id", unitId)
+      .eq("period", p.period)
+      .neq("status", "void")
+      .returns<{ id: string; amount_cents: number; description: string | null }[]>();
+
+    let blocked = false;
+    let alreadyRight = false;
+    for (const c of existing ?? []) {
+      if (c.amount_cents === p.amountCents && c.description === p.description) {
+        alreadyRight = true;
+        continue;
+      }
+      const { count } = await db
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("charge_id", c.id)
+        .eq("status", "succeeded");
+      if ((count ?? 0) > 0) {
+        blocked = true;
+        continue;
+      }
+      await db.from("charges").update({ status: "void" }).eq("id", c.id);
+    }
+
+    if (blocked) {
+      return {
+        ok: true,
+        notice: `Date saved. There's already a payment against this month's rent, so the old charge was left as it is — check it on the Payments screen.`,
+      };
+    }
+    if (!alreadyRight) {
+      await db.from("charges").insert({
+        unit_id: unitId,
+        resident_id: occ?.occupant_profile_id ?? null,
+        amount_cents: p.amountCents,
+        description: p.isWholeMonth ? "Monthly rent" : p.description,
+        due_date: moveIn,
+        status: "open",
+        period: p.period,
+      });
+    }
+  }
+
+  const { data: unit } = await db
+    .from("units")
+    .select("label, properties(name)")
+    .eq("id", unitId)
+    .maybeSingle<{ label: string; properties: { name: string | null } | null }>();
+  const home = unit
+    ? `${unit.properties?.name ? `${unit.properties.name} · ` : ""}${unit.label}`
+    : null;
+
+  await db.from("unit_log_entries").insert({
+    unit_id: unitId,
+    kind: "tenancy",
+    body: `Move-in confirmed for ${moveIn}, taken by phone. First month ${
+      p ? `${p.description} = ${(p.amountCents / 100).toFixed(2)}` : "not prorated"
+    }; ${(due.totalCents / 100).toFixed(2)} due before the keys.`,
+  });
+
+  let told = "";
+  if (tellThem && occ?.occupant_profile_id && due.totalCents > 0) {
+    const { data: who } = await db
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", occ.occupant_profile_id)
+      .maybeSingle<{ email: string | null; full_name: string | null }>();
+    if (who?.email) {
+      await sendMoveInStatement({
+        email: who.email,
+        fullName: who.full_name,
+        homeLabel: home,
+        moveInDate: moveIn,
+        prorationLabel: p && !p.isWholeMonth ? p.description : null,
+        rentCents: due.rentCents,
+        depositCents: due.depositCents,
+        totalCents: due.totalCents,
+        firstFullMonthOn: p?.firstFullMonthOn ?? null,
+        monthlyRentCents: rentCents,
+      });
+      told = ` ${who.email} has been emailed what to bring.`;
+    } else {
+      told = " No email on file for them, so nothing was sent.";
+    }
+  }
+
+  revalidatePath(`/admin/units/${unitId}`);
+  revalidatePath("/portal/welcome");
+  revalidatePath("/admin");
+
+  return {
+    ok: true,
+    notice: `Moving in ${moveIn}. ${(due.totalCents / 100).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    })} due before the keys.${told}`,
+  };
 }
 
 export type MoveInMoneyState = { ok: boolean; error?: string; notice?: string };
