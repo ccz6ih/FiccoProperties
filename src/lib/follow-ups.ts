@@ -27,6 +27,14 @@ export type FollowUp = {
   href: string;
   /** The date it hinges on, for sorting and display. */
   onDate: string | null;
+  /**
+   * Closable from the list itself. Only set where the right answer is
+   * unambiguous — a notice whose balance is already clear, a deposit that's
+   * been returned, a turn whose work is done. Anything needing a judgement
+   * call keeps only its link, so nothing consequential is one stray click
+   * away.
+   */
+  quick?: { kind: "notice_cured" | "deposit_settled" | "turn_complete"; target: string; label: string };
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -114,6 +122,15 @@ export async function getFollowUps(db: SupabaseClient): Promise<FollowUp[]> {
         action: settled ? "Mark it cured" : "Decide: file, or give more time",
         href: `/admin/notices/${n.id}`,
         onDate: n.cure_by,
+        ...(settled
+          ? {
+              quick: {
+                kind: "notice_cured" as const,
+                target: n.id,
+                label: "Mark it cured",
+              },
+            }
+          : {}),
       });
     }
   } catch {
@@ -168,6 +185,11 @@ export async function getFollowUps(db: SupabaseClient): Promise<FollowUp[]> {
         action: "Finalise the deposit statement",
         href: `/admin/move-out/${t.unit_id}`,
         onDate: deadline,
+        quick: {
+          kind: "deposit_settled" as const,
+          target: t.unit_id,
+          label: "It's been returned",
+        },
       });
     }
   } catch {
@@ -202,6 +224,11 @@ export async function getFollowUps(db: SupabaseClient): Promise<FollowUp[]> {
         action: "Finish it, or tick off what's done",
         href: `/admin/units/${t.unit_id}`,
         onDate: started,
+        quick: {
+          kind: "turn_complete" as const,
+          target: t.id,
+          label: "It's finished",
+        },
       });
     }
   } catch {

@@ -2,6 +2,25 @@ import Link from "next/link";
 import { Card } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import type { FollowUp } from "@/lib/follow-ups";
+import {
+  markNoticeCured,
+  markDepositSettled,
+  markTurnComplete,
+} from "@/app/(admin)/admin/follow-ups/actions";
+
+type QuickKind = NonNullable<FollowUp["quick"]>["kind"];
+
+const QUICK: Record<QuickKind, (form: FormData) => Promise<void>> = {
+  notice_cured: markNoticeCured,
+  deposit_settled: markDepositSettled,
+  turn_complete: markTurnComplete,
+};
+
+const FIELD: Record<QuickKind, string> = {
+  notice_cured: "notice_id",
+  deposit_settled: "unit_id",
+  turn_complete: "turn_id",
+};
 
 const TONE: Record<FollowUp["urgency"], { chip: string; label: string }> = {
   overdue: { chip: "bg-terracotta/20 text-terracotta-dark", label: "Overdue" },
@@ -81,12 +100,37 @@ export function FollowUpsCard({
                 <div className="mt-1 text-[15px] font-semibold text-ink">{f.title}</div>
                 <div className="mt-0.5 text-sm leading-relaxed text-ink-soft">{f.detail}</div>
               </div>
-              <Link
-                href={f.href}
-                className="shrink-0 rounded-full border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink hover:bg-sand"
-              >
-                {f.action} →
-              </Link>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {/* Closable right here. The work is nearly always already done
+                    — what hasn't happened is the record catching up. */}
+                {f.quick && (
+                  <form action={QUICK[f.quick.kind]} className="flex items-center gap-1.5">
+                    <input type="hidden" name={FIELD[f.quick.kind]} value={f.quick.target} />
+                    {f.quick.kind === "turn_complete" && (
+                      <input
+                        type="date"
+                        name="completed_on"
+                        defaultValue={new Date().toISOString().slice(0, 10)}
+                        max={new Date().toISOString().slice(0, 10)}
+                        title="The day the work was finished — not today, if they differ"
+                        className="rounded-lg border border-clay-deep bg-white px-2 py-1 text-xs text-ink"
+                      />
+                    )}
+                    <button
+                      type="submit"
+                      className="rounded-full bg-pine px-3 py-1.5 text-xs font-medium text-cream hover:bg-pine-dark"
+                    >
+                      ✓ {f.quick.label}
+                    </button>
+                  </form>
+                )}
+                <Link
+                  href={f.href}
+                  className="rounded-full border border-clay-deep px-3 py-1.5 text-xs font-medium text-ink hover:bg-sand"
+                >
+                  {f.quick ? "Open it" : f.action} →
+                </Link>
+              </div>
             </div>
           </li>
         ))}
