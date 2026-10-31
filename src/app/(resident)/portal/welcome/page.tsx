@@ -29,6 +29,7 @@ type OccRow = {
     label: string;
     bedrooms: number | null;
     bathrooms: number | null;
+    rent_cents: number | null;
     property_id: string | null;
     properties: {
       name: string | null;
@@ -114,7 +115,7 @@ export default async function Welcome() {
     admin
       .from("unit_occupancy")
       .select(
-        "unit_id, tenant_name, rent_cents, deposit_cents, move_in_date, move_in_confirmed_at, payment_preference, units:unit_id(label, bedrooms, bathrooms, property_id, properties(name, slug, type, address_line1, city))"
+        "unit_id, tenant_name, rent_cents, deposit_cents, move_in_date, move_in_confirmed_at, payment_preference, units:unit_id(label, bedrooms, bathrooms, rent_cents, property_id, properties(name, slug, type, address_line1, city))"
       )
       .eq("unit_id", unitId)
       .maybeSingle<OccRow>(),
@@ -154,9 +155,12 @@ export default async function Welcome() {
   // What's owed before the keys, and what of it has landed. Its own queries so
   // the welcome never breaks over the money block.
   const moveInIso = occ?.move_in_confirmed_at ? occ.move_in_date : null;
+  // The tenancy carries the rent, but a hand-built one can be missing it — the
+  // home always knows the price, so fall back rather than quote them nothing.
+  const monthlyRent = occ?.rent_cents ?? occ?.units?.rent_cents ?? null;
   const proration =
-    moveInIso && occ?.rent_cents ? prorateFirstMonth(moveInIso, occ.rent_cents) : null;
-  const due = moveInTotal(proration, occ?.rent_cents ?? null, occ?.deposit_cents ?? null);
+    moveInIso && monthlyRent ? prorateFirstMonth(moveInIso, monthlyRent) : null;
+  const due = moveInTotal(proration, monthlyRent, occ?.deposit_cents ?? null);
 
   let rentPaidCents = 0;
   let depositReceivedCents = 0;
@@ -232,7 +236,7 @@ export default async function Welcome() {
           <div>
             <div className="text-[11px] uppercase tracking-wide text-ink-faint">Rent</div>
             <div className="text-lg font-semibold text-ink">
-              {occ?.rent_cents ? `${formatCents(occ.rent_cents)} / mo` : "—"}
+              {monthlyRent ? `${formatCents(monthlyRent)} / mo` : "—"}
             </div>
             <div className="text-xs text-ink-faint">due the 1st</div>
           </div>
@@ -307,7 +311,7 @@ export default async function Welcome() {
               totalCents={due.totalCents}
               rentPaidCents={rentPaidCents}
               depositReceivedCents={depositReceivedCents}
-              monthlyRentCents={occ?.rent_cents ?? null}
+              monthlyRentCents={monthlyRent}
             />
           )}
         </Step>

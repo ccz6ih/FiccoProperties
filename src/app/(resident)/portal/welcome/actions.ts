@@ -150,14 +150,15 @@ export async function confirmMoveIn(
   await stampIfComplete(ctx.db, ctx.unitId);
 
   // What they now owe, so both sides see the same figure.
+  const monthlyRent = await rentForUnit(ctx.db, ctx.unitId);
   const { data: money } = await ctx.db
     .from("unit_occupancy")
-    .select("rent_cents, deposit_cents")
+    .select("deposit_cents")
     .eq("unit_id", ctx.unitId)
-    .maybeSingle<{ rent_cents: number | null; deposit_cents: number | null }>();
+    .maybeSingle<{ deposit_cents: number | null }>();
 
-  const p = money?.rent_cents ? prorateFirstMonth(raw, money.rent_cents) : null;
-  const due = moveInTotal(p, money?.rent_cents ?? null, money?.deposit_cents ?? null);
+  const p = monthlyRent ? prorateFirstMonth(raw, monthlyRent) : null;
+  const due = moveInTotal(p, monthlyRent, money?.deposit_cents ?? null);
 
   const { home, name } = await homeContext(ctx.db, ctx.unitId, ctx.userId);
   await sendNotification({
@@ -198,13 +199,43 @@ export async function confirmMoveIn(
       depositCents: due.depositCents,
       totalCents: due.totalCents,
       firstFullMonthOn: p?.firstFullMonthOn ?? null,
-      monthlyRentCents: money?.rent_cents ?? null,
+      monthlyRentCents: monthlyRent,
     });
   }
 
   revalidatePath("/portal/welcome");
   revalidatePath("/portal");
   return { ok: true, notice: "Got it — see you then." };
+}
+
+/**
+ * The rent for a home, from the tenancy if it carries one, otherwise from the
+ * home itself.
+ *
+ * A tenancy set up by hand can easily end up without a rent on it — the figure
+ * lives on the unit as well, and it's the unit you're looking at when you set
+ * the price. Without this fallback that gap is silent and expensive: no
+ * prorated charge is raised and the resident is told to bring the deposit
+ * alone, which is exactly what happened to The Villa Unit 2.
+ */
+async function rentForUnit(db: SupabaseClient, unitId: string): Promise<number | null> {
+  const { data: occ } = await db
+    .from("unit_occupancy")
+    .select("rent_cents")
+    .eq("unit_id", unitId)
+    .maybeSingle<{ rent_cents: number | null }>();
+  if (occ?.rent_cents) return occ.rent_cents;
+
+  const { data: unit } = await db
+    .from("units")
+    .select("rent_cents")
+    .eq("id", unitId)
+    .maybeSingle<{ rent_cents: number | null }>();
+  if (!unit?.rent_cents) return null;
+
+  // Heal it, so every other screen stops disagreeing with this one.
+  await db.from("unit_occupancy").update({ rent_cents: unit.rent_cents }).eq("unit_id", unitId);
+  return unit.rent_cents;
 }
 
 /**
@@ -224,14 +255,10 @@ async function raiseMoveInRent(
   residentId: string,
   moveInIso: string
 ): Promise<void> {
-  const { data: occ } = await db
-    .from("unit_occupancy")
-    .select("rent_cents")
-    .eq("unit_id", unitId)
-    .maybeSingle<{ rent_cents: number | null }>();
-  if (!occ?.rent_cents) return;
+  const rentCents = await rentForUnit(db, unitId);
+  if (!rentCents) return;
 
-  const p = prorateFirstMonth(moveInIso, occ.rent_cents);
+  const p = prorateFirstMonth(moveInIso, rentCents);
   if (!p) return;
 
   // Anything already raised for the move-in month that nobody has paid against
