@@ -7,6 +7,7 @@ import { PageHeader, StatCard, EmptyState } from "@/components/dashboard-ui";
 import { formatDate, humanize } from "@/lib/format";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { activeProvider, providerHasDeliveryEvents } from "@/lib/email-transport";
 
 export const metadata: Metadata = { title: "Email log" };
 export const dynamic = "force-dynamic";
@@ -27,6 +28,9 @@ const STATUS_UI: Record<string, { label: string; cls: string }> = {
   complained: { label: "⚠ Marked spam", cls: "bg-terracotta/15 text-terracotta-dark font-semibold" },
   delivery_delayed: { label: "Delayed…", cls: "bg-gold/15 text-gold" },
   sent: { label: "Sent", cls: "bg-sand text-ink-soft" },
+  // Over SMTP the mail server accepts the message and the conversation ends —
+  // there's no webhook coming, so this is the last word, not a stalled "sent".
+  handed_off: { label: "Sent ✓", cls: "bg-sand text-ink-soft" },
   delivered: { label: "Delivered ✓", cls: "bg-pine/10 text-pine" },
   opened: { label: "Opened 👁", cls: "bg-pine/10 text-pine" },
 };
@@ -40,6 +44,8 @@ export default async function EmailLog({
   if (!isStaff(profile)) redirect("/portal");
 
   const { show } = await searchParams;
+  const provider = activeProvider();
+  const hasDeliveryEvents = providerHasDeliveryEvents(provider);
   const supabase = await createClient();
   const db = supabase as unknown as SupabaseClient;
 
@@ -70,13 +76,27 @@ export default async function EmailLog({
         subtitle="Every message the system has tried to send, and what became of it."
       />
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Logged" value={String(all.length)} hint="most recent 400" />
         <StatCard
           label="Problems"
           value={String(problems.length)}
           tone={problems.length > 0 ? "terracotta" : undefined}
           hint="failed, bounced or marked spam"
+        />
+        <StatCard
+          label="Sending via"
+          value={
+            provider === "smtp" ? "SMTP" : provider === "resend" ? "Resend" : "Not set up"
+          }
+          tone={provider === "none" ? "terracotta" : undefined}
+          hint={
+            provider === "none"
+              ? "no provider configured — nothing can send"
+              : hasDeliveryEvents
+                ? "delivery tracking on"
+                : "no delivery tracking over SMTP"
+          }
         />
         <StatCard
           label="Last send"
@@ -161,9 +181,21 @@ export default async function EmailLog({
       )}
 
       <p className="mt-4 text-xs text-ink-faint">
-        A failed row means Resend refused it outright — usually a bad API key or a malformed
-        address; the reason is on the end of the subject. Delivered and opened come back from
-        Resend&apos;s webhook, so they only appear if that&apos;s still connected.
+        A failed row means the provider refused it outright — usually bad credentials or a
+        malformed address; the reason is on the end of the subject.{" "}
+        {hasDeliveryEvents ? (
+          <>
+            Delivered and opened come back from the provider&apos;s webhook, so they only
+            appear if that&apos;s still connected.
+          </>
+        ) : (
+          <>
+            We&apos;re sending over SMTP, where the mail server accepts the message and the
+            conversation ends — so &ldquo;Sent ✓&rdquo; is the last word and nothing further
+            will arrive. Bounces come back to the reply-to address instead, so keep an eye on
+            that inbox.
+          </>
+        )}
       </p>
     </div>
   );

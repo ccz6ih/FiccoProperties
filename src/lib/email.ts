@@ -1,15 +1,22 @@
 /**
- * Lightweight transactional email via Resend (https://resend.com).
+ * Transactional email. The provider is a setting, not a decision baked into
+ * this file — see lib/email-transport.ts.
  * Server-only. No-ops safely until the env vars are set, so the app never
  * breaks if email isn't configured yet.
  *
  * Env:
- *   RESEND_API_KEY  — from the Resend dashboard
+ *   SMTP_* or RESEND_API_KEY — whichever provider is in use
  *   NOTIFY_EMAIL    — where staff notifications go (comma-separated allowed)
  *   EMAIL_FROM      — verified sender, e.g. "38th Ave Properties <notifications@38thaveproperties.com>"
  *   OWNER_REPLY_TO  — where resident replies go (set in Vercel). Falls back to
  *                     hello@38thaveproperties.com if unset.
  */
+
+import {
+  deliver,
+  activeProvider,
+  providerHasDeliveryEvents,
+} from "@/lib/email-transport";
 
 /** Where replies to office emails should land — one env-controlled knob. */
 export function ownerReplyTo(): string {
@@ -62,104 +69,60 @@ export async function sendNotification(opts: {
    */
   meta?: { kind: string; refType?: string; refId?: string };
 }): Promise<{ sent: boolean; id?: string }> {
-  const key = process.env.RESEND_API_KEY;
   const to = opts.to ?? process.env.NOTIFY_EMAIL;
   const from =
     process.env.EMAIL_FROM ||
     '"Craig Carda · 38th Ave Properties" <notifications@38thaveproperties.com>';
 
-  if (!key || !to) {
-    if (to) {
-      await logAttempt({
-        message_id: null,
-        to_email: to,
-        subject: opts.subject,
-        kind: opts.meta?.kind ?? "other",
-        ref_type: opts.meta?.refType ?? null,
-        ref_id: opts.meta?.refId ?? null,
-        status: "failed",
-        error: "no RESEND_API_KEY set",
-      });
-    }
-    return { sent: false };
-  }
-
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: to.split(",").map((s) => s.trim()).filter(Boolean),
-        subject: opts.subject,
-        html: opts.html,
-        reply_to: opts.replyTo ?? ownerReplyTo(),
-      }),
-    });
-    if (!res.ok) {
-      // Read why — "API key is invalid" after a rotation is the common one, and
-      // it is worth having in the log rather than a bare failure.
-      let reason = `HTTP ${res.status}`;
-      try {
-        const body = (await res.json()) as { message?: string };
-        if (body?.message) reason = body.message;
-      } catch {
-        /* not JSON */
-      }
-      await logAttempt({
-        message_id: null,
-        to_email: to,
-        subject: opts.subject,
-        kind: opts.meta?.kind ?? "other",
-        ref_type: opts.meta?.refType ?? null,
-        ref_id: opts.meta?.refId ?? null,
-        status: "failed",
-        error: reason,
-      });
-      return { sent: false };
-    }
-
-    let id: string | undefined;
-    try {
-      const json = (await res.json()) as { id?: string };
-      id = json?.id;
-    } catch {
-      /* body not JSON — still sent */
-    }
-
-    // Log EVERY send, tagged or not. Delivery tracking is only as good as its
-    // coverage: an untagged send is one the webhook can never report a bounce
-    // for, and those pass silently — the resident can't get in and has no way
-    // to tell us. Best-effort, so a logging failure never blocks the email.
-    if (id) {
-      await logAttempt({
-        message_id: id,
-        to_email: to,
-        subject: opts.subject,
-        kind: opts.meta?.kind ?? "other",
-        ref_type: opts.meta?.refType ?? null,
-        ref_id: opts.meta?.refId ?? null,
-        status: "sent",
-      });
-    }
-
-    return { sent: true, id };
-  } catch (err) {
-    await logAttempt({
-      message_id: null,
-      to_email: to,
+  // Shared by every exit below, so a send can't be left out of the log by
+  // taking a path someone forgot about.
+  const record = (status: string, messageId: string | null, error?: string) =>
+    logAttempt({
+      message_id: messageId,
+      to_email: to as string,
       subject: opts.subject,
       kind: opts.meta?.kind ?? "other",
       ref_type: opts.meta?.refType ?? null,
       ref_id: opts.meta?.refId ?? null,
-      status: "failed",
-      error: err instanceof Error ? err.message : "network error",
+      status,
+      error,
     });
+
+  if (!to) return { sent: false };
+
+  if (activeProvider() === "none") {
+    await record("failed", null, "no email provider configured");
     return { sent: false };
   }
+
+  const result = await deliver({
+    from,
+    to: to.split(",").map((s) => s.trim()).filter(Boolean),
+    subject: opts.subject,
+    html: opts.html,
+    replyTo: opts.replyTo ?? ownerReplyTo(),
+  });
+
+  if (!result.ok) {
+    await record("failed", null, result.error ?? "send failed");
+    return { sent: false };
+  }
+
+  // Log EVERY send, tagged or not. Delivery tracking is only as good as its
+  // coverage: an untagged send is one the webhook can never report a bounce
+  // for, and those pass silently — the resident can't get in and has no way
+  // to tell us. Best-effort, so a logging failure never blocks the email.
+  //
+  // Over SMTP there is no webhook to follow up with, so "sent" is the last
+  // word we will ever get. It's recorded as `handed_off` rather than `sent` so
+  // the log can say plainly that nothing further is coming, instead of looking
+  // like a delivery confirmation that never arrived.
+  await record(
+    providerHasDeliveryEvents() ? "sent" : "handed_off",
+    result.id ?? null
+  );
+
+  return { sent: true, id: result.id };
 }
 
 /** Escape a dynamic value before embedding it in email HTML. */
