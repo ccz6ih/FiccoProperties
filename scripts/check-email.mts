@@ -50,6 +50,24 @@ if (provider === "smtp") {
   console.log(`host     : ${process.env.SMTP_HOST}:${port} ${secure ? "(TLS)" : "(STARTTLS)"}`);
   console.log(`user     : ${process.env.SMTP_USER}`);
 
+  // Microsoft refuses to send as an address other than the mailbox you signed
+  // in as — "550 5.7.60 SendAsDenied" — and it's the single most common way an
+  // Office 365 setup fails after everything else is right. Catch it here, in
+  // words, rather than letting it surface as a code during a real notice.
+  const fromAddress = (from.match(/<([^>]+)>/)?.[1] ?? from).trim().toLowerCase();
+  const smtpUser = (process.env.SMTP_USER ?? "").trim().toLowerCase();
+  if (
+    /office365|outlook/i.test(process.env.SMTP_HOST ?? "") &&
+    smtpUser &&
+    fromAddress !== smtpUser
+  ) {
+    console.warn(
+      `\n!  EMAIL_FROM sends as "${fromAddress}" but you sign in as "${smtpUser}".` +
+        `\n   Microsoft will reject that with 550 5.7.60 SendAsDenied.` +
+        `\n   Set EMAIL_FROM to use ${smtpUser}, or give that mailbox Send As rights.`
+    );
+  }
+
   const nodemailer = (await import("nodemailer")).default;
   const t = nodemailer.createTransport({
     host: process.env.SMTP_HOST,

@@ -18,9 +18,15 @@ import {
   providerHasDeliveryEvents,
 } from "@/lib/email-transport";
 
-/** Where replies to office emails should land — one env-controlled knob. */
+/**
+ * Where replies to office emails should land — one env-controlled knob.
+ *
+ * The fallback is office@, which is a real mailbox on the domain. It used to
+ * be hello@, which never existed: with no MX record on the domain at all, a
+ * tenant hitting reply was writing into the void and had no way to know.
+ */
 export function ownerReplyTo(): string {
-  return process.env.OWNER_REPLY_TO || "hello@38thaveproperties.com";
+  return process.env.OWNER_REPLY_TO || "office@38thaveproperties.com";
 }
 
 /**

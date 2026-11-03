@@ -36,6 +36,57 @@ these can be signed up for and sending the same day:
 
 All four give you an SMTP host, username and password. That's all the app needs.
 
+## Office 365 through GoDaddy (office@38thaveproperties.com)
+
+Workable, and it also gives the domain a real mailbox, which it has never had.
+Two things make it fiddlier than a dedicated sending service, and both are
+worth knowing before you start rather than after.
+
+**SMTP AUTH is switched off by default** on mailboxes created in recent years,
+and **Security Defaults — on by default for a new tenant — blocks SMTP sign-in
+across the whole tenant regardless of the per-mailbox setting.** You have to
+deal with both, and GoDaddy's simplified email panel may not expose either; you
+may need the real Microsoft admin centre at `admin.microsoft.com`.
+
+**It is also on a clock.** Microsoft disables basic authentication for SMTP
+AUTH by default at the end of December 2026, with final removal to be announced
+in the second half of 2027. An admin can re-enable it, but this is not a
+setting to build on for years.
+
+Order of work:
+
+1. Create the mailbox `office@38thaveproperties.com` and sign in once at
+   `outlook.office.com` to clear the first-run prompts.
+2. In `admin.microsoft.com` → Users → Active users → **office@** → Mail →
+   **Manage email apps** → tick **Authenticated SMTP** → Save.
+3. Check whether **Security Defaults** is on: Microsoft Entra admin centre →
+   Overview → Properties → Manage security defaults. If it's on, SMTP sign-in
+   is blocked tenant-wide no matter what step 2 says.
+4. Allow up to an hour for the change, occasionally longer.
+5. **Turn on DKIM** — see below. With `p=quarantine` on the domain this decides
+   inbox versus spam.
+
+`EMAIL_FROM` **must be the mailbox you sign in as.** Microsoft rejects sending
+as anything else with `550 5.7.60 SendAsDenied`, and it is the most common way
+an otherwise-correct setup fails. `scripts/check-email.mts` warns about this
+before you send.
+
+### DKIM for Microsoft 365
+
+GoDaddy normally adds MX, SPF and autodiscover when you buy the mailbox. DKIM
+it does not — you switch that on yourself:
+
+1. `security.microsoft.com` → Email & collaboration → Policies & rules →
+   Threat policies → **Email authentication settings** → DKIM
+2. Select `38thaveproperties.com` and enable signing
+3. It will give you **two CNAME records** (`selector1._domainkey` and
+   `selector2._domainkey`). Add both at GoDaddy, then enable again.
+
+Check afterwards that the domain has **exactly one** SPF record at the apex,
+containing `include:spf.protection.outlook.com`. Two SPF records is the same as
+none. The existing Resend SPF sits on the `send.` subdomain and does not
+conflict.
+
 ## Set it up
 
 Add to `.env.local` locally, and to **Vercel → Project → Settings →
