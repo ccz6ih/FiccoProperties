@@ -4,6 +4,45 @@ The app no longer cares which company sends its mail. Point it at any provider
 that speaks SMTP — which is nearly all of them — by setting four environment
 variables. No code change, no developer.
 
+## What is actually running (as of 3 Nov 2026)
+
+SMTP2GO, sending as `office@38thaveproperties.com`. Verified working end to
+end: Gmail reports SPF pass, DKIM pass signed by `38thaveproperties.com`, and
+`dmarc=pass ... dis=NONE` — the quarantine policy was evaluated and not
+applied.
+
+```
+EMAIL_PROVIDER=smtp
+SMTP_HOST=mail.smtp2go.com
+SMTP_PORT=587
+SMTP_USER=38thaveproperties.com
+SMTP_PASS=<in .env.local and Vercel>
+EMAIL_FROM="38th Ave Properties <office@38thaveproperties.com>"
+OWNER_REPLY_TO=office@38thaveproperties.com
+```
+
+Three CNAMEs at GoDaddy make the authentication work. Do not remove them:
+
+| Host | Points to | Why |
+|---|---|---|
+| `em1158692` | `return.smtp2go.net` | Return path — this is what makes SPF *align* with the domain |
+| `s1158692._domainkey` | `dkim.smtp2go.net` | DKIM signing key |
+| `link` | `track.smtp2go.net` | Click tracking |
+
+**Do not add `include:spf.smtp2go.com` to the apex SPF.** It looks sensible and
+does nothing: SPF is evaluated against the return-path domain above, not the
+apex, and every extra include counts against a hard ten-lookup limit.
+
+Mail *to* `office@` works through the MX at the apex pointing to
+`38thaveproperties-com.mail.protection.outlook.com`. That is Microsoft, and is
+unrelated to sending — the mailbox receives, SMTP2GO sends.
+
+Office 365 SMTP was tried first and abandoned: `535 5.7.3 Authentication
+unsuccessful` persisted after enabling Authenticated SMTP org-wide, and basic
+auth for SMTP AUTH is being switched off by Microsoft at the end of December
+2026 anyway. The mailbox was still worth having — the domain had no MX record
+at all before this, so replies and bounces had nowhere to go.
+
 ## The one thing you cannot skip
 
 `38thaveproperties.com` publishes a **DMARC policy of `p=quarantine`**. That
