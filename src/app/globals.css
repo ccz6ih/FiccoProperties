@@ -122,8 +122,15 @@
      rendered instead, because a working surface (dots, checkboxes, chips,
      overdue-first) and a sheet that goes in an envelope with the takings are
      two different things, and one stylesheet cannot be both. */
+  /* Black on white, whatever the app's cream palette says. This sheet is
+     photocopied and filed, and the background tint printed as a grey wash
+     across every page. */
+  .turn-in-sheet,
+  .turn-in-sheet * {
+    background: #fff !important;
+    color: #000 !important;
+  }
   .turn-in-sheet {
-    color: #000;
     font-size: 10.5pt;
     line-height: 1.35;
   }
@@ -175,7 +182,7 @@
   /* Zebra striping does the work the colour used to: it keeps the eye on one
      line across a wide row when ticking entries off against the envelope. */
   .turn-in-table tbody tr:nth-child(even) td {
-    background: #f4f4f4;
+    background: #efefef !important;
   }
   .turn-in-table tfoot td {
     border-top: 2px solid #000;
@@ -187,9 +194,18 @@
   .col-tick {
     width: 22px;
   }
+  /* A fixed square, not a box stretched to the height of a two-tender row. */
   .turn-in-table tbody .col-tick {
-    border: 1px solid #000;
     background: #fff !important;
+    padding: 5px 4px;
+  }
+  .turn-in-table tbody .col-tick::before {
+    content: "";
+    display: block;
+    width: 11px;
+    height: 11px;
+    border: 1px solid #000;
+    margin-top: 1px;
   }
   .col-unit {
     width: 44px;
@@ -213,7 +229,6 @@
   .tender-amt {
     display: inline-block;
     margin-left: 6px;
-    color: #444;
     font-variant-numeric: tabular-nums;
   }
   .turn-in-owing .tender-amt {

@@ -226,12 +226,6 @@ export default async function RentBoardPage({
         />
       </div>
 
-      <div className="mb-4 hidden print:block">
-        <div className="font-display text-xl font-semibold text-ink">
-          38th Ave Properties — Rent board · {periodLabel(period)}
-        </div>
-      </div>
-
       {hasUnits ? (
         <RentBoard groups={groups} periodLabel={periodLabel(period)} />
       ) : (

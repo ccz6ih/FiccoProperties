@@ -1,4 +1,4 @@
-import { formatCents, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import type { BoardGroup, BoardCharge } from "@/components/rent-board";
 
 /**
@@ -17,6 +17,46 @@ import type { BoardGroup, BoardCharge } from "@/components/rent-board";
  * The tick column is deliberately empty. It gets filled in by hand while the
  * envelope is being packed, which is the job this sheet exists to serve.
  */
+
+/**
+ * Money on a document that gets counted against a physical stack: always two
+ * decimals, so the points line up down the column and $1,600 can never be
+ * mistaken for $1,600.75 at a glance.
+ */
+const dollars = (cents: number) =>
+  (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+/**
+ * Is this tender a piece of paper that goes in the envelope?
+ *
+ * Rent settled another way — work done against it, a write-off — is still
+ * paid, but there is nothing to hand over. Counting it in "total enclosed"
+ * means the envelope comes up short against its own cover sheet, which reads
+ * exactly like money having gone missing.
+ */
+const isPhysical = (ref: string) => /^\s*(money order|check|cheque|cash)/i.test(ref);
+
+/** "Money order KS#123 $1,000.00" → "Money order KS#123" when the amount just
+ *  repeats the tender. 24 of November's 53 payments had it typed in by hand,
+ *  and printed beside the real figure it reads like an error. */
+function tidyRef(ref: string, cents: number): string {
+  const cleaned = ref
+    .replace(/\s*\$+\s?[\d,]+(?:\.\d{2})?\s*$/, "")
+    // The amount was often run on with a dash or colon; without its number
+    // that separator is just a loose mark at the end of a reference.
+    .replace(/[\s\-–:,;]+$/, "")
+    .trim();
+  if (!cleaned) return ref.trim();
+  const stripped = ref.slice(cleaned.length).replace(/[^\d.]/g, "");
+  if (!stripped) return cleaned;
+  // Only drop it when it really is this tender's amount.
+  return Math.round(Number(stripped) * 100) === cents ? cleaned : ref.trim();
+}
 
 const unitNo = (label: string) => {
   const m = label.match(/(\d+)/);
@@ -50,6 +90,21 @@ export function RentTurnInSheet({
           .sort(byUnit);
         const vacant = g.charges.filter((c) => c.status === "vacant").sort(byUnit);
 
+        // A home settled entirely without paper — work done against the rent,
+        // say — is paid, but nothing goes in the envelope for it. It is listed
+        // separately so "total enclosed" can be counted against the stack and
+        // come out exactly right.
+        const enclosed = paid.filter((c) => c.paidRefs.some((t) => isPhysical(t.ref)));
+        const otherwise = paid.filter((c) => !c.paidRefs.some((t) => isPhysical(t.ref)));
+        const enclosedCents = enclosed.reduce(
+          (sum, c) => sum + c.paidRefs.filter((t) => isPhysical(t.ref)).reduce((n, t) => n + t.cents, 0),
+          0
+        );
+        const itemCount = enclosed.reduce(
+          (n, c) => n + c.paidRefs.filter((t) => isPhysical(t.ref)).length,
+          0
+        );
+
         return (
           <section
             key={g.property}
@@ -67,7 +122,8 @@ export function RentTurnInSheet({
 
             <table className="turn-in-table">
               <caption className="turn-in-caption">
-                In the envelope — {paid.length} {paid.length === 1 ? "home" : "homes"}
+                In the envelope — {itemCount} {itemCount === 1 ? "item" : "items"} from{" "}
+                {enclosed.length} {enclosed.length === 1 ? "home" : "homes"}
               </caption>
               <thead>
                 <tr>
@@ -79,29 +135,28 @@ export function RentTurnInSheet({
                 </tr>
               </thead>
               <tbody>
-                {paid.map((c) => (
-                  <tr key={`p-${c.unit}`}>
-                    <td className="col-tick" />
-                    <td className="col-unit">{shortUnit(c.unit)}</td>
-                    <td className="col-name">{c.name}</td>
-                    <td className="col-ref">
-                      {c.paidRefs.length === 0 ? (
-                        <span className="muted">—</span>
-                      ) : (
-                        c.paidRefs.map((t, i) => (
+                {enclosed.map((c) => {
+                  const tenders = c.paidRefs.filter((t) => isPhysical(t.ref));
+                  return (
+                    <tr key={`p-${c.unit}`}>
+                      <td className="col-tick" />
+                      <td className="col-unit">{shortUnit(c.unit)}</td>
+                      <td className="col-name">{c.name}</td>
+                      <td className="col-ref">
+                        {tenders.map((t, i) => (
                           <span className="tender" key={`${t.ref}-${i}`}>
-                            {t.ref}
-                            {c.paidRefs.length > 1 && (
-                              <span className="tender-amt">{formatCents(t.cents)}</span>
-                            )}
+                            {tidyRef(t.ref, t.cents)}
+                            <span className="tender-amt">{dollars(t.cents)}</span>
                           </span>
-                        ))
-                      )}
-                    </td>
-                    <td className="col-amt">{formatCents(c.billedCents)}</td>
-                  </tr>
-                ))}
-                {paid.length === 0 && (
+                        ))}
+                      </td>
+                      <td className="col-amt">
+                        {dollars(tenders.reduce((n, t) => n + t.cents, 0))}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {enclosed.length === 0 && (
                   <tr>
                     <td colSpan={5} className="muted">
                       Nothing collected yet this month.
@@ -113,10 +168,45 @@ export function RentTurnInSheet({
                 <tr>
                   <td className="col-tick" />
                   <td colSpan={3}>Total enclosed</td>
-                  <td className="col-amt">{formatCents(g.collectedCents)}</td>
+                  <td className="col-amt">{dollars(enclosedCents)}</td>
                 </tr>
               </tfoot>
             </table>
+
+            {otherwise.length > 0 && (
+              <table className="turn-in-table">
+                <caption className="turn-in-caption">
+                  Paid, but not in the envelope — settled another way
+                </caption>
+                <thead>
+                  <tr>
+                    <th className="col-tick" />
+                    <th className="col-unit">Unit</th>
+                    <th className="col-name">Resident</th>
+                    <th className="col-ref">How it was settled</th>
+                    <th className="col-amt">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {otherwise.map((c) => (
+                    <tr key={`x-${c.unit}`}>
+                      <td className="col-tick" />
+                      <td className="col-unit">{shortUnit(c.unit)}</td>
+                      <td className="col-name">{c.name}</td>
+                      <td className="col-ref">
+                        {c.paidRefs.map((t, i) => (
+                          <span className="tender" key={`${t.ref}-${i}`}>
+                            {tidyRef(t.ref, t.cents)}
+                          </span>
+                        ))}
+                        {c.paidRefs.length === 0 && <span className="muted">—</span>}
+                      </td>
+                      <td className="col-amt">{dollars(c.billedCents)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
             {owing.length > 0 && (
               <table className="turn-in-table turn-in-owing">
@@ -146,11 +236,11 @@ export function RentTurnInSheet({
                             : "Due"}
                         {c.lateFeeCents ? (
                           <span className="tender-amt">
-                            incl. {formatCents(c.lateFeeCents)} late fee
+                            incl. {dollars(c.lateFeeCents)} late fee
                           </span>
                         ) : null}
                       </td>
-                      <td className="col-amt">{formatCents(c.amountCents)}</td>
+                      <td className="col-amt">{dollars(c.amountCents)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -158,7 +248,7 @@ export function RentTurnInSheet({
                   <tr>
                     <td className="col-tick" />
                     <td colSpan={3}>Still owed</td>
-                    <td className="col-amt">{formatCents(g.outstandingCents)}</td>
+                    <td className="col-amt">{dollars(g.outstandingCents)}</td>
                   </tr>
                 </tfoot>
               </table>
