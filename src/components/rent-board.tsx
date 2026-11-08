@@ -30,7 +30,14 @@ export type BoardCharge = {
   billedCents: number;
   receivedCents: number;
   status: "paid" | "open" | "overdue" | "unbilled" | "vacant";
-  paidRef?: string | null;
+  /**
+   * Every cheque or money order that settled this home, with its own amount.
+   *
+   * Most rent here arrives as two money orders — a $1,000 and the remainder —
+   * and the printed sheet is handed over with the orders themselves, so one
+   * reference isn't enough to check the stack against.
+   */
+  paidRefs: { ref: string; cents: number }[];
   paidDate?: string | null;
 };
 export type BoardGroup = {
@@ -60,6 +67,29 @@ const STATUS: Record<BoardCharge["status"], { dot: string; row: string; label: s
 function unitOrder(label: string): number {
   const m = label.match(/(\d+)/);
   return m ? Number(m[1]) : 9999;
+}
+
+/**
+ * Where a row sits on the printed sheet.
+ *
+ * The paper copy is handed over with the cheques and money orders stacked in
+ * unit order, so the paid block leads and matches the stack one for one.
+ * Everything still owed follows as the exceptions, and empty homes come last
+ * — they are neither a payment to count nor a debt to chase.
+ *
+ * The blocks are a thousand apart so unit numbers (up to 61 at Mountain
+ * Village) can never run one block into the next.
+ */
+const PRINT_BLOCK = { paid: 0, owing: 1000, vacant: 2000 } as const;
+
+function printOrder(c: BoardCharge): number {
+  const block =
+    c.status === "paid"
+      ? PRINT_BLOCK.paid
+      : c.status === "vacant"
+        ? PRINT_BLOCK.vacant
+        : PRINT_BLOCK.owing;
+  return block + unitOrder(c.unit);
 }
 
 const isMarkable = (c: BoardCharge) =>
@@ -172,7 +202,7 @@ export function RentBoard({
                   return (
                     <li
                       key={c.id ?? `${g.property}-${i}`}
-                      style={{ order: unitOrder(c.unit) }}
+                      style={{ order: printOrder(c) }}
                       className={`flex items-center justify-between gap-3 border-l-4 px-4 py-2.5 break-inside-avoid ${meta.row}`}
                     >
                       <div className="flex min-w-0 items-center gap-3">
@@ -188,16 +218,28 @@ export function RentBoard({
                         <span className={`status-dot h-2.5 w-2.5 shrink-0 rounded-full ${meta.dot}`} />
                         <span className="truncate text-sm font-medium text-ink">{c.name}</span>
                         <span className="shrink-0 text-xs text-ink-faint">{c.unit}</span>
-                        {c.paidRef && (
-                          <span className="shrink-0 rounded-full bg-pine/10 px-2 py-0.5 text-xs text-pine">
-                            {c.paidRef}
+                        {/* One chip per tender. The amount rides along only
+                            when there was more than one, because that is the
+                            case you have to check against the stack — a lone
+                            reference needs no arithmetic. */}
+                        {c.paidRefs.map((t, n) => (
+                          <span
+                            key={`${t.ref}-${n}`}
+                            className="shrink-0 rounded-full bg-pine/10 px-2 py-0.5 text-xs text-pine print:rounded-none print:px-0"
+                          >
+                            {t.ref}
+                            {c.paidRefs.length > 1 ? ` · ${formatCents(t.cents)}` : ""}
                           </span>
-                        )}
+                        ))}
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         {c.status === "paid" && c.id && (
                           <span className="print:hidden">
-                            <PaymentReceipt chargeId={c.id} note={c.paidRef ?? null} compact />
+                            <PaymentReceipt
+                              chargeId={c.id}
+                              note={c.paidRefs.map((t) => t.ref).join(", ") || null}
+                              compact
+                            />
                           </span>
                         )}
                         <span className={`text-xs font-medium ${meta.text}`}>
@@ -216,6 +258,20 @@ export function RentBoard({
                     </li>
                   );
                 })}
+                {/* Where the cheques stop. Print only: on screen the status
+                    chips already say it, but on paper handed across a desk a
+                    plain rule between "here is the money" and "these have not
+                    paid" saves the conversation. Ordered to land between the
+                    two blocks, and omitted when one of them is empty. */}
+                {g.charges.some((c) => c.status === "paid") &&
+                  g.charges.some((c) => c.status === "open" || c.status === "overdue" || c.status === "unbilled") && (
+                    <li
+                      style={{ order: PRINT_BLOCK.owing - 1 }}
+                      className="hidden print:block border-t-2 border-black px-4 pt-2 pb-1 text-xs font-semibold uppercase tracking-wide"
+                    >
+                      Still owed
+                    </li>
+                  )}
                 {g.charges.length === 0 && (
                   <li className="px-4 py-3 text-sm text-ink-faint">No charges.</li>
                 )}

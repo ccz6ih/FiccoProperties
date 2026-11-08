@@ -82,7 +82,11 @@ export default async function RentBoardPage({
   // Payment reference (check / money-order #) for this period's charges, so the
   // board and its printout show how each paid unit paid.
   const chargeIds = (charges ?? []).map((c) => c.id);
-  const refByCharge = new Map<string, string>();
+  // Every tender against a charge, not just one. Most rent here arrives as
+  // two money orders — a $1,000 and the remainder — and the sheet is handed
+  // over with the physical orders, so both numbers have to be on it or they
+  // cannot be reconciled against the stack.
+  const refsByCharge = new Map<string, { ref: string; cents: number }[]>();
   const paidByCharge = new Map<string, number>();
   const paidDateByCharge = new Map<string, string>();
   if (chargeIds.length > 0) {
@@ -103,12 +107,14 @@ export default async function RentBoardPage({
     for (const p of payments ?? []) {
       if (!p.charge_id) continue;
       paidByCharge.set(p.charge_id, (paidByCharge.get(p.charge_id) ?? 0) + p.amount_cents);
+      if (p.provider_ref && p.provider_ref !== "offline") {
+        refsByCharge.set(p.charge_id, [
+          ...(refsByCharge.get(p.charge_id) ?? []),
+          { ref: p.provider_ref, cents: p.amount_cents },
+        ]);
+      }
       // Newest-first, so the first one seen is the latest payment date.
       if (!paidDateByCharge.has(p.charge_id)) paidDateByCharge.set(p.charge_id, p.created_at);
-      if (refByCharge.has(p.charge_id)) continue;
-      if (p.provider_ref && p.provider_ref !== "offline") {
-        refByCharge.set(p.charge_id, p.provider_ref);
-      }
     }
   }
 
@@ -168,7 +174,12 @@ export default async function RentBoardPage({
       billedCents: unitCharges.length === 0 ? o?.rent_cents ?? 0 : billedCents,
       receivedCents,
       status,
-      paidRef: status === "paid" && settled[0] ? refByCharge.get(settled[0].id) ?? null : null,
+      // Across every charge on the home, so rent and a late fee settled by
+      // separate orders both show.
+      paidRefs:
+        status === "paid"
+          ? unitCharges.flatMap((c) => refsByCharge.get(c.id) ?? [])
+          : [],
       paidDate: status === "paid" && settled[0] ? paidDateByCharge.get(settled[0].id) ?? null : null,
     });
     byProp.set(property, arr);
