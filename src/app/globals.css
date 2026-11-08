@@ -117,36 +117,135 @@
     break-inside: avoid;
   }
 
-  /* The rent board on paper.
-     It gets stacked beside the bank bags and worked through unit by unit, so
-     the printed sheet drops the colour coding entirely and runs 1, 2, 3 …
-     rather than the screen's overdue-first order. Status stays legible as a
-     word; the coloured dots and tinted rows are a screen affordance and only
-     cost toner here. */
-  .rent-board-print,
-  .rent-board-print * {
+  /* The rent board on paper — see components/rent-turn-in-sheet.tsx.
+     The screen board is hidden entirely in print and a separate document is
+     rendered instead, because a working surface (dots, checkboxes, chips,
+     overdue-first) and a sheet that goes in an envelope with the takings are
+     two different things, and one stylesheet cannot be both. */
+  .turn-in-sheet {
+    color: #000;
+    font-size: 10.5pt;
+    line-height: 1.35;
+  }
+  .turn-in-head {
+    border-bottom: 2px solid #000;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+  }
+  .turn-in-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 15pt;
+    font-weight: 700;
+  }
+  .turn-in-sub {
+    font-size: 9pt;
+    color: #333;
+    margin-top: 1px;
+  }
+
+  .turn-in-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 16px;
+  }
+  .turn-in-caption {
+    caption-side: top;
+    text-align: left;
+    font-size: 9pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 0 4px;
+  }
+  .turn-in-table th {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: left;
+    border-bottom: 1px solid #000;
+    padding: 3px 6px;
+    font-weight: 600;
+  }
+  .turn-in-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #d8d8d8;
+    vertical-align: top;
+    break-inside: avoid;
+  }
+  /* Zebra striping does the work the colour used to: it keeps the eye on one
+     line across a wide row when ticking entries off against the envelope. */
+  .turn-in-table tbody tr:nth-child(even) td {
+    background: #f4f4f4;
+  }
+  .turn-in-table tfoot td {
+    border-top: 2px solid #000;
+    border-bottom: 0;
+    padding-top: 6px;
+    font-weight: 700;
+  }
+
+  .col-tick {
+    width: 22px;
+  }
+  .turn-in-table tbody .col-tick {
+    border: 1px solid #000;
     background: #fff !important;
-    color: #000 !important;
-    box-shadow: none !important;
   }
-  .rent-board-print li {
-    border-left: 0 !important;
-    border-bottom: 1px solid #ccc !important;
-    padding-top: 4px !important;
-    padding-bottom: 4px !important;
+  .col-unit {
+    width: 44px;
+    font-weight: 700;
   }
-  /* The status dot carries no meaning without colour. */
-  .rent-board-print .status-dot {
-    display: none !important;
+  .col-name {
+    width: 34%;
   }
-  /* Unit order, via flex ordering on the list rather than a second copy of
-     the DOM. The container is only flex in print, so the screen keeps its
-     own ordering untouched. */
-  .rent-board-print .board-rows {
-    display: flex !important;
-    flex-direction: column !important;
+  .col-amt {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
-  .rent-board-print .board-head {
-    border-bottom: 2px solid #000 !important;
+
+  /* One tender per line: two money orders is the normal case here, and they
+     have to be checkable one at a time against the paper in the envelope. */
+  .tender {
+    display: block;
+    font-size: 9pt;
   }
+  .tender-amt {
+    display: inline-block;
+    margin-left: 6px;
+    color: #444;
+    font-variant-numeric: tabular-nums;
+  }
+  .turn-in-owing .tender-amt {
+    display: block;
+    margin-left: 0;
+    font-size: 8.5pt;
+  }
+  .muted {
+    color: #666;
+  }
+
+  .turn-in-vacant {
+    font-size: 9pt;
+    color: #444;
+    margin: 0 0 14px;
+  }
+
+  .turn-in-signoff {
+    display: flex;
+    gap: 28px;
+    margin-top: 22px;
+    font-size: 9pt;
+    break-inside: avoid;
+  }
+  .turn-in-signoff .rule {
+    display: inline-block;
+    width: 150px;
+    border-bottom: 1px solid #000;
+    margin-left: 6px;
+  }
+  .turn-in-signoff .rule-short {
+    width: 90px;
+  }
+
 }
