@@ -14,9 +14,21 @@ const initial: AdminPaymentsState = { ok: false };
 
 export type BoardCharge = {
   id: string | null;
+  /**
+   * Every charge on this home still carrying a balance. A home can owe rent
+   * AND a late fee, and marking it paid has to settle both — settling only
+   * one is how a tenant ends up chased for $70 they thought they'd cleared.
+   */
+  chargeIds: string[];
   name: string;
   unit: string;
+  /** Outstanding while unpaid; what was billed once it's settled. */
   amountCents: number;
+  /** The late-fee share of what's outstanding, where there is one. */
+  lateFeeCents?: number | null;
+  /** Totals for the community header, so a part payment still counts. */
+  billedCents: number;
+  receivedCents: number;
   status: "paid" | "open" | "overdue" | "unbilled" | "vacant";
   paidRef?: string | null;
   paidDate?: string | null;
@@ -50,7 +62,8 @@ function unitOrder(label: string): number {
   return m ? Number(m[1]) : 9999;
 }
 
-const isMarkable = (c: BoardCharge) => !!c.id && (c.status === "open" || c.status === "overdue");
+const isMarkable = (c: BoardCharge) =>
+  c.chargeIds.length > 0 && (c.status === "open" || c.status === "overdue");
 
 export function RentBoard({
   groups,
@@ -191,7 +204,14 @@ export function RentBoard({
                           {meta.label}
                           {c.status === "paid" && c.paidDate ? ` · ${formatDate(c.paidDate)}` : ""}
                         </span>
-                        <span className="text-sm font-medium text-ink">{formatCents(c.amountCents)}</span>
+                        <span className="text-right text-sm font-medium text-ink">
+                          {formatCents(c.amountCents)}
+                          {c.lateFeeCents ? (
+                            <span className="block text-[11px] font-normal text-ink-faint">
+                              incl. {formatCents(c.lateFeeCents)} late fee
+                            </span>
+                          ) : null}
+                        </span>
                       </div>
                     </li>
                   );
@@ -207,9 +227,11 @@ export function RentBoard({
 
       {selectedRows.length > 0 && (
         <form action={action} className="sticky bottom-4 z-30 mt-4 print:hidden">
-          {selectedRows.map((c) => (
-            <input key={c.id} type="hidden" name="charge_ids" value={c.id!} />
-          ))}
+          {selectedRows.flatMap((c) =>
+            c.chargeIds.map((id) => (
+              <input key={id} type="hidden" name="charge_ids" value={id} />
+            ))
+          )}
           <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-cream px-5 py-3 shadow-xl">
             <div className="text-sm">
               <span className="font-semibold text-ink">{selectedRows.length} selected</span>

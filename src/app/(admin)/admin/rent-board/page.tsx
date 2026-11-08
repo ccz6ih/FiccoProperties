@@ -24,6 +24,7 @@ type ChargeRow = {
   status: string;
   due_date: string | null;
   amount_cents: number;
+  description: string | null;
 };
 
 function currentPeriod(): string {
@@ -57,7 +58,7 @@ export default async function RentBoardPage({
       .returns<OccRow[]>(),
     db
       .from("charges")
-      .select("id, unit_id, status, due_date, amount_cents")
+      .select("id, unit_id, status, due_date, amount_cents, description")
       .eq("period", period)
       .neq("status", "void")
       .returns<ChargeRow[]>(),
@@ -65,24 +66,43 @@ export default async function RentBoardPage({
 
   const occByUnit = new Map<string, OccRow>();
   for (const o of occ ?? []) occByUnit.set(o.unit_id, o);
-  const chargeByUnit = new Map<string, ChargeRow>();
-  for (const c of charges ?? []) if (c.unit_id) chargeByUnit.set(c.unit_id, c);
+  // Every charge on the home, not just one of them.
+  //
+  // This used to be a Map keyed by unit, so a home billed rent AND a late fee
+  // kept whichever arrived last — in practice the late fee, because it is
+  // raised afterwards. The board then showed Yadira Olivas owing $68.75 when
+  // she owed $1,443.75, and the community totals were short by the rent of
+  // every late tenant.
+  const chargesByUnit = new Map<string, ChargeRow[]>();
+  for (const c of charges ?? []) {
+    if (!c.unit_id) continue;
+    chargesByUnit.set(c.unit_id, [...(chargesByUnit.get(c.unit_id) ?? []), c]);
+  }
 
   // Payment reference (check / money-order #) for this period's charges, so the
   // board and its printout show how each paid unit paid.
   const chargeIds = (charges ?? []).map((c) => c.id);
   const refByCharge = new Map<string, string>();
+  const paidByCharge = new Map<string, number>();
   const paidDateByCharge = new Map<string, string>();
   if (chargeIds.length > 0) {
     const { data: payments } = await db
       .from("payments")
-      .select("charge_id, provider_ref, created_at")
+      .select("charge_id, provider_ref, created_at, amount_cents")
       .in("charge_id", chargeIds)
       .eq("status", "succeeded")
       .order("created_at", { ascending: false })
-      .returns<{ charge_id: string | null; provider_ref: string | null; created_at: string }[]>();
+      .returns<
+        {
+          charge_id: string | null;
+          provider_ref: string | null;
+          created_at: string;
+          amount_cents: number;
+        }[]
+      >();
     for (const p of payments ?? []) {
       if (!p.charge_id) continue;
+      paidByCharge.set(p.charge_id, (paidByCharge.get(p.charge_id) ?? 0) + p.amount_cents);
       // Newest-first, so the first one seen is the latest payment date.
       if (!paidDateByCharge.has(p.charge_id)) paidDateByCharge.set(p.charge_id, p.created_at);
       if (refByCharge.has(p.charge_id)) continue;
@@ -97,23 +117,59 @@ export default async function RentBoardPage({
     const property = u.properties?.name ?? "Unassigned";
     const o = occByUnit.get(u.id);
     const occupied = !!o && !!(o.tenant_name || o.occupant_profile_id);
-    const charge = chargeByUnit.get(u.id);
+    const unitCharges = chargesByUnit.get(u.id) ?? [];
+
+    const billedCents = unitCharges.reduce((sum, c) => sum + c.amount_cents, 0);
+    const receivedCents = unitCharges.reduce(
+      (sum, c) => sum + Math.min(c.amount_cents, paidByCharge.get(c.id) ?? 0),
+      0
+    );
+    const outstandingCents = Math.max(0, billedCents - receivedCents);
+
+    // Charges still carrying a balance — what "mark paid" has to settle, and
+    // what decides whether the home reads as overdue.
+    const unpaid = unitCharges.filter(
+      (c) => c.amount_cents - (paidByCharge.get(c.id) ?? 0) > 0
+    );
+    // A late fee alongside rent is worth naming: "$1,470" on its own invites
+    // the question, and that question is a phone call.
+    const lateFeeCents = unpaid
+      .filter((c) => (c.description ?? "").toLowerCase().includes("late fee"))
+      .reduce((sum, c) => sum + c.amount_cents - (paidByCharge.get(c.id) ?? 0), 0);
 
     let status: BoardCharge["status"];
     if (!occupied) status = "vacant";
-    else if (charge)
-      status = charge.status === "paid" ? "paid" : charge.due_date && charge.due_date < todayIso ? "overdue" : "open";
-    else status = "unbilled";
+    else if (unitCharges.length === 0) status = "unbilled";
+    else if (outstandingCents === 0) status = "paid";
+    else if (unpaid.some((c) => c.due_date && c.due_date < todayIso)) status = "overdue";
+    else status = "open";
+
+    // The newest payment across the home's charges names how they paid.
+    const settled = unitCharges
+      .filter((c) => paidByCharge.has(c.id))
+      .sort((a, b) =>
+        (paidDateByCharge.get(b.id) ?? "").localeCompare(paidDateByCharge.get(a.id) ?? "")
+      );
 
     const arr = byProp.get(property) ?? [];
     arr.push({
-      id: charge?.id ?? null,
+      id: unpaid[0]?.id ?? unitCharges[0]?.id ?? null,
+      chargeIds: unpaid.map((c) => c.id),
       name: occupied ? o?.profiles?.full_name ?? o?.tenant_name ?? "—" : "Vacant",
       unit: u.label,
-      amountCents: charge?.amount_cents ?? o?.rent_cents ?? 0,
+      // Paid homes show what came in; the rest show what is still owed.
+      amountCents:
+        unitCharges.length === 0
+          ? o?.rent_cents ?? 0
+          : status === "paid"
+            ? billedCents
+            : outstandingCents,
+      lateFeeCents: lateFeeCents > 0 ? lateFeeCents : null,
+      billedCents: unitCharges.length === 0 ? o?.rent_cents ?? 0 : billedCents,
+      receivedCents,
       status,
-      paidRef: charge && status === "paid" ? refByCharge.get(charge.id) ?? null : null,
-      paidDate: charge && status === "paid" ? paidDateByCharge.get(charge.id) ?? null : null,
+      paidRef: status === "paid" && settled[0] ? refByCharge.get(settled[0].id) ?? null : null,
+      paidDate: status === "paid" && settled[0] ? paidDateByCharge.get(settled[0].id) ?? null : null,
     });
     byProp.set(property, arr);
   }
@@ -127,10 +183,15 @@ export default async function RentBoardPage({
       );
       const occupiedRows = list.filter((c) => c.status !== "vacant");
       const paid = occupiedRows.filter((c) => c.status === "paid").length;
-      const collectedCents = occupiedRows.filter((c) => c.status === "paid").reduce((s, c) => s + c.amountCents, 0);
-      const outstandingCents = occupiedRows
-        .filter((c) => c.status === "open" || c.status === "overdue" || c.status === "unbilled")
-        .reduce((s, c) => s + c.amountCents, 0);
+      // Summed from money actually received and still owed, rather than from
+      // each row's headline figure — otherwise a home that has part-paid
+      // counts as nothing collected, and the community looks further behind
+      // than it is.
+      const collectedCents = occupiedRows.reduce((s, c) => s + c.receivedCents, 0);
+      const outstandingCents = occupiedRows.reduce(
+        (s, c) => s + Math.max(0, c.billedCents - c.receivedCents),
+        0
+      );
       return { property, charges: list, paid, total: occupiedRows.length, collectedCents, outstandingCents };
     })
     .sort((a, b) => a.property.localeCompare(b.property));
