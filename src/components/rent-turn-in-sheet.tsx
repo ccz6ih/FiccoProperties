@@ -173,41 +173,6 @@ export function RentTurnInSheet({
               </tfoot>
             </table>
 
-            {otherwise.length > 0 && (
-              <table className="turn-in-table">
-                <caption className="turn-in-caption">
-                  Paid, but not in the envelope — settled another way
-                </caption>
-                <thead>
-                  <tr>
-                    <th className="col-tick" />
-                    <th className="col-unit">Unit</th>
-                    <th className="col-name">Resident</th>
-                    <th className="col-ref">How it was settled</th>
-                    <th className="col-amt">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {otherwise.map((c) => (
-                    <tr key={`x-${c.unit}`}>
-                      <td className="col-tick" />
-                      <td className="col-unit">{shortUnit(c.unit)}</td>
-                      <td className="col-name">{c.name}</td>
-                      <td className="col-ref">
-                        {c.paidRefs.map((t, i) => (
-                          <span className="tender" key={`${t.ref}-${i}`}>
-                            {tidyRef(t.ref, t.cents)}
-                          </span>
-                        ))}
-                        {c.paidRefs.length === 0 && <span className="muted">—</span>}
-                      </td>
-                      <td className="col-amt">{dollars(c.billedCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
             {owing.length > 0 && (
               <table className="turn-in-table turn-in-owing">
                 <caption className="turn-in-caption">
@@ -252,6 +217,24 @@ export function RentTurnInSheet({
                   </tr>
                 </tfoot>
               </table>
+            )}
+
+            {/* Rent that was settled without paper — the property manager's
+                home, where the work covers it. Named so the sheet accounts
+                for every home, but kept out of the money tables: there is
+                nothing to hand over and nothing to count. */}
+            {otherwise.length > 0 && (
+              <p className="turn-in-vacant">
+                Not in the envelope:{" "}
+                {otherwise
+                  .map((c) => {
+                    const how = c.paidRefs[0]
+                      ? tidyRef(c.paidRefs[0].ref, c.paidRefs[0].cents).replace(/^other\s+/i, "")
+                      : "settled another way";
+                    return `${shortUnit(c.unit)} — ${how.toLowerCase()}`;
+                  })
+                  .join(" · ")}
+              </p>
             )}
 
             {vacant.length > 0 && (
