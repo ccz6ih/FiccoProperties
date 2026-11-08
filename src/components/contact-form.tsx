@@ -1,5 +1,6 @@
 "use client";
 
+import { HONEYPOT_FIELD } from "@/lib/contact-honeypot";
 import { useActionState } from "react";
 import { Button, Card } from "@/components/ui";
 import { submitContactMessage, type ContactState } from "@/app/(public)/contact/actions";
@@ -31,6 +32,22 @@ export function ContactForm() {
   return (
     <Card className="p-6 sm:p-8">
       <form action={action} className="space-y-5">
+        {/* A field no sighted user can reach: off-screen, not tabbable, and
+            told to screen readers it isn't there. Bots fill in every input
+            they find, so anything arriving here did not come from a person.
+            Kept out of `hidden` deliberately — some bots skip those. */}
+        <div aria-hidden="true" className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden">
+          <label htmlFor={HONEYPOT_FIELD}>Company website</label>
+          <input
+            id={HONEYPOT_FIELD}
+            name={HONEYPOT_FIELD}
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            defaultValue=""
+          />
+        </div>
+
         {state.error && (
           <div className="rounded-xl border border-terracotta/40 bg-terracotta-soft px-4 py-3 text-sm text-terracotta-dark">
             {state.error}
