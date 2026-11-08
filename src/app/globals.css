@@ -116,4 +116,37 @@
     margin: 0 0 10mm;
     break-inside: avoid;
   }
+
+  /* The rent board on paper.
+     It gets stacked beside the bank bags and worked through unit by unit, so
+     the printed sheet drops the colour coding entirely and runs 1, 2, 3 …
+     rather than the screen's overdue-first order. Status stays legible as a
+     word; the coloured dots and tinted rows are a screen affordance and only
+     cost toner here. */
+  .rent-board-print,
+  .rent-board-print * {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .rent-board-print li {
+    border-left: 0 !important;
+    border-bottom: 1px solid #ccc !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+  /* The status dot carries no meaning without colour. */
+  .rent-board-print .status-dot {
+    display: none !important;
+  }
+  /* Unit order, via flex ordering on the list rather than a second copy of
+     the DOM. The container is only flex in print, so the screen keeps its
+     own ordering untouched. */
+  .rent-board-print .board-rows {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .rent-board-print .board-head {
+    border-bottom: 2px solid #000 !important;
+  }
 }
