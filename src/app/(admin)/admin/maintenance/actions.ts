@@ -407,6 +407,74 @@ export async function addMaintenanceComment(form: FormData) {
     body,
     internal,
   });
+
+  // And send it, because writing to someone is not the same as them hearing.
+  //
+  // This note landed in the resident's portal and nowhere else. Staff wrote
+  // "let me know when you're home" on The Villa Unit 3 on 3 November, heard
+  // nothing, wrote the same thing again on the 12th, and heard nothing again —
+  // because the tenant had no idea either message existed. A portal is
+  // somewhere people go when they already know there is something to see.
+  //
+  // Internal notes are staff-only by definition and never sent.
+  if (!internal) {
+    const { data: req } = await db
+      .from("maintenance_requests")
+      .select("title, created_by, unit_id, units(label, properties(name))")
+      .eq("id", requestId)
+      .maybeSingle<{
+        title: string;
+        created_by: string | null;
+        unit_id: string | null;
+        units: { label: string; properties: { name: string | null } | null } | null;
+      }>();
+
+    // Whoever raised it first, then whoever lives there — a request logged by
+    // staff on a resident's behalf still has to reach the resident.
+    let to: string | null = null;
+    if (req?.created_by) {
+      const { data: p } = await db
+        .from("profiles")
+        .select("email")
+        .eq("id", req.created_by)
+        .maybeSingle<{ email: string | null }>();
+      to = p?.email ?? null;
+    }
+    if (!to && req?.unit_id) {
+      const { data: occ } = await db
+        .from("unit_occupancy")
+        .select("tenant_email, occupant_profile_id")
+        .eq("unit_id", req.unit_id)
+        .maybeSingle<{ tenant_email: string | null; occupant_profile_id: string | null }>();
+      to = occ?.tenant_email ?? null;
+      if (!to && occ?.occupant_profile_id) {
+        const { data: p } = await db
+          .from("profiles")
+          .select("email")
+          .eq("id", occ.occupant_profile_id)
+          .maybeSingle<{ email: string | null }>();
+        to = p?.email ?? null;
+      }
+    }
+
+    if (to) {
+      const home = req?.units
+        ? `${req.units.properties?.name ? `${req.units.properties.name} · ` : ""}${req.units.label}`
+        : "your home";
+      await sendNotification({
+        to,
+        subject: `About your repair — ${req?.title ?? "maintenance request"}`,
+        meta: { kind: "maintenance_note", refType: "maintenance_request", refId: requestId },
+        html: notificationHtml("A message about your repair 🔧", [
+          ["Request", req?.title ?? "Maintenance request"],
+          ["Home", home],
+          ["Message", body],
+          ["Replying", "Just reply to this email, or call (720) 527-2596."],
+        ]),
+      });
+    }
+  }
+
   revalidatePath(`/admin/maintenance/${requestId}`);
   revalidatePath("/portal/maintenance");
 }
