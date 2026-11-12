@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification, notificationHtml } from "@/lib/email";
+import { maintenanceRecipient } from "@/lib/maintenance-contact";
 import { requireProfile, isStaff } from "@/lib/auth";
 import { workOrderEmail } from "@/lib/workorder-email";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -352,40 +353,44 @@ export async function scheduleMaintenanceVisit(
   // And by email, when they have one on file.
   const { data: req } = await db
     .from("maintenance_requests")
-    .select("title, created_by, units(label, properties(name))")
+    .select("title, created_by, unit_id, units(label, properties(name))")
     .eq("id", id)
     .maybeSingle<{
       title: string;
       created_by: string | null;
+      unit_id: string | null;
       units: { label: string; properties: { name: string | null } | null } | null;
     }>();
-  if (req?.created_by) {
-    const { data: p } = await db
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", req.created_by)
-      .maybeSingle<{ full_name: string | null; email: string | null }>();
-    if (p?.email) {
-      const home = req.units
-        ? `${req.units.properties?.name ? `${req.units.properties.name} · ` : ""}${req.units.label}`
-        : "your home";
-      await sendNotification({
-        to: p.email,
-        subject: `Repair scheduled — ${dateLabel}${window ? `, ${window}` : ""}`,
-        html: notificationHtml("Your repair is scheduled 🔧", [
-          ["Request", req.title],
-          ["Home", home],
-          ["When", `${dateLabel}${window ? `, ${window}` : ""}`],
-          ...(entryLine ? ([["Getting in", entryLine]] as [string, string][]) : []),
-          ["Need to change it?", "Reply to this email or call (720) 527-2596"],
-        ]),
-      });
-    }
+  const who = await maintenanceRecipient(db, req?.unit_id ?? null, req?.created_by ?? null);
+  if (who) {
+    const home = req?.units
+      ? `${req.units.properties?.name ? `${req.units.properties.name} · ` : ""}${req.units.label}`
+      : "your home";
+    await sendNotification({
+      to: who.email,
+      subject: `Repair scheduled — ${dateLabel}${window ? `, ${window}` : ""}`,
+      meta: { kind: "repair_scheduled", refType: "maintenance_request", refId: id },
+      html: notificationHtml("Your repair is scheduled 🔧", [
+        ["Request", req?.title ?? "Maintenance request"],
+        ["Home", home],
+        ["When", `${dateLabel}${window ? `, ${window}` : ""}`],
+        ...(entryLine ? ([["Getting in", entryLine]] as [string, string][]) : []),
+        ["Need to change it?", "Reply to this email or call (720) 527-2596"],
+      ]),
+    });
   }
 
   revalidatePath(`/admin/maintenance/${id}`);
   revalidatePath("/portal/maintenance");
-  return { ok: true, notice: `Scheduled for ${dateLabel} — tenant notified.` };
+
+  // Say who was told, not that "the tenant" was. The old wording claimed a
+  // notification the resident had never received.
+  const told = !who
+    ? "nobody has an email on file, so nothing was sent"
+    : who.isResident
+      ? `${who.name ?? who.email} notified`
+      : `no email for the resident — sent to ${who.email} instead`;
+  return { ok: true, notice: `Scheduled for ${dateLabel} — ${told}.` };
 }
 
 export async function addMaintenanceComment(form: FormData) {
@@ -429,40 +434,14 @@ export async function addMaintenanceComment(form: FormData) {
         units: { label: string; properties: { name: string | null } | null } | null;
       }>();
 
-    // Whoever raised it first, then whoever lives there — a request logged by
-    // staff on a resident's behalf still has to reach the resident.
-    let to: string | null = null;
-    if (req?.created_by) {
-      const { data: p } = await db
-        .from("profiles")
-        .select("email")
-        .eq("id", req.created_by)
-        .maybeSingle<{ email: string | null }>();
-      to = p?.email ?? null;
-    }
-    if (!to && req?.unit_id) {
-      const { data: occ } = await db
-        .from("unit_occupancy")
-        .select("tenant_email, occupant_profile_id")
-        .eq("unit_id", req.unit_id)
-        .maybeSingle<{ tenant_email: string | null; occupant_profile_id: string | null }>();
-      to = occ?.tenant_email ?? null;
-      if (!to && occ?.occupant_profile_id) {
-        const { data: p } = await db
-          .from("profiles")
-          .select("email")
-          .eq("id", occ.occupant_profile_id)
-          .maybeSingle<{ email: string | null }>();
-        to = p?.email ?? null;
-      }
-    }
+    const who = await maintenanceRecipient(db, req?.unit_id ?? null, req?.created_by ?? null);
 
-    if (to) {
+    if (who) {
       const home = req?.units
         ? `${req.units.properties?.name ? `${req.units.properties.name} · ` : ""}${req.units.label}`
         : "your home";
       await sendNotification({
-        to,
+        to: who.email,
         subject: `About your repair — ${req?.title ?? "maintenance request"}`,
         meta: { kind: "maintenance_note", refType: "maintenance_request", refId: requestId },
         html: notificationHtml("A message about your repair 🔧", [
