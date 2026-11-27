@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { requestPasswordReset } from "@/app/login/actions";
 
 type Mode = "signin" | "signup" | "reset";
 
@@ -56,18 +57,15 @@ export function LoginForm({ next, units = [] }: { next: string; units?: SignupUn
     }
 
     if (mode === "reset") {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        // Land directly on the reset page. A redirectTo carrying its own query
-        // string has to match Supabase's redirect allow-list exactly, and when
-        // it doesn't Supabase silently falls back to the Site URL — which is
-        // why these links were dropping people on the homepage.
-        redirectTo: `${window.location.origin}/auth/reset`,
-      });
+      // Goes through our own transport rather than supabase.auth
+      // .resetPasswordForEmail, which sends via Supabase's separately
+      // configured SMTP. When that configuration went stale every reset died
+      // with "Error sending recovery email" while the rest of the app's mail
+      // was fine, and the resident was simply locked out with nothing to go on.
+      await requestPasswordReset(email);
       setPending(false);
-      if (error) {
-        setError(error.message);
-        return;
-      }
+      // Always the same answer, so the page can't be used to discover which
+      // addresses have accounts.
       setNotice("If that email has an account, a password-reset link is on its way.");
       return;
     }
